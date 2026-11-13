@@ -10,7 +10,12 @@
 //                   game.view()            현재 상황 (점수, 코트·벤치, 체력, 파울)
 //                   game.result()          박스스코어
 
-import { makeRng } from './rng.js';
+import { makeRng } from './rng.ts';
+import type { Rng } from './rng.ts';
+import type {
+  BasePlayer, Composites, EngineTeam, GameOptions, GameResult, GameView, LogEvent, PlayerView,
+  RatingKey, ShotType, StatLine, StepResult, Tactics,
+} from './types.ts';
 
 // ---- 조정 계수: 밸런스는 여기서만 만진다 ----
 export const TUNING = {
@@ -66,11 +71,11 @@ export const TUNING = {
   press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.04, rimMix: 1.2, foul: 1.25, drain: 1.25, paceSec: 1.5 },
 };
 
-const r = (p, k) => p.ratings[k] / 100;
+const r = (p: BasePlayer, k: RatingKey) => p.ratings[k] / 100;
 
 // 원본 능력치 -> 엔진이 쓰는 합성 능력치 (0~1)
-export function composites(p) {
-  const c = {
+export function composites(p: BasePlayer): Composites {
+  const c: Composites = {
     ballHandling: 0.6 * r(p, 'drb') + 0.2 * r(p, 'spd') + 0.2 * r(p, 'oiq'),
     passing: 0.7 * r(p, 'pss') + 0.3 * r(p, 'oiq'),
     rim: 0.3 * r(p, 'hgt') + 0.2 * r(p, 'jmp') + 0.3 * r(p, 'dnk') + 0.2 * r(p, 'spd'),
@@ -84,29 +89,60 @@ export function composites(p) {
     stealing: 0.45 * r(p, 'spd') + 0.55 * r(p, 'diq'),
     blocking: 0.5 * r(p, 'hgt') + 0.3 * r(p, 'jmp') + 0.2 * r(p, 'diq'),
     endurance: r(p, 'end'),
+    usage: 0, // 아래에서 계산한다
   };
   const best = Math.max(c.rim, c.post, c.mid, c.three);
   c.usage = 0.6 * best + 0.4 * r(p, 'oiq');
   return c;
 }
 
-export function overall(p) {
+export function overall(p: BasePlayer) {
   const c = composites(p);
   const offense = Math.max(c.rim, c.post, c.mid, c.three) * 0.6 + (c.ballHandling + c.passing) * 0.2;
   const defense = Math.max(c.defInterior, c.defPerimeter) * 0.7 + c.rebounding * 0.3;
   return Math.round((offense * 0.55 + defense * 0.45) * 100);
 }
 
-const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-const SHOT_LABEL = { rim: '골밑슛', post: '포스트업', mid: '미들슛', three: '3점슛' };
-const emptyLine = () => ({
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+const SHOT_LABEL: Record<ShotType, string> = { rim: '골밑슛', post: '포스트업', mid: '미들슛', three: '3점슛' };
+const emptyLine = (): StatLine => ({
   sec: 0, pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
   orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0,
 });
 
-function setupTeam(team, rng, auto) {
+// 경기 중의 선수·팀 상태
+interface GamePlayer {
+  id: string;
+  name: string;
+  pos: number;
+  c: Composites;
+  ovr: number;
+  form: number; // 당일 컨디션 보정
+  energy: number; // 0~1
+  injured: boolean;
+  since: number; // 마지막으로 코트에 들어오거나 나간 시각
+  stat: StatLine;
+  starter: boolean;
+}
+
+interface GameTeam {
+  id: string | undefined;
+  name: string;
+  tactics: Tactics;
+  players: GamePlayer[];
+  court: GamePlayer[];
+  auto: boolean;
+  score: number;
+  teamFouls: number;
+  possessions: number;
+  subs: number;
+  run: number;
+  timeoutsLeft: number;
+}
+
+function setupTeam(team: EngineTeam, rng: Rng, auto: boolean): GameTeam {
   const T = TUNING;
-  const players = team.players.map((p, i) => {
+  const players: GamePlayer[] = team.players.map((p, i) => {
     // 숨겨진 능력치: 일관성이 낮을수록 그날 컨디션이 크게 흔들린다
     const consistency = (p.hidden?.consistency ?? 50) / 100;
     return {
@@ -128,18 +164,18 @@ function setupTeam(team, rng, auto) {
   };
 }
 
-export function createGame(homeTeam, awayTeam, opts = {}) {
+export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: GameOptions = {}) {
   const rng = makeRng(opts.seed ?? Date.now());
   const T = TUNING;
   const manual = opts.manual ?? [false, false];
   const teams = [setupTeam(homeTeam, rng, !manual[0]), setupTeam(awayTeam, rng, !manual[1])];
-  const log = [];
+  const log: LogEvent[] = [];
   let period = 1;
   let clock = T.periodSeconds;
   let now = 0; // 경기 시작부터 흐른 시간(초)
   let finished = false;
 
-  const say = (team, text) => {
+  const say = (team: GameTeam, text: string) => {
     if (!opts.log) return;
     const m = Math.floor(clock / 60);
     const s = String(Math.floor(clock % 60)).padStart(2, '0');
@@ -147,20 +183,20 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
   };
 
   // 피로·컨디션 반영 능력치
-  const eff = (p, key) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form);
-  const avg = (team, key) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
-  const pick = (players, weightFn) => players[rng.weighted(players.map(weightFn))];
+  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form);
+  const avg = (team: GameTeam, key: keyof Composites) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
+  const pick = (players: GamePlayer[], weightFn: (p: GamePlayer) => number) => players[rng.weighted(players.map(weightFn))];
   const isFinal = () => period >= 4;
-  const gone = (p) => p.injured || p.stat.pf >= T.foulOutLimit; // 더는 뛸 수 없는 선수
+  const gone = (p: GamePlayer) => p.injured || p.stat.pf >= T.foulOutLimit; // 더는 뛸 수 없는 선수
 
-  function addPoints(off, def, player, pts) {
+  function addPoints(off: GameTeam, def: GameTeam, player: GamePlayer, pts: number) {
     player.stat.pts += pts;
     off.score += pts;
     off.run += pts;
     def.run = 0;
   }
 
-  function elapse(sec) {
+  function elapse(sec: number) {
     for (const team of teams) {
       const d = team.tactics.defense;
       const style = d === 'press' ? T.press.drain : d === 'zone' ? T.zone.drain : 1;
@@ -177,7 +213,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
     now += sec;
   }
 
-  function swap(team, slot, incoming) {
+  function swap(team: GameTeam, slot: number, incoming: GamePlayer) {
     const cur = team.court[slot];
     team.court[slot] = incoming;
     cur.since = now;
@@ -188,20 +224,20 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
 
   // 자동 교체: 지친 선수는 쉬게 하고, 회복한 주전은 복귀. 접전 막판엔 베스트 5, 승부가 기울면 벤치.
   // 직접 지휘하는 팀은 퇴장 선수의 빈자리만 채운다.
-  function autoSubstitute(team, opp) {
+  function autoSubstitute(team: GameTeam, opp: GameTeam) {
     const margin = Math.abs(team.score - opp.score);
     const crunch = isFinal() && clock <= T.crunchSeconds && margin <= T.crunchMargin;
     const garbage = period === 4 && clock <= 300 && margin >= T.garbageMargin;
-    const foulTrouble = (p) => {
+    const foulTrouble = (p: GamePlayer) => {
       if (crunch || period > 4 || (period === 4 && clock <= 300)) return false;
       return p.stat.pf >= Math.min(4, period + 1); // 1Q 2개, 2Q 3개, 이후 4개면 아낀다
     };
-    const unavailable = (p) => gone(p) || foulTrouble(p) || (garbage && p.starter);
-    const mustLeave = (p) =>
+    const unavailable = (p: GamePlayer) => gone(p) || foulTrouble(p) || (garbage && p.starter);
+    const mustLeave = (p: GamePlayer) =>
       unavailable(p) ||
       (crunch ? p.energy < 0.25 : p.energy < T.tiredEnergy && now - p.since >= T.minStint);
-    const ready = (p) => !unavailable(p) && p.energy >= (crunch ? 0.3 : garbage ? 0 : T.restedEnergy);
-    const value = (p, slot) => p.ovr * (1 - T.posMismatchPenalty * Math.abs(p.pos - (slot + 1)));
+    const ready = (p: GamePlayer) => !unavailable(p) && p.energy >= (crunch ? 0.3 : garbage ? 0 : T.restedEnergy);
+    const value = (p: GamePlayer, slot: number) => p.ovr * (1 - T.posMismatchPenalty * Math.abs(p.pos - (slot + 1)));
 
     for (let slot = 0; slot < 5; slot++) {
       const cur = team.court[slot];
@@ -216,14 +252,14 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
     }
   }
 
-  function addFoul(def, player) {
+  function addFoul(def: GameTeam, player: GamePlayer) {
     player.stat.pf++;
     def.teamFouls++;
     if (player.stat.pf >= T.foulOutLimit) say(def, `${player.name} 5반칙 퇴장`);
   }
 
   // 자유투. 마지막 구가 빗나가면 true (리바운드 상황)
-  function freeThrows(off, def, shooter, n) {
+  function freeThrows(off: GameTeam, def: GameTeam, shooter: GamePlayer, n: number) {
     let lastMissed = false;
     let made = 0;
     for (let i = 0; i < n; i++) {
@@ -241,7 +277,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
   }
 
   // 리바운드. 공격 리바운드면 true
-  function rebound(off, def, orbMult = 1) {
+  function rebound(off: GameTeam, def: GameTeam, orbMult = 1) {
     const zone = def.tactics.defense === 'zone' ? T.zone.defReb : 1;
     const o = avg(off, 'rebounding') * T.offReboundWeight * orbMult;
     const d = avg(def, 'rebounding') * zone;
@@ -254,7 +290,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
   }
 
   // 누가 쏠지: 공격 비중 + 전술 중심에 맞는 선수 + 에이스 지정 / 상대의 집중 마크
-  function chooseShooter(off, def) {
+  function chooseShooter(off: GameTeam, def: GameTeam) {
     const focus = off.tactics.focus;
     return rng.weighted(
       off.court.map((p) => {
@@ -269,19 +305,19 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
     );
   }
 
-  function chooseShot(off, def, shooter, threeUrgency) {
+  function chooseShot(off: GameTeam, def: GameTeam, shooter: GamePlayer, threeUrgency: number) {
     const w = { ...T.shotMixWeight };
     if (off.tactics.focus === 'inside') { w.rim *= T.focusShotBoost; w.post *= T.focusShotBoost; }
     if (off.tactics.focus === 'outside') { w.three *= T.focusShotBoost; }
     if (def.tactics.defense === 'zone') { w.three *= T.zone.threeMix; w.rim *= T.zone.rimMix; }
     if (def.tactics.defense === 'press') { w.rim *= T.press.rimMix; }
     w.three *= threeUrgency;
-    const types = ['rim', 'post', 'mid', 'three'];
+    const types: ShotType[] = ['rim', 'post', 'mid', 'three'];
     return types[rng.weighted(types.map((t) => w[t] * shooter.c[t] ** 2.5))];
   }
 
   // 한 번의 공격권. 공격 리바운드가 나오는 동안 계속된다.
-  function possession(off, def) {
+  function possession(off: GameTeam, def: GameTeam) {
     off.possessions++;
     let secondChance = false;
     while (clock > 0) {
@@ -306,7 +342,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
       }
 
       // 공격 시간
-      let seconds;
+      let seconds: number;
       if (!secondChance && clock <= 24 && !hurry) {
         seconds = Math.max(1, clock - rng.int(0, 3)); // 마지막 공격은 시간을 다 쓰고 쏜다
       } else {
@@ -419,7 +455,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
   }
 
   // 작전 타임: 상대의 기세를 끊고 코트 위 선수들이 숨을 돌린다
-  function timeout(side) {
+  function timeout(side: number) {
     const team = teams[side];
     if (finished || team.timeoutsLeft <= 0) return false;
     team.timeoutsLeft--;
@@ -432,7 +468,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
   let offense = rng.chance(0.5) ? 0 : 1; // 점프볼
 
   // 공격권 하나를 진행한다
-  function step() {
+  function step(): StepResult | null {
     if (finished) return null;
     const mark = log.length;
     teams.forEach((team, side) => {
@@ -459,23 +495,23 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
     return { events: log.slice(mark), periodEnded, finished };
   }
 
-  const describe = (p) => ({ id: p.id, name: p.name, pos: p.pos, ovr: p.ovr, energy: Math.round(p.energy * 100), pf: p.stat.pf, pts: p.stat.pts, out: gone(p) });
+  const describe = (p: GamePlayer): PlayerView => ({ id: p.id, name: p.name, pos: p.pos, ovr: p.ovr, energy: Math.round(p.energy * 100), pf: p.stat.pf, pts: p.stat.pts, out: gone(p) });
 
   return {
     step,
     timeout,
     get finished() { return finished; },
     playPeriod() {
-      const events = [];
-      let s;
+      const events: LogEvent[] = [];
+      let s: StepResult | null;
       while ((s = step())) { events.push(...s.events); if (s.periodEnded) break; }
       return events;
     },
-    playToEnd() { while (step()); return this.result(); },
-    setAuto(side, auto) { teams[side].auto = auto; },
-    setTactics(side, patch) { Object.assign(teams[side].tactics, patch); },
+    playToEnd(): GameResult { while (step()); return this.result(); },
+    setAuto(side: number, auto: boolean) { teams[side].auto = auto; },
+    setTactics(side: number, patch: Partial<Tactics>) { Object.assign(teams[side].tactics, patch); },
     // 직접 교체. 성공하면 true
-    substitute(side, outId, inId) {
+    substitute(side: number, outId: string, inId: string) {
       const team = teams[side];
       const slot = team.court.findIndex((p) => p.id === outId);
       const incoming = team.players.find((p) => p.id === inId);
@@ -483,7 +519,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
       swap(team, slot, incoming);
       return true;
     },
-    view() {
+    view(): GameView {
       return {
         period, clock: Math.max(0, Math.round(clock)), finished,
         teams: teams.map((t) => ({
@@ -494,7 +530,7 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
         })),
       };
     },
-    result() {
+    result(): GameResult {
       return {
         finished,
         periods: period,
@@ -510,6 +546,8 @@ export function createGame(homeTeam, awayTeam, opts = {}) {
   };
 }
 
-export function simulateGame(homeTeam, awayTeam, opts = {}) {
+export type Game = ReturnType<typeof createGame>;
+
+export function simulateGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: GameOptions = {}) {
   return createGame(homeTeam, awayTeam, opts).playToEnd();
 }

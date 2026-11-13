@@ -1,24 +1,26 @@
 // 사용법:
-//   node scripts/simulate.js           -> 대량 시뮬레이션 통계 (밸런스 검증)
-//   node scripts/simulate.js game 42   -> 시드 42로 한 경기 중계 + 박스스코어
-import { makeRng } from '../src/rng.js';
-import { generateTeam } from '../src/generate.js';
-import { simulateGame } from '../src/engine.js';
+//   node scripts/simulate.ts           -> 대량 시뮬레이션 통계 (밸런스 검증)
+//   node scripts/simulate.ts game 42   -> 시드 42로 한 경기 중계 + 박스스코어
+import { makeRng } from '../src/game/rng.ts';
+import { generateTeam } from '../src/game/generate.ts';
+import { simulateGame } from '../src/game/engine.ts';
+import type { BoxTeam, Tactics } from '../src/game/types.ts';
 
-const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) : '-');
+type Totals = Record<string, number>;
 
-function teamTotals(t) {
-  const sum = (k) => t.players.reduce((s, p) => s + p[k], 0);
-  const o = {};
-  for (const k of ['pts', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'pf']) o[k] = sum(k);
+const pct = (a: number, b: number) => (b ? ((100 * a) / b).toFixed(1) : '-');
+
+function teamTotals(t: BoxTeam) {
+  const o: Totals = {};
+  for (const k of ['pts', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'pf'] as const) o[k] = t.players.reduce((s, p) => s + p[k], 0);
   o.poss = t.possessions;
   return o;
 }
 
-function batch(label, qa, qb, n, tacticsA = {}, tacticsB = {}) {
+function batch(label: string, qa: number, qb: number, n: number, tacticsA: Partial<Tactics> = {}, tacticsB: Partial<Tactics> = {}) {
   const rng = makeRng(7);
-  const tot = [{}, {}];
-  const add = (o, k, v) => { o[k] = (o[k] ?? 0) + v; };
+  const tot: Totals[] = [{}, {}];
+  const add = (o: Totals, k: string, v: number) => { o[k] = (o[k] ?? 0) + v; };
   let winsA = 0;
   let ot = 0;
   for (let i = 0; i < n; i++) {
@@ -40,7 +42,7 @@ function batch(label, qa, qb, n, tacticsA = {}, tacticsB = {}) {
   }
   console.log(`\n[${label}] ${n}경기 · A 승률 ${pct(winsA, n)}% · 연장 ${pct(ot, n)}%`);
   tot.forEach((x, ti) => {
-    const per = (k, d = 1) => (x[k] / n).toFixed(d);
+    const per = (k: string, d = 1) => (x[k] / n).toFixed(d);
     const opp = tot[1 - ti];
     console.log(
       `  ${'AB'[ti]}: 득점 ${per('pts')} · 공격권 ${per('poss')} · FG ${pct(x.fgm, x.fga)}% · 3P ${pct(x.tpm, x.tpa)}% (비중 ${pct(x.tpa, x.fga)}%) · FT ${per('fta')}개 · 공리 ${pct(x.orb, x.orb + opp.drb)}% · 어시 ${per('ast')} · 스틸 ${per('stl')} · 블록 ${per('blk')} · 턴오버 ${per('tov')} · 파울 ${per('pf')}`,
@@ -51,7 +53,7 @@ function batch(label, qa, qb, n, tacticsA = {}, tacticsB = {}) {
   });
 }
 
-function oneGame(seed) {
+function oneGame(seed: number) {
   const rng = makeRng(seed);
   const g = simulateGame(generateTeam(rng, '홈', 55), generateTeam(rng, '원정', 52), { seed, log: true });
   for (const e of g.log) console.log(`${e.period}Q ${e.clock.padStart(5)} [${e.score}] ${e.team}: ${e.text}`);

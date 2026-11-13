@@ -3,7 +3,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sim": "node scripts/simulate.js",
-    "game": "node scripts/simulate.js game"
+    "dev": "next dev -p 5173",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "start": "next start -p 5173",
+    "sim": "node scripts/simulate.ts",
+    "game": "node scripts/simulate.ts game"
+  },
+  "dependencies": {
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
   }
 }

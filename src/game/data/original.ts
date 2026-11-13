@@ -5,13 +5,14 @@
 //   수준    그 선수의 전반적인 능력 (현 평균 주전이 55 안팎, 전국구 에이스가 80 이상)
 //   잠재력  높을수록 훈련·경기로 빨리 성장한다
 //   일관성  낮을수록 경기마다 기복이 크다
-//   보정    포지션 평균 대비 강점(+)과 약점(-). 키는 src/school.js의 RATING_LABEL 참고
+//   보정    포지션 평균 대비 강점(+)과 약점(-). 키는 src/game/school.ts의 RATING_LABEL 참고
 // 학년은 원작 시점(1년차) 기준이다. 명단에 없는 자리는 자동 생성된 선수가 채운다.
+import type { Dataset, PlayerSpec, Ratings, SchoolSpec } from '../types.ts';
 
-const P = (kr, jp, pos, year, level, potential, consistency, tweaks = {}) => ({ name: { kr, jp }, pos, year, level, potential, consistency, tweaks });
-const school = (kr, jp, prestige, players = [], extra = {}) => ({ name: { kr, jp }, prestige, players, ...extra });
+const P = (kr: string, jp: string, pos: number, year: number, level: number, potential: number, consistency: number, tweaks: Partial<Ratings> = {}): PlayerSpec => ({ name: { kr, jp }, pos, year, level, potential, consistency, tweaks });
+const school = (kr: string, jp: string, prestige: number, players: PlayerSpec[] = [], extra: Pick<SchoolSpec, 'benchLevel' | 'prefecture'> = {}): SchoolSpec => ({ name: { kr, jp }, prestige, players, ...extra });
 
-export const ORIGINAL = {
+export const ORIGINAL: Dataset = {
   prefecture: '가나가와현',
 
   // 가나가와현 16개교. 앞의 9개교는 원작에 나오는 학교, 나머지는 대회 규모를 맞추기 위한 가상의 학교다.
