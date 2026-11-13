@@ -1,0 +1,9 @@
+{
+  "name": "basketball-manager-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sim": "node scripts/simulate.js",
+    "game": "node scripts/simulate.js game"
+  }
+}
