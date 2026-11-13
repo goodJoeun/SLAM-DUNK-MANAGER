@@ -9,7 +9,7 @@ import type { DayDecision } from '@/game/season';
 import type {
   Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, ProgramKey, Tactics,
 } from '@/game/types';
-import { BREAK_MS, DEFAULT_PREFS, SPEEDS, addNote, advanceMatch, newMatch, periodLabel } from './live';
+import { BREAK_MS, DEFAULT_PREFS, SPEEDS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
 import { buildMessages, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
@@ -128,6 +128,7 @@ function openMatchReport(S: GameState, messages: Message[]) {
   S.screen = 'inbox';
 }
 
+// 경기를 바로 멈춘다. 연출 중인 공격권이 있으면 결과를 곧바로 드러낸다(경기 종료·끝까지 맡기기·화면을 떠날 때).
 function stopMatchTimer(S: GameState) {
   const m = S.match;
   if (!m) return;
@@ -135,33 +136,54 @@ function stopMatchTimer(S: GameState) {
   m.timer = null;
   m.playing = false;
   m.interlude = null;
+  if (m.pending) reveal(m, S.prefs, m.pending);
 }
 
-// 경기를 한 공격권씩 흘려보낸다. 중요한 순간이면 멈추고, 쿼터 사이에는 잠깐 쉬었다가 이어 간다.
-function tick(S: GameState, rerender: () => void) {
+// 경기를 한 공격권씩 흘려보낸다. 공격권마다 코트 연출을 보여 준 뒤 결과를 드러내고,
+// 중요한 순간이면 멈추고, 쿼터 사이에는 잠깐 쉬었다가 이어 간다.
+// keepGoing이 false면 공격권 하나만 보여 주고 멈춘다(일시정지 중 공격권 하나 진행).
+function tick(S: GameState, rerender: () => void, keepGoing = true) {
   const m = S.match;
-  if (!m || !m.playing) return;
+  if (!m || (keepGoing && !m.playing)) return;
   m.timer = null;
   m.interlude = null;
-  const r = advanceMatch(m, S.prefs);
-  if (r.finished) {
-    stopMatchTimer(S);
-  } else if (r.stop) {
-    m.pause = r.stop;
-    stopMatchTimer(S);
-  } else if (r.periodEnded) {
-    m.interlude = `${periodLabel(m.game.view().period)} 시작 전 휴식`;
-    m.timer = setTimeout(() => tick(S, rerender), BREAK_MS);
+  const b = beginPossession(m, S.prefs);
+  if (!b) { stopMatchTimer(S); rerender(); return; }
+
+  const finishUp = () => {
+    if (S.match !== m) return; // 그사이 경기를 떠났다
+    m.timer = null;
+    const r = reveal(m, S.prefs, b.pending);
+    if (r.finished) {
+      stopMatchTimer(S);
+    } else if (r.stop) {
+      m.pause = r.stop;
+      stopMatchTimer(S);
+    } else if (!keepGoing || !m.playing) {
+      // 공격권 하나만 보여 주거나, 연출 중에 일시정지를 눌렀다
+    } else if (r.periodEnded) {
+      m.interlude = `${periodLabel(m.game.view().period)} 시작 전 휴식`;
+      m.timer = setTimeout(() => tick(S, rerender), BREAK_MS);
+    } else {
+      m.timer = setTimeout(() => tick(S, rerender), SPEEDS[S.prefs.speed].gap);
+    }
+    rerender();
+  };
+
+  if (b.ms > 0) {
+    m.timer = setTimeout(finishUp, b.ms);
+    rerender();
   } else {
-    m.timer = setTimeout(() => tick(S, rerender), SPEEDS[S.prefs.speed].ms);
+    finishUp();
   }
-  rerender();
 }
 
-// 방금 엔진이 남긴 중계 한 줄(교체·작전 타임)을 화면 중계에 옮긴다
+// 방금 엔진이 남긴 중계 한 줄(교체·작전 타임)을 화면 중계에 옮긴다. 연출 중이면 그 공격권 뒤에 붙인다.
 function pushLastLog(m: ActiveMatch) {
   const last = m.game.result().log.at(-1);
-  if (last) m.feed.unshift({ ...last });
+  if (!last) return;
+  if (m.pending) m.deferredLog.push({ ...last });
+  else m.feed.unshift({ ...last });
 }
 
 function trainDay(S: GameState) {
@@ -266,14 +288,22 @@ const actions = {
     if (m.playing || m.game.finished) return;
     m.pause = null;
     m.playing = true;
+    if (m.pending) return; // 연출 중인 공격권이 끝나면 이어서 진행한다
     m.timer = setTimeout(() => tick(S, rerender), 0);
   },
-  pause({ S }: Ctx) { stopMatchTimer(S); },
-  // 멈춘 상태에서 공격권 하나만 진행 (자세히 보고 싶을 때)
-  step({ S }: Ctx) {
+  // 일시정지: 연출 중인 공격권은 끝까지 보여 준 뒤 멈춘다
+  pause({ S }: Ctx) {
     const m = matchOf(S);
-    if (m.playing) return;
-    m.pause = advanceMatch(m, S.prefs).stop;
+    m.playing = false;
+    m.interlude = null;
+    if (!m.pending && m.timer) { clearTimeout(m.timer); m.timer = null; }
+  },
+  // 멈춘 상태에서 공격권 하나만 진행 (자세히 보고 싶을 때)
+  step({ S, rerender }: Ctx) {
+    const m = matchOf(S);
+    if (m.playing || m.pending || m.game.finished) return;
+    m.pause = null;
+    tick(S, rerender, false);
   },
   speed({ S }: Ctx, key: SpeedKey) { S.prefs.speed = key; writeJson(PREFS_KEY, S.prefs); },
   toggleAlert({ S }: Ctx, key: AlertKey) { S.prefs.alerts[key] = !S.prefs.alerts[key]; writeJson(PREFS_KEY, S.prefs); },

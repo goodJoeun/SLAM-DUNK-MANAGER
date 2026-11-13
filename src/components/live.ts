@@ -1,14 +1,24 @@
-// 직접 지휘하는 경기의 실시간 진행: 속도, 중요한 순간의 자동 정지, 코치 알림.
-// 엔진은 공격권 하나씩 진행할 뿐이고, 언제 멈추고 무엇을 알릴지는 여기서 정한다.
+// 직접 지휘하는 경기의 실시간 진행: 속도, 코트 연출, 중요한 순간의 자동 정지, 코치 알림.
+// 엔진은 공격권 하나씩 진행할 뿐이고, 언제 멈추고 무엇을 보여 줄지는 여기서 정한다.
+//
+// 공격권 하나는 두 단계로 진행한다.
+//   1) beginPossession: 엔진을 한 공격권 진행하고 코트 연출(타임라인)을 만든다. 화면 점수·중계는 아직 그대로 둔다.
+//   2) reveal: 연출이 끝나면 점수·중계·알림을 드러낸다. 그래야 슛이 들어가기 전에 점수가 먼저 바뀌지 않는다.
 import type { UserMatch } from '@/game/season';
-import type { GameView, LogEvent } from '@/game/types';
+import type { Scene } from '@/game/court';
+import type { BoxTeam, GameView, LogEvent, StepResult } from '@/game/types';
+import { choreograph, tipOffScene } from './court/choreo';
+import type { EndKind } from './court/choreo';
+import type { CourtAnimation } from './court/FullCourt';
 
 export type SpeedKey = 'slow' | 'normal' | 'fast' | 'fastest';
-export const SPEEDS: Record<SpeedKey, { label: string; ms: number }> = {
-  slow: { label: '느리게', ms: 900 },
-  normal: { label: '보통', ms: 420 },
-  fast: { label: '빠르게', ms: 160 },
-  fastest: { label: '매우 빠르게', ms: 40 },
+// perSecond: 경기 시간 1초를 몇 ms로 보여 줄지 (0이면 연출 없이 바로 진행)
+// gap: 공격권 사이 쉬는 시간, keyOnly: 득점·블록·스틸이 있는 공격권만 연출한다
+export const SPEEDS: Record<SpeedKey, { label: string; perSecond: number; gap: number; keyOnly?: boolean }> = {
+  slow: { label: '느리게', perSecond: 260, gap: 350 },
+  normal: { label: '보통', perSecond: 120, gap: 150 },
+  fast: { label: '빠르게', perSecond: 70, gap: 90, keyOnly: true },
+  fastest: { label: '매우 빠르게', perSecond: 0, gap: 40 },
 };
 export const BREAK_MS = 1500; // 쿼터 사이 휴식
 
@@ -46,6 +56,12 @@ export interface CoachNote {
   paused: boolean; // 이 알림 때문에 경기가 멈췄는지
 }
 
+// 엔진은 진행했지만 아직 화면에 드러내지 않은 공격권
+export interface Pending {
+  step: StepResult;
+  period: number; // 이 공격권이 진행된 쿼터
+}
+
 // 직접 지휘 중인 경기
 export interface ActiveMatch extends UserMatch {
   feed: LogEvent[]; // 중계 (최신이 앞)
@@ -56,14 +72,24 @@ export interface ActiveMatch extends UserMatch {
   interlude: string | null; // 쿼터 사이 휴식 중이면 안내 문구
   notes: CoachNote[]; // 코치 알림 (최신이 앞)
   flags: Record<string, boolean>; // 같은 알림을 되풀이하지 않기 위한 표시
+  // 코트 연출
+  scene: Scene | null; // 마지막 공격권이 끝난 장면
+  lastEnd: EndKind | null;
+  anim: CourtAnimation | null; // 지금 재생 중인 움직임
+  pending: Pending | null;
+  display: { view: GameView; box: BoxTeam[] } | null; // 연출 중에 보여 줄 (이전) 점수판과 기록
+  deferredLog: LogEvent[]; // 연출 중에 일어난 교체·작전 타임 (공격권을 드러낸 뒤에 중계에 붙인다)
+  possessions: number;
 }
 
 export const newMatch = (m: UserMatch): ActiveMatch => ({
   ...m, feed: [], selected: null, timer: null, playing: false, pause: null, interlude: null, notes: [], flags: {},
+  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0,
 });
 
 const FEED_LIMIT = 400;
 const NOTE_LIMIT = 40;
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
 export const periodLabel = (period: number) => (period > 4 ? `연장 ${period - 4}` : `${period}쿼터`);
 const clockText = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
@@ -72,6 +98,39 @@ export function addNote(m: ActiveMatch, view: GameView, tone: NoteTone, text: st
   const id = (m.notes[0]?.id ?? 0) + 1;
   m.notes.unshift({ id, period: view.period, clock: clockText(view.clock), text, tone, paused });
   if (m.notes.length > NOTE_LIMIT) m.notes.length = NOTE_LIMIT;
+}
+
+// 이 공격권을 움직임으로 보여 줄지 (빠르게는 득점·블록·스틸이 있는 공격권만)
+function animates(prefs: MatchPrefs, step: StepResult) {
+  const s = SPEEDS[prefs.speed];
+  if (!s.perSecond) return false;
+  if (!s.keyOnly) return true;
+  return step.events.some((e) => e.info && ((e.info.kind === 'shot' && e.info.made) || e.info.kind === 'block' || e.info.kind === 'steal'));
+}
+
+// 1) 엔진을 한 공격권 진행하고 코트 연출을 만든다. 끝났으면 null.
+export function beginPossession(m: ActiveMatch, prefs: MatchPrefs): { pending: Pending; ms: number } | null {
+  const before = m.game.view();
+  const box = m.game.result().box;
+  const step = m.game.step();
+  if (!step) return null;
+  const after = m.game.view();
+  const c = choreograph({
+    period: before.period, after, step, prev: m.scene ?? tipOffScene(before), prevEnd: m.lastEnd, seed: ++m.possessions,
+    msPerSecond: SPEEDS[prefs.speed].perSecond, targetSeconds: clamp(step.elapsed, 4, 18),
+  });
+  const ms = animates(prefs, step) ? Math.round(c.timeline.duration) : 0;
+  m.scene = c.end;
+  m.lastEnd = c.endKind;
+  const pending = { step, period: before.period };
+  if (ms > 0) {
+    m.anim = { timeline: c.timeline, startAt: performance.now() };
+    m.display = { view: before, box };
+    m.pending = pending;
+  } else {
+    m.anim = null;
+  }
+  return { pending, ms };
 }
 
 // 한 공격권이 끝난 뒤 상황을 살펴 알림을 남긴다. 멈춰야 하면 그 이유를 돌려준다.
@@ -94,11 +153,11 @@ function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogE
   for (const p of [...me.court, ...me.bench]) if (p.energy >= 70) delete m.flags[`tired:${p.id}`]; // 회복하면 다시 알린다
 
   for (const e of events) {
-    if (e.text.includes('5반칙 퇴장')) {
+    if (e.info?.kind === 'foulout') {
       const ours = e.team === me.name;
-      raise(`out:${e.text}`, ours ? 'bad' : 'good', ours ? `${e.text}. 벤치 선수가 대신 들어갑니다.` : `상대 ${e.text}.`, false);
+      raise(`out:${e.info.actor}`, ours ? 'bad' : 'good', ours ? `${e.text}. 벤치 선수가 대신 들어갑니다.` : `상대 ${e.text}.`, false);
     }
-    if (e.team === opp.name && e.text.startsWith('작전 타임')) addNote(m, after, 'info', `${opp.name} 작전 타임.`);
+    if (e.info?.kind === 'timeout' && e.team === opp.name) addNote(m, after, 'info', `${opp.name} 작전 타임.`);
   }
 
   if (opp.run >= 8) raise('run', 'bad', `${opp.name} 연속 ${opp.run}점 — 작전 타임으로 흐름을 끊어 보세요.`, prefs.alerts.run);
@@ -116,18 +175,27 @@ function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogE
   return stop;
 }
 
-// 공격권 하나를 진행한다. watch가 false면 알림 없이 진행만 한다(끝까지 맡기기).
-export function advanceMatch(m: ActiveMatch, prefs: MatchPrefs, watch = true) {
-  const before = m.game.view();
-  const s = m.game.step();
-  if (!s) return { stop: null, periodEnded: false, finished: true };
-  m.feed.unshift(...[...s.events].reverse());
+// 2) 공격권 결과를 화면에 드러낸다. watch가 false면 알림 없이 진행만 한다(끝까지 맡기기).
+export function reveal(m: ActiveMatch, prefs: MatchPrefs, pending: Pending, watch = true) {
+  const { step } = pending;
+  m.pending = null;
+  m.display = null;
+  m.anim = null;
+  m.feed.unshift(...[...step.events].reverse());
+  if (m.deferredLog.length) { m.feed.unshift(...[...m.deferredLog].reverse()); m.deferredLog = []; }
   if (m.feed.length > FEED_LIMIT) m.feed.length = FEED_LIMIT;
   const after = m.game.view();
-  const stop = watch ? review(m, prefs, after, s.events) : null;
-  if (watch && s.periodEnded) {
+  const stop = watch ? review(m, prefs, after, step.events) : null;
+  if (watch && step.periodEnded) {
     const [h, a] = after.teams;
-    addNote(m, after, 'info', `${s.finished ? '경기 종료' : `${periodLabel(before.period)} 종료`} · ${h.name} ${h.score} : ${a.score} ${a.name}`);
+    addNote(m, after, 'info', `${step.finished ? '경기 종료' : `${periodLabel(pending.period)} 종료`} · ${h.name} ${h.score} : ${a.score} ${a.name}`);
   }
-  return { stop, periodEnded: s.periodEnded, finished: s.finished };
+  return { stop, periodEnded: step.periodEnded, finished: step.finished };
+}
+
+// 연출 없이 공격권 하나를 바로 진행한다
+export function advanceMatch(m: ActiveMatch, prefs: MatchPrefs, watch = true) {
+  const b = beginPossession(m, { ...prefs, speed: 'fastest' });
+  if (!b) return { stop: null, periodEnded: false, finished: true };
+  return reveal(m, prefs, b.pending, watch);
 }

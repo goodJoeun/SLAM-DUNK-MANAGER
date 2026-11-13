@@ -3,7 +3,8 @@ import type { BoxTeam, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
 import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
 import type { AlertKey, FeedMode, SpeedKey } from './live';
-import Court from './Court';
+import FullCourt, { shortName } from './court/FullCourt';
+import { tipOffScene } from './court/choreo';
 import { CondBar, Crest, Icon, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
 
@@ -80,13 +81,17 @@ function Compare({ box }: { box: BoxTeam[] }) {
 const MADE = /성공|블록|스틸/;
 
 export default function MatchView({ S, act, match: m }: ViewProps & { match: ActiveMatch }) {
-  const v = m.game.view();
-  const box = m.game.result().box;
-  const mine = v.teams[m.side];
-  const opp = v.teams[1 - m.side];
+  // 점수판·기록은 연출 중인 공격권이 끝나기 전까지 이전 상태로 보여 준다. 선수 명단(교체)은 지금 상태.
+  const live = m.game.view();
+  const v = m.display?.view ?? live;
+  const box = m.display?.box ?? m.game.result().box;
+  const mine = live.teams[m.side];
+  const opp = live.teams[1 - m.side];
+  const labels = Object.fromEntries(live.teams.flatMap((team) => [...team.court, ...team.bench]).map((p) => [p.id, shortName(p.name)]));
+  const courtColors: [string, string] = [clubColor(v.teams[0].name), clubColor(v.teams[1].name)];
   const clock = `${Math.floor(v.clock / 60)}:${String(v.clock % 60).padStart(2, '0')}`;
   const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);
-  const started = m.feed.length > 0;
+  const started = m.feed.length > 0 || m.possessions > 0;
   const everyone = Object.fromEntries([...mine.court, ...mine.bench].map((p) => [p.id, p.name]));
   const rivals = Object.fromEntries([...opp.court, ...opp.bench].map((p) => [p.id, `${p.name} (${p.pts}점)`]));
   const t = mine.tactics;
@@ -118,7 +123,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <button className="btn" disabled={!mine.timeoutsLeft} onClick={() => act('timeout')}>작전 타임 ({mine.timeoutsLeft})</button>
             <button className="btn" onClick={() => act('autosub')}>교체: {mine.auto ? 'AI 코치' : '직접'}</button>
             <span className="spacer" />
-            {!m.playing && <button className="btn ghost" onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
+            {!m.playing && <button className="btn ghost" disabled={Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
             <button className="btn ghost" onClick={() => act('skip')}>끝까지 AI에게 맡기기</button>
           </>
         )}
@@ -133,24 +138,52 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         </div>
       )}
 
-      <div className="match-grid">
+      <div className="match-main">
+        <Panel title="코트" flush action={<span className="hint">{SPEEDS[prefs.speed].perSecond ? (SPEEDS[prefs.speed].keyOnly ? '주요 장면만 움직임으로 보여 줍니다' : '모든 공격권을 움직임으로 보여 줍니다') : '움직임 없이 빠르게 진행합니다'}</span>}>
+          <FullCourt
+            anim={m.anim}
+            scene={m.scene ?? tipOffScene(live)}
+            colors={courtColors}
+            labels={labels}
+            mySide={m.side}
+            selected={m.selected}
+            onPick={v.finished ? undefined : (id) => act('pick', 'court', id)}
+          />
+          <div className="court-legend">
+            <span><i style={{ background: courtColors[0] }} />{v.teams[0].name}</span>
+            <span><i style={{ background: courtColors[1] }} />{v.teams[1].name}</span>
+            <span>숫자는 포지션(1 PG ~ 5 C) · 노란 고리는 공을 가진 선수 · 우리 선수를 누르면 교체할 선수로 고릅니다</span>
+          </div>
+        </Panel>
         <div className="stack">
-          <Panel title={`${mine.name} 코트`} flush>
-            <div style={{ padding: 12 }}>
-              <Court
-                players={mine.court.map((p) => ({ id: p.id, name: p.name, note: `${p.pts}점 · ${p.pf}F`, energy: p.energy, selected: m.selected === p.id, out: p.out }))}
-                onPick={(id) => act('pick', 'court', id)}
-              />
-            </div>
-            <div className="sub-hint">
-              {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 바로 바뀝니다.' : '코트의 선수를 누른 뒤 벤치 선수를 누르면 교체됩니다. 고리는 체력입니다.'}
-            </div>
-            {mine.bench.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />)}
+          <Panel title="코치 알림" flush>
+            {m.notes.length ? (
+              <ul className="notes">
+                {m.notes.slice(0, 6).map((n) => (
+                  <li key={n.id} className={`tone-${n.tone}`}>
+                    <Icon name={NOTE_ICON[n.tone]} />
+                    <span>{n.text}{n.paused && <span className="pill" style={{ marginLeft: 6 }}>자동 정지</span>}</span>
+                    <span className="t">{n.period > 4 ? '연장' : `${n.period}Q`} {n.clock}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>}
           </Panel>
-          <Panel title={`${opp.name} 코트`} flush>
-            {opp.court.map((p) => <PlayerRow key={p.id} player={p} />)}
+          <Panel title="경기 기록" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
+            <Compare box={box} />
           </Panel>
         </div>
+      </div>
+
+      <div className="match-grid">
+        <Panel title={`${mine.name} 선수`} flush>
+          <div className="sub-hint">
+            {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트의 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 막대는 체력입니다.'}
+          </div>
+          {mine.court.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />)}
+          <div className="sub-hint">벤치</div>
+          {mine.bench.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />)}
+        </Panel>
 
         <Panel
           title="중계"
@@ -171,22 +204,6 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         </Panel>
 
         <div className="stack">
-          <Panel title="코치 알림" flush>
-            {m.notes.length ? (
-              <ul className="notes">
-                {m.notes.slice(0, 8).map((n) => (
-                  <li key={n.id} className={`tone-${n.tone}`}>
-                    <Icon name={NOTE_ICON[n.tone]} />
-                    <span>{n.text}{n.paused && <span className="pill" style={{ marginLeft: 6 }}>자동 정지</span>}</span>
-                    <span className="t">{n.period > 4 ? '연장' : `${n.period}Q`} {n.clock}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>}
-          </Panel>
-          <Panel title="경기 기록" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
-            <Compare box={box} />
-          </Panel>
           <Panel title="전술">
             <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
             <div className="controls">
@@ -209,6 +226,9 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
               ))}
             </div>
             <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
+          </Panel>
+          <Panel title={`${opp.name} 코트`} flush>
+            {opp.court.map((p) => <PlayerRow key={p.id} player={p} />)}
           </Panel>
         </div>
       </div>

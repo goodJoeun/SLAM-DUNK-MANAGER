@@ -13,7 +13,7 @@
 import { makeRng } from './rng.ts';
 import type { Rng } from './rng.ts';
 import type {
-  BasePlayer, Composites, EngineTeam, GameOptions, GameResult, GameView, LogEvent, PlayerView,
+  BasePlayer, Composites, EngineTeam, EventInfo, GameOptions, GameResult, GameView, LogEvent, PlayerView,
   RatingKey, ShotType, StatLine, StepResult, Tactics,
 } from './types.ts';
 
@@ -175,11 +175,14 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   let now = 0; // 경기 시작부터 흐른 시간(초)
   let finished = false;
 
-  const say = (team: GameTeam, text: string) => {
+  const say = (team: GameTeam, text: string, info?: EventInfo) => {
     if (!opts.log) return;
     const m = Math.floor(clock / 60);
     const s = String(Math.floor(clock % 60)).padStart(2, '0');
-    log.push({ period, clock: `${m}:${s}`, team: team.name, text, score: `${teams[0].score}-${teams[1].score}` });
+    log.push({
+      period, clock: `${m}:${s}`, team: team.name, text, score: `${teams[0].score}-${teams[1].score}`,
+      side: teams.indexOf(team), at: now, info,
+    });
   };
 
   // 피로·컨디션 반영 능력치
@@ -219,7 +222,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     cur.since = now;
     incoming.since = now;
     team.subs++;
-    say(team, `교체: ${cur.name} → ${incoming.name}`);
+    say(team, `교체: ${cur.name} → ${incoming.name}`, { kind: 'sub', actor: incoming.id, other: cur.id });
   }
 
   // 자동 교체: 지친 선수는 쉬게 하고, 회복한 주전은 복귀. 접전 막판엔 베스트 5, 승부가 기울면 벤치.
@@ -255,11 +258,11 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   function addFoul(def: GameTeam, player: GamePlayer) {
     player.stat.pf++;
     def.teamFouls++;
-    if (player.stat.pf >= T.foulOutLimit) say(def, `${player.name} 5반칙 퇴장`);
+    if (player.stat.pf >= T.foulOutLimit) say(def, `${player.name} 5반칙 퇴장`, { kind: 'foulout', actor: player.id });
   }
 
   // 자유투. 마지막 구가 빗나가면 true (리바운드 상황)
-  function freeThrows(off: GameTeam, def: GameTeam, shooter: GamePlayer, n: number) {
+  function freeThrows(off: GameTeam, def: GameTeam, shooter: GamePlayer, n: number, shot?: ShotType) {
     let lastMissed = false;
     let made = 0;
     for (let i = 0; i < n; i++) {
@@ -272,7 +275,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       }
       lastMissed = !ok;
     }
-    say(off, `${shooter.name} 자유투 ${n}개 중 ${made}개 성공`);
+    say(off, `${shooter.name} 자유투 ${n}개 중 ${made}개 성공`, { kind: 'ft', actor: shooter.id, attempts: n, makes: made, shot });
     return lastMissed;
   }
 
@@ -285,7 +288,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     const team = offensive ? off : def;
     const who = pick(team.court, (p) => eff(p, 'rebounding') ** 3);
     who.stat[offensive ? 'orb' : 'drb']++;
-    say(team, `${who.name} ${offensive ? '공격' : '수비'} 리바운드`);
+    say(team, `${who.name} ${offensive ? '공격' : '수비'} 리바운드`, { kind: 'rebound', actor: who.id, offensive });
     return offensive;
   }
 
@@ -332,7 +335,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         elapse(Math.min(clock, rng.int(2, 5)));
         const fouler = pick(def.court, (p) => 1 / (1 + p.stat.pf));
         addFoul(def, fouler);
-        say(def, `${fouler.name} 파울 작전`);
+        say(def, `${fouler.name} 파울 작전`, { kind: 'foul', actor: fouler.id });
         if (bonus()) {
           const shooter = pick(off.court, (p) => p.c.ballHandling ** 2);
           if (freeThrows(off, def, shooter, 2) && rebound(off, def, 0.5)) { secondChance = true; continue; }
@@ -362,7 +365,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       if (rng.chance(T.nonShootingFoul * (pressing ? T.press.foul : 1))) {
         const fouler = pick(def.court, (p) => 1.3 - p.c.defPerimeter);
         addFoul(def, fouler);
-        say(def, `${fouler.name} 파울`);
+        say(def, `${fouler.name} 파울`, { kind: 'foul', actor: fouler.id });
         if (bonus()) {
           const shooter = pick(off.court, (p) => p.c.usage);
           if (freeThrows(off, def, shooter, 2) && rebound(off, def, 0.5)) { secondChance = true; continue; }
@@ -382,9 +385,9 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         if (rng.chance(T.stealShare)) {
           const thief = pick(def.court, (p) => eff(p, 'stealing') ** 3);
           thief.stat.stl++;
-          say(def, `${thief.name} 스틸 (${loser.name} 턴오버)`);
+          say(def, `${thief.name} 스틸 (${loser.name} 턴오버)`, { kind: 'steal', actor: thief.id, other: loser.id });
         } else {
-          say(off, `${loser.name} 턴오버`);
+          say(off, `${loser.name} 턴오버`, { kind: 'turnover', actor: loser.id });
         }
         return;
       }
@@ -419,7 +422,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         blocker.stat.blk++;
         shooter.stat.fga++;
         if (type === 'three') shooter.stat.tpa++;
-        say(def, `${blocker.name} 블록! (${shooter.name} ${SHOT_LABEL[type]})`);
+        say(def, `${blocker.name} 블록! (${shooter.name} ${SHOT_LABEL[type]})`, { kind: 'block', actor: blocker.id, other: shooter.id, shot: type });
         if (rebound(off, def, S.orb)) { secondChance = true; continue; }
         return;
       }
@@ -435,20 +438,22 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         addPoints(off, def, shooter, S.pts);
         const mates = off.court.filter((p) => p !== shooter);
         let text = `${shooter.name} ${SHOT_LABEL[type]} 성공`;
+        let assist: string | undefined;
         if (rng.chance(S.assist * (0.6 + 0.8 * avg(off, 'passing')))) {
           const passer = pick(mates, (p) => eff(p, 'passing') ** 4);
           passer.stat.ast++;
+          assist = passer.id;
           text += ` (어시스트 ${passer.name})`;
         }
-        say(off, fouled ? `${text} + 파울` : text);
+        say(off, fouled ? `${text} + 파울` : text, { kind: 'shot', actor: shooter.id, shot: type, made: true, assist });
         if (fouled && freeThrows(off, def, shooter, 1) && rebound(off, def, 0.5)) { secondChance = true; continue; }
         return;
       }
       if (fouled) {
-        if (freeThrows(off, def, shooter, S.pts) && rebound(off, def, 0.5)) { secondChance = true; continue; }
+        if (freeThrows(off, def, shooter, S.pts, type) && rebound(off, def, 0.5)) { secondChance = true; continue; }
         return;
       }
-      say(off, `${shooter.name} ${SHOT_LABEL[type]} 실패`);
+      say(off, `${shooter.name} ${SHOT_LABEL[type]} 실패`, { kind: 'shot', actor: shooter.id, shot: type, made: false });
       if (rebound(off, def, S.orb)) { secondChance = true; continue; }
       return;
     }
@@ -461,7 +466,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     team.timeoutsLeft--;
     teams[1 - side].run = 0;
     for (const p of team.court) p.energy = Math.min(1, p.energy + T.timeoutEnergy);
-    say(team, `작전 타임 (남은 횟수 ${team.timeoutsLeft})`);
+    say(team, `작전 타임 (남은 횟수 ${team.timeoutsLeft})`, { kind: 'timeout' });
     return true;
   }
 
@@ -475,6 +480,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       autoSubstitute(team, teams[1 - side]);
       if (team.auto && teams[1 - side].run >= T.aiTimeoutRun) timeout(side);
     });
+    const side = offense;
+    const startedAt = now;
     possession(teams[offense], teams[1 - offense]);
     offense = 1 - offense;
     let periodEnded = false;
@@ -492,7 +499,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         });
       }
     }
-    return { events: log.slice(mark), periodEnded, finished };
+    return { events: log.slice(mark), periodEnded, finished, offense: side, elapsed: now - startedAt };
   }
 
   const describe = (p: GamePlayer): PlayerView => ({ id: p.id, name: p.name, pos: p.pos, ovr: p.ovr, energy: Math.round(p.energy * 100), pf: p.stat.pf, pts: p.stat.pts, out: gone(p) });

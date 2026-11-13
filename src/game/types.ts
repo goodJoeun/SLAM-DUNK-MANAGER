@@ -91,18 +91,37 @@ export interface StatLine {
   orb: number; drb: number; ast: number; stl: number; blk: number; tov: number; pf: number;
 }
 
+// 중계 한 줄에 붙는 구조화된 정보. 코트 연출처럼 문장을 해석하지 않고 쓰기 위한 것이다.
+export type EventKind = 'shot' | 'block' | 'rebound' | 'ft' | 'foul' | 'steal' | 'turnover' | 'sub' | 'timeout' | 'foulout';
+export interface EventInfo {
+  kind: EventKind;
+  actor?: string; // 주인공 선수 id (슛한 선수, 리바운드한 선수, 스틸한 선수, 들어온 선수 ...)
+  other?: string; // 상대역 (블록당한 슈터, 공을 뺏긴 선수, 나간 선수)
+  assist?: string;
+  shot?: ShotType; // 슛·블록, 또는 슛하다 얻은 자유투의 슛 종류
+  made?: boolean;
+  offensive?: boolean; // 공격 리바운드
+  attempts?: number; // 자유투 시도
+  makes?: number; // 자유투 성공
+}
+
 export interface LogEvent {
   period: number;
   clock: string;
   team: string;
   text: string;
   score: string;
+  side: number; // 이 줄의 주인공 팀 (0 홈, 1 원정)
+  at: number; // 경기 시작부터 흐른 시간(초)
+  info?: EventInfo;
 }
 
 export interface StepResult {
   events: LogEvent[];
   periodEnded: boolean;
   finished: boolean;
+  offense: number; // 이번 공격권의 공격 팀 (0 홈, 1 원정)
+  elapsed: number; // 이번 공격권에 흐른 경기 시간(초)
 }
 
 export interface GameOptions {

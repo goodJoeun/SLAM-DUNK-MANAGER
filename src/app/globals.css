@@ -520,3 +520,31 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; }
 .toggle { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
 .toggle input { width: 16px; height: 16px; accent-color: var(--club); }
+
+/* ---------- 풀코트 ---------- */
+
+.fullcourt { display: block; width: 100%; height: auto; }
+.fullcourt .floor { fill: color-mix(in srgb, #c98a4b 22%, var(--panel-2)); }
+.fullcourt .paint { fill: color-mix(in srgb, var(--club) 18%, transparent); stroke: rgb(255 255 255 / 0.55); stroke-width: 0.06; }
+.fullcourt .ln { fill: none; stroke: rgb(255 255 255 / 0.55); stroke-width: 0.06; }
+.fullcourt .board { stroke: rgb(255 255 255 / 0.85); stroke-width: 0.1; }
+.fullcourt .rim { fill: none; stroke: #f07a2a; stroke-width: 0.08; }
+.fullcourt .body { stroke: #fff; stroke-width: 0.07; }
+.fullcourt .no { fill: #fff; font-size: 0.46px; font-weight: 800; text-anchor: middle; pointer-events: none; }
+.fullcourt .nm { fill: rgb(255 255 255 / 0.75); font-size: 0.5px; font-weight: 600; text-anchor: middle; paint-order: stroke; stroke: rgb(0 0 0 / 0.45); stroke-width: 0.12px; pointer-events: none; }
+.fullcourt .nm.mine { fill: #fff; font-weight: 800; }
+.fullcourt .holder { fill: none; stroke: var(--gold); stroke-width: 0.08; }
+.fullcourt .dot.pick { cursor: pointer; }
+.fullcourt .dot.sel .body { stroke: var(--gold); stroke-width: 0.16; }
+.fullcourt .ball { fill: #e8792b; stroke: #7a3410; stroke-width: 0.04; }
+.fullcourt .ball-shadow { fill: #000; }
+@media (prefers-color-scheme: light) {
+  .fullcourt .floor { fill: #e8c79c; }
+  .fullcourt .ln, .fullcourt .paint { stroke: rgb(255 255 255 / 0.95); }
+  .fullcourt .nm { fill: #1d232b; stroke: rgb(255 255 255 / 0.7); }
+  .fullcourt .nm.mine { fill: #000; }
+}
+.match-main { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1050px) { .match-main { grid-template-columns: minmax(0, 1fr); } }
+.court-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
+.court-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
