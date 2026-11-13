@@ -4,7 +4,7 @@ import { overall } from '@/game/engine';
 import { RATING_KEYS } from '@/game/generate';
 import type { Career, Player, RatingKey } from '@/game/types';
 import type { Act } from './useGame';
-import Portrait, { PortraitEditor } from './Portrait';
+import Portrait, { PortraitEditor, licensedPortrait } from './Portrait';
 import {
   ATTR_GROUPS, Attr, CondBar, Crest, Icon, PageTitle, Panel, POS_NAME, PosBadge, RATING_SHORT, Seg, Select, Stars,
   abilityStars, pct, potentialStars, userTeam,
@@ -66,7 +66,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
 
       <div className="profile-head">
         <div className="profile-photo">
-          <Portrait name={p.name} team={team.name} src={portraits[p.name]} size={112} />
+          <Portrait name={p.name} team={team.name} src={portraits[p.name] ?? licensedPortrait(p)} size={112} />
           <PortraitEditor
             hasCustom={Boolean(portraits[p.name])}
             onSet={(url) => act('setPortrait', p.name, url)}
@@ -184,7 +184,7 @@ export default function SquadView({ S, act }: ViewProps) {
               return (
                 <tr key={p.id} className={`click ${sort === 'lineup' && i === 5 ? 'sep' : ''} ${p.injuredDays ? 'dim' : ''}`} onClick={() => act('player', p.id)}>
                   <td className="l"><PosBadge pos={p.pos} /></td>
-                  <td className="l name"><span className="name-cell"><Portrait name={p.name} team={team.name} src={S.portraits[p.name]} size={26} round />{p.name}{p.fixed && <span className="faint">★</span>}</span></td>
+                  <td className="l name"><span className="name-cell"><Portrait name={p.name} team={team.name} src={S.portraits[p.name] ?? licensedPortrait(p)} size={26} round />{p.name}{p.fixed && <span className="faint">★</span>}</span></td>
                   {view === 'overview' ? (
                     <>
                       <td>{p.year}학년</td>

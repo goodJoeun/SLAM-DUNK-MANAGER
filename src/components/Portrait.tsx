@@ -2,7 +2,26 @@
 // 기본 그림은 이름에서 얼굴형·머리 모양·피부색·등번호를 고르고, 소속 학교 색 유니폼을 입힌다.
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { ORIGINAL } from '@/game/data/original';
+import { PORTRAIT_SLUGS } from '@/game/data/portraits';
+import portraitFiles from '@/game/data/portrait-files.json';
+import type { Player } from '@/game/types';
 import { clubHue } from './ui';
+
+// 원작 선수 이름(한국어판·원작 표기 모두) -> public/portraits/ 의 이미지 주소. npm run portraits 로 연결된 파일만 담긴다.
+const FILES = portraitFiles as Record<string, string>;
+const LICENSED = new Map<string, string>();
+for (const spec of [...ORIGINAL.schools, ...ORIGINAL.nationals].flatMap((s) => s.players)) {
+  const slug = PORTRAIT_SLUGS[spec.name.kr];
+  const file = slug && FILES[slug];
+  if (!file) continue;
+  const url = `/portraits/${encodeURIComponent(file)}`;
+  LICENSED.set(spec.name.kr, url);
+  LICENSED.set(spec.name.jp, url);
+}
+
+// 원작 선수면 연결된 이미지 주소, 아니면 undefined
+export const licensedPortrait = (p: Player) => (p.fixed ? LICENSED.get(p.name) : undefined);
 
 const SKIN = ['#f1c9a5', '#e6b691', '#d6a37c', '#c48b63'];
 const HAIR_COLOR = ['#1c1a19', '#2b211c', '#3b2a1e', '#a8412a', '#5a4632'];
@@ -49,9 +68,14 @@ export default function Portrait({ name, team, src, size = 48, round = false }: 
   size?: number;
   round?: boolean;
 }) {
+  // 이미지를 불러오지 못하면(파일이 지워졌거나 깨졌으면) 기본 그림으로 돌아간다
+  const [failed, setFailed] = useState<string | null>(null);
+  const show = src && src !== failed ? src : null;
   return (
     <span className={`portrait ${round ? 'round' : ''}`} style={{ width: size, height: size }}>
-      {src ? <img src={src} alt={`${name} 이미지`} /> : <Avatar name={name} team={team} face={size <= 40} />}
+      {show
+        ? <img src={show} alt={`${name} 이미지`} onError={() => setFailed(show)} />
+        : <Avatar name={name} team={team} face={size <= 40} />}
     </span>
   );
 }
@@ -108,7 +132,7 @@ export function PortraitEditor({ hasCustom, onSet, onClear }: {
     <div className="portrait-edit">
       <input ref={input} type="file" accept="image/*" hidden onChange={onFile} />
       <button className="btn small" onClick={() => input.current?.click()}>{hasCustom ? '이미지 바꾸기' : '이미지 올리기'}</button>
-      {hasCustom && <button className="btn small ghost" onClick={onClear}>기본 그림으로</button>}
+      {hasCustom && <button className="btn small ghost" onClick={onClear}>올린 이미지 지우기</button>}
       {error && <span className="bad hint">{error}</span>}
     </div>
   );
