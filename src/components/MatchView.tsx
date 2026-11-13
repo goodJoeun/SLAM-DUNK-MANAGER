@@ -1,9 +1,14 @@
 import type { CSSProperties } from 'react';
 import type { BoxTeam, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
+import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
+import type { AlertKey, FeedMode, SpeedKey } from './live';
 import Court from './Court';
-import { CondBar, Crest, Panel, PosBadge, Select, TacticSelects, clubColor } from './ui';
+import { CondBar, Crest, Icon, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
+
+const SPEED_OPTIONS = Object.entries(SPEEDS).map(([k, v]) => [k, v.label] as [string, string]);
+const NOTE_ICON = { info: 'bulb', warn: 'alert', bad: 'alert', good: 'ball' } as const;
 
 function Side({ team: t, mine, away = false }: { team: TeamView; mine: boolean; away?: boolean }) {
   return (
@@ -74,17 +79,19 @@ function Compare({ box }: { box: BoxTeam[] }) {
 
 const MADE = /성공|블록|스틸/;
 
-export default function MatchView({ act, match: m }: ViewProps & { match: ActiveMatch }) {
+export default function MatchView({ S, act, match: m }: ViewProps & { match: ActiveMatch }) {
   const v = m.game.view();
   const box = m.game.result().box;
   const mine = v.teams[m.side];
   const opp = v.teams[1 - m.side];
   const clock = `${Math.floor(v.clock / 60)}:${String(v.clock % 60).padStart(2, '0')}`;
-  const period = v.finished ? '경기 종료' : v.period > 4 ? `연장 ${v.period - 4}` : `${v.period}쿼터`;
+  const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);
+  const started = m.feed.length > 0;
   const everyone = Object.fromEntries([...mine.court, ...mine.bench].map((p) => [p.id, p.name]));
   const rivals = Object.fromEntries([...opp.court, ...opp.bench].map((p) => [p.id, `${p.name} (${p.pts}점)`]));
   const t = mine.tactics;
-  const feed = m.feed.slice(0, 120);
+  const prefs = S.prefs;
+  const feed = (prefs.feed === 'key' ? m.feed.filter((e) => KEY_EVENT.test(e.text)) : m.feed).slice(0, 150);
   const colors = { '--home': clubColor(v.teams[0].name), '--away': clubColor(v.teams[1].name) } as CSSProperties;
 
   return (
@@ -92,7 +99,7 @@ export default function MatchView({ act, match: m }: ViewProps & { match: Active
       <div className="scorebar">
         <Side team={v.teams[0]} mine={m.side === 0} />
         <div className="sb-mid">
-          <span className="q">{period}</span>
+          <span className="q">{status}</span>
           <span className="clock">{clock}</span>
           <span className="faint" style={{ fontSize: 11.5 }}>{m.label}</span>
         </div>
@@ -104,43 +111,79 @@ export default function MatchView({ act, match: m }: ViewProps & { match: Active
           <button className="btn primary" onClick={() => act('finish')}>경기 종료 — 결과 반영</button>
         ) : (
           <>
-            <button className="btn primary" onClick={() => act('run')}>{m.timer ? '일시정지' : '쿼터 끝까지 진행'}</button>
-            <button className="btn" disabled={Boolean(m.timer)} onClick={() => act('step')}>공격권 하나</button>
+            {m.playing
+              ? <button className="btn primary play-btn" onClick={() => act('pause')}><span className="pause-ico" />일시정지</button>
+              : <button className="btn primary play-btn" onClick={() => act('play')}><Icon name="next" />{started ? '계속 진행' : '경기 시작'}</button>}
+            <Seg options={SPEED_OPTIONS} value={prefs.speed} onChange={(k) => act('speed', k as SpeedKey)} />
             <button className="btn" disabled={!mine.timeoutsLeft} onClick={() => act('timeout')}>작전 타임 ({mine.timeoutsLeft})</button>
             <button className="btn" onClick={() => act('autosub')}>교체: {mine.auto ? 'AI 코치' : '직접'}</button>
             <span className="spacer" />
+            {!m.playing && <button className="btn ghost" onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
             <button className="btn ghost" onClick={() => act('skip')}>끝까지 AI에게 맡기기</button>
           </>
         )}
       </div>
 
-      <div className="match-grid">
-        <Panel title={`${mine.name} 코트`} flush>
-          <div style={{ padding: 12 }}>
-            <Court
-              players={mine.court.map((p) => ({ id: p.id, name: p.name, note: `${p.pts}점 · ${p.pf}F`, energy: p.energy, selected: m.selected === p.id, out: p.out }))}
-              onPick={(id) => act('pick', 'court', id)}
-            />
-          </div>
-          <div className="sub-hint">{m.selected ? '들어갈 벤치 선수를 누르세요.' : '코트의 선수를 누른 뒤 벤치 선수를 누르면 교체됩니다. 고리는 체력입니다.'}</div>
-          {mine.bench.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />)}
-        </Panel>
+      {m.pause && !v.finished && (
+        <div className="pause-banner">
+          <Icon name="alert" />
+          <div><b>경기를 멈췄습니다</b><span>{m.pause}</span></div>
+          <span className="spacer" />
+          <button className="btn primary" onClick={() => act('play')}>계속 진행</button>
+        </div>
+      )}
 
-        <Panel title="중계" flush>
+      <div className="match-grid">
+        <div className="stack">
+          <Panel title={`${mine.name} 코트`} flush>
+            <div style={{ padding: 12 }}>
+              <Court
+                players={mine.court.map((p) => ({ id: p.id, name: p.name, note: `${p.pts}점 · ${p.pf}F`, energy: p.energy, selected: m.selected === p.id, out: p.out }))}
+                onPick={(id) => act('pick', 'court', id)}
+              />
+            </div>
+            <div className="sub-hint">
+              {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 바로 바뀝니다.' : '코트의 선수를 누른 뒤 벤치 선수를 누르면 교체됩니다. 고리는 체력입니다.'}
+            </div>
+            {mine.bench.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />)}
+          </Panel>
+          <Panel title={`${opp.name} 코트`} flush>
+            {opp.court.map((p) => <PlayerRow key={p.id} player={p} />)}
+          </Panel>
+        </div>
+
+        <Panel
+          title="중계"
+          flush
+          action={<Seg options={FEED_MODES} value={prefs.feed} onChange={(k) => act('feedMode', k as FeedMode)} />}
+        >
           <div className="feed">
             {feed.length
               ? feed.map((e, i) => (
-                <div key={m.feed.length - i} className={e.team === mine.name ? 'mine' : ''}>
+                <div key={`${feed.length - i}-${e.clock}`} className={e.team === mine.name ? 'mine' : ''}>
                   <span className="t">{e.period > 4 ? '연장' : `${e.period}Q`} {e.clock}</span>
                   <span className="t">{e.score}</span>
                   <span className={MADE.test(e.text) ? 'made' : ''}>{e.text}</span>
                 </div>
               ))
-              : <p className="empty">경기를 진행하면 중계가 여기에 나옵니다.</p>}
+              : <p className="empty">{started ? '아직 주요 장면이 없습니다.' : '경기 시작을 누르면 중계가 여기에 나옵니다.'}</p>}
           </div>
         </Panel>
 
         <div className="stack">
+          <Panel title="코치 알림" flush>
+            {m.notes.length ? (
+              <ul className="notes">
+                {m.notes.slice(0, 8).map((n) => (
+                  <li key={n.id} className={`tone-${n.tone}`}>
+                    <Icon name={NOTE_ICON[n.tone]} />
+                    <span>{n.text}{n.paused && <span className="pill" style={{ marginLeft: 6 }}>자동 정지</span>}</span>
+                    <span className="t">{n.period > 4 ? '연장' : `${n.period}Q`} {n.clock}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>}
+          </Panel>
           <Panel title="경기 기록" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
             <Compare box={box} />
           </Panel>
@@ -154,9 +197,18 @@ export default function MatchView({ act, match: m }: ViewProps & { match: Active
                 <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
               </label>
             </div>
+            <p className="hint">경기가 흐르는 중에도 바로 적용됩니다.</p>
           </Panel>
-          <Panel title={`${opp.name} 코트`} flush>
-            {opp.court.map((p) => <PlayerRow key={p.id} player={p} />)}
+          <Panel title="자동 정지">
+            <div className="toggles">
+              {(Object.keys(ALERTS) as AlertKey[]).map((k) => (
+                <label key={k} className="toggle">
+                  <input type="checkbox" checked={prefs.alerts[k]} onChange={() => act('toggleAlert', k)} />
+                  {ALERTS[k]}
+                </label>
+              ))}
+            </div>
+            <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
           </Panel>
         </div>
       </div>

@@ -5,27 +5,24 @@
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
 import { createCareer, today, playDay, prepareUserMatch } from '@/game/season';
-import type { DayDecision, UserMatch } from '@/game/season';
+import type { DayDecision } from '@/game/season';
 import type {
-  Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, LogEvent, NameStyle, ProgramKey, Tactics,
+  Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, ProgramKey, Tactics,
 } from '@/game/types';
+import { BREAK_MS, DEFAULT_PREFS, SPEEDS, addNote, advanceMatch, newMatch, periodLabel } from './live';
+import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
 import { buildMessages, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
 
 const SAVE_KEY = 'hoops-manager-save-v2';
 const INBOX_KEY = 'hoops-manager-inbox-v1';
 const PORTRAIT_KEY = 'hoops-manager-portraits-v1'; // 선수 이름 -> 사용자가 올린 이미지 (게임을 새로 시작해도 남는다)
+const PREFS_KEY = 'hoops-manager-match-prefs-v1'; // 경기 속도·자동 정지·중계 보기 설정
 const INBOX_LIMIT = 80;
-const STEP_MS = 320; // 경기 자동 진행 속도
 
 export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'comp' | 'records';
 
-// 직접 지휘 중인 경기
-export interface ActiveMatch extends UserMatch {
-  feed: LogEvent[]; // 중계 (최신이 앞)
-  selected: string | null; // 교체하려고 고른 코트 위 선수
-  timer: ReturnType<typeof setInterval> | null; // 자동 진행 중이면 타이머
-}
+export type { ActiveMatch } from './live';
 
 export interface GameState {
   career: Career | null;
@@ -39,6 +36,7 @@ export interface GameState {
   match: ActiveMatch | null;
   playerId: string | null;
   portraits: Record<string, string>;
+  prefs: MatchPrefs;
 }
 
 // 게임을 시작한 뒤의 상태
@@ -67,6 +65,11 @@ function save(S: GameState) {
   writeJson(INBOX_KEY, S.inbox);
 }
 
+function loadPrefs(): MatchPrefs {
+  const saved = readJson<Partial<MatchPrefs>>(PREFS_KEY, {});
+  return { ...DEFAULT_PREFS, ...saved, alerts: { ...DEFAULT_PREFS.alerts, ...saved.alerts } };
+}
+
 const initialState = (): GameState => {
   const career = readJson<Career | null>(SAVE_KEY, null);
   return {
@@ -81,6 +84,7 @@ const initialState = (): GameState => {
     match: null,
     playerId: null,
     portraits: readJson<Record<string, string>>(PORTRAIT_KEY, {}),
+    prefs: loadPrefs(),
   };
 };
 
@@ -125,15 +129,33 @@ function openMatchReport(S: GameState, messages: Message[]) {
 }
 
 function stopMatchTimer(S: GameState) {
-  if (S.match?.timer) { clearInterval(S.match.timer); S.match.timer = null; }
+  const m = S.match;
+  if (!m) return;
+  if (m.timer) clearTimeout(m.timer);
+  m.timer = null;
+  m.playing = false;
+  m.interlude = null;
 }
 
-function stepMatch(S: GameState) {
-  const m = matchOf(S);
-  const s = m.game.step();
-  if (!s) { stopMatchTimer(S); return; }
-  m.feed.unshift(...[...s.events].reverse());
-  if (s.periodEnded || s.finished) stopMatchTimer(S);
+// 경기를 한 공격권씩 흘려보낸다. 중요한 순간이면 멈추고, 쿼터 사이에는 잠깐 쉬었다가 이어 간다.
+function tick(S: GameState, rerender: () => void) {
+  const m = S.match;
+  if (!m || !m.playing) return;
+  m.timer = null;
+  m.interlude = null;
+  const r = advanceMatch(m, S.prefs);
+  if (r.finished) {
+    stopMatchTimer(S);
+  } else if (r.stop) {
+    m.pause = r.stop;
+    stopMatchTimer(S);
+  } else if (r.periodEnded) {
+    m.interlude = `${periodLabel(m.game.view().period)} 시작 전 휴식`;
+    m.timer = setTimeout(() => tick(S, rerender), BREAK_MS);
+  } else {
+    m.timer = setTimeout(() => tick(S, rerender), SPEEDS[S.prefs.speed].ms);
+  }
+  rerender();
 }
 
 // 방금 엔진이 남긴 중계 한 줄(교체·작전 타임)을 화면 중계에 옮긴다
@@ -149,7 +171,7 @@ function trainDay(S: GameState) {
 
 function startCommand(S: GameState) {
   const match = prepareUserMatch(careerOf(S));
-  if (match) S.match = { ...match, feed: [], selected: null, timer: null };
+  if (match) S.match = newMatch(match);
 }
 
 interface Ctx {
@@ -239,18 +261,38 @@ const actions = {
   },
 
   // 경기 중
-  step({ S }: Ctx) { stepMatch(S); },
-  run({ S, rerender }: Ctx) {
+  play({ S, rerender }: Ctx) {
     const m = matchOf(S);
-    if (m.timer) { stopMatchTimer(S); return; }
-    m.timer = setInterval(() => { stepMatch(S); rerender(); }, STEP_MS);
+    if (m.playing || m.game.finished) return;
+    m.pause = null;
+    m.playing = true;
+    m.timer = setTimeout(() => tick(S, rerender), 0);
   },
+  pause({ S }: Ctx) { stopMatchTimer(S); },
+  // 멈춘 상태에서 공격권 하나만 진행 (자세히 보고 싶을 때)
+  step({ S }: Ctx) {
+    const m = matchOf(S);
+    if (m.playing) return;
+    m.pause = advanceMatch(m, S.prefs).stop;
+  },
+  speed({ S }: Ctx, key: SpeedKey) { S.prefs.speed = key; writeJson(PREFS_KEY, S.prefs); },
+  toggleAlert({ S }: Ctx, key: AlertKey) { S.prefs.alerts[key] = !S.prefs.alerts[key]; writeJson(PREFS_KEY, S.prefs); },
+  feedMode({ S }: Ctx, mode: FeedMode) { S.prefs.feed = mode; writeJson(PREFS_KEY, S.prefs); },
   timeout({ S }: Ctx) {
     const m = matchOf(S);
     if (m.game.timeout(m.side)) pushLastLog(m);
   },
   autosub({ S }: Ctx) { const m = matchOf(S); m.game.setAuto(m.side, !m.game.view().teams[m.side].auto); },
-  skip({ S }: Ctx) { const m = matchOf(S); stopMatchTimer(S); m.game.setAuto(m.side, true); while (!m.game.finished) stepMatch(S); },
+  skip({ S }: Ctx) {
+    const m = matchOf(S);
+    stopMatchTimer(S);
+    m.pause = null;
+    m.game.setAuto(m.side, true);
+    addNote(m, m.game.view(), 'info', 'AI 코치가 남은 경기를 맡았습니다.');
+    while (!m.game.finished) advanceMatch(m, S.prefs, false);
+    const [h, a] = m.game.view().teams;
+    addNote(m, m.game.view(), 'info', `경기 종료 · ${h.name} ${h.score} : ${a.score} ${a.name}`);
+  },
   pick({ S }: Ctx, where: 'court' | 'bench', id: string) {
     const m = matchOf(S);
     if (m.game.finished) return;

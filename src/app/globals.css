@@ -494,3 +494,29 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .portrait-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .profile-photo { display: grid; justify-items: center; gap: 8px; }
 .name-cell { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ---------- 실시간 경기 ---------- */
+
+.play-btn { min-width: 112px; justify-content: center; }
+.pause-ico { display: inline-block; width: 10px; height: 12px; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
+.pause-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, var(--panel));
+}
+.pause-banner > svg { width: 20px; height: 20px; color: var(--warn); }
+.pause-banner b { display: block; }
+.pause-banner span { font-size: 12.5px; }
+.notes { display: grid; margin: 0; padding: 0; list-style: none; }
+.notes li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
+.notes li:last-child { border-bottom: 0; }
+.notes li svg { width: 16px; height: 16px; margin-top: 1px; color: var(--muted); }
+.notes li.tone-warn svg { color: var(--warn); }
+.notes li.tone-bad svg { color: var(--bad); }
+.notes li.tone-good svg { color: var(--good); }
+.notes li.tone-info svg { color: var(--gold); }
+.notes .t { color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--club); }
