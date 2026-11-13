@@ -14,6 +14,7 @@ import type { Message, MessageDraft } from './inbox';
 
 const SAVE_KEY = 'hoops-manager-save-v2';
 const INBOX_KEY = 'hoops-manager-inbox-v1';
+const PORTRAIT_KEY = 'hoops-manager-portraits-v1'; // 선수 이름 -> 사용자가 올린 이미지 (게임을 새로 시작해도 남는다)
 const INBOX_LIMIT = 80;
 const STEP_MS = 320; // 경기 자동 진행 속도
 
@@ -37,6 +38,7 @@ export interface GameState {
   messageId: number | null;
   match: ActiveMatch | null;
   playerId: string | null;
+  portraits: Record<string, string>;
 }
 
 // 게임을 시작한 뒤의 상태
@@ -53,8 +55,8 @@ function readJson<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
-function writeJson(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* 저장 실패는 무시한다 */ }
+function writeJson(key: string, value: unknown): boolean {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; }
 }
 function removeKey(key: string) {
   try { localStorage.removeItem(key); } catch { /* 저장 실패는 무시한다 */ }
@@ -78,6 +80,7 @@ const initialState = (): GameState => {
     messageId: null,
     match: null,
     playerId: null,
+    portraits: readJson<Record<string, string>>(PORTRAIT_KEY, {}),
   };
 };
 
@@ -175,6 +178,20 @@ const actions = {
     S.messageId = id;
     const m = S.inbox.find((x) => x.id === id);
     if (m?.unread) { m.unread = false; save(S); }
+  },
+  setPortrait({ S }: Ctx, name: string, dataUrl: string) {
+    const next = { ...S.portraits, [name]: dataUrl };
+    if (!writeJson(PORTRAIT_KEY, next)) {
+      window.alert('브라우저 저장 공간이 부족해 이미지를 저장하지 못했습니다. 다른 선수의 이미지를 지운 뒤 다시 시도해 주세요.');
+      return;
+    }
+    S.portraits = next;
+  },
+  clearPortrait({ S }: Ctx, name: string) {
+    const next = { ...S.portraits };
+    delete next[name];
+    S.portraits = next;
+    writeJson(PORTRAIT_KEY, next);
   },
   readAll({ S }: Ctx) { for (const m of S.inbox) m.unread = false; save(S); },
   program({ S }: Ctx, key: ProgramKey) { S.program = key; },

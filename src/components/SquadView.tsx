@@ -4,6 +4,7 @@ import { overall } from '@/game/engine';
 import { RATING_KEYS } from '@/game/generate';
 import type { Career, Player, RatingKey } from '@/game/types';
 import type { Act } from './useGame';
+import Portrait, { PortraitEditor } from './Portrait';
 import {
   ATTR_GROUPS, Attr, CondBar, Crest, Icon, PageTitle, Panel, POS_NAME, PosBadge, RATING_SHORT, Seg, Select, Stars,
   abilityStars, pct, potentialStars, userTeam,
@@ -40,7 +41,13 @@ function status(p: Player, index: number) {
   return <span className="pill">벤치</span>;
 }
 
-function PlayerProfile({ c, player: p, index, act }: { c: Career; player: Player; index: number; act: Act }) {
+function PlayerProfile({ c, player: p, index, act, portraits }: {
+  c: Career;
+  player: Player;
+  index: number;
+  act: Act;
+  portraits: Record<string, string>;
+}) {
   const team = userTeam(c);
   const list = team.players;
   const prev = list[(index - 1 + list.length) % list.length];
@@ -58,8 +65,16 @@ function PlayerProfile({ c, player: p, index, act }: { c: Career; player: Player
       </div>
 
       <div className="profile-head">
-        <Crest name={team.name} size={52} />
+        <div className="profile-photo">
+          <Portrait name={p.name} team={team.name} src={portraits[p.name]} size={112} />
+          <PortraitEditor
+            hasCustom={Boolean(portraits[p.name])}
+            onSet={(url) => act('setPortrait', p.name, url)}
+            onClear={() => act('clearPortrait', p.name)}
+          />
+        </div>
         <div className="who">
+          <span className="row"><Crest name={team.name} size={20} /><span className="muted">{team.name}</span></span>
           <h1>{p.name}</h1>
           <div className="row">
             <PosBadge pos={p.pos} /><span>{POS_NAME[p.pos]}</span><span className="muted">·</span><span>{p.year}학년</span>
@@ -118,7 +133,7 @@ export default function SquadView({ S, act }: ViewProps) {
   const c = S.career;
   const team = userTeam(c);
   const selectedIndex = team.players.findIndex((x) => x.id === S.playerId);
-  if (selectedIndex >= 0) return <PlayerProfile c={c} player={team.players[selectedIndex]} index={selectedIndex} act={act} />;
+  if (selectedIndex >= 0) return <PlayerProfile c={c} player={team.players[selectedIndex]} index={selectedIndex} act={act} portraits={S.portraits} />;
 
   const rows = team.players.map((p, i) => ({ p, i }));
   if (sort !== 'lineup') {
@@ -169,7 +184,7 @@ export default function SquadView({ S, act }: ViewProps) {
               return (
                 <tr key={p.id} className={`click ${sort === 'lineup' && i === 5 ? 'sep' : ''} ${p.injuredDays ? 'dim' : ''}`} onClick={() => act('player', p.id)}>
                   <td className="l"><PosBadge pos={p.pos} /></td>
-                  <td className="l name">{p.name}{p.fixed && <span className="faint"> ★</span>}</td>
+                  <td className="l name"><span className="name-cell"><Portrait name={p.name} team={team.name} src={S.portraits[p.name]} size={26} round />{p.name}{p.fixed && <span className="faint">★</span>}</span></td>
                   {view === 'overview' ? (
                     <>
                       <td>{p.year}학년</td>
