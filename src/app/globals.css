@@ -548,3 +548,11 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 @media (max-width: 1050px) { .match-main { grid-template-columns: minmax(0, 1fr); } }
 .court-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
 .court-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+.fullcourt .caption { fill: var(--text); font-size: 0.72px; font-weight: 800; text-anchor: middle; letter-spacing: 0.02em; }
+@media (max-width: 700px) {
+  .fullcourt .body { r: 0.62px; }
+  .fullcourt .holder { r: 0.88px; }
+  .fullcourt .no { font-size: 0.62px; }
+  .fullcourt .nm { font-size: 0.74px; }
+  .fullcourt .caption { font-size: 0.95px; }
+}

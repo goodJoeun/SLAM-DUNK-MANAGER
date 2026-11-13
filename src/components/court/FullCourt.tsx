@@ -34,7 +34,7 @@ export function sampleTimeline(tl: Timeline, t: number): Scene {
     z: b.arc ? 4 * f * (1 - f) : 0, // 슛은 포물선
     holder: f < 0.5 ? a.scene.ball.holder : b.scene.ball.holder,
   };
-  return { players, ball };
+  return { players, ball, caption: b.caption ?? a.caption };
 }
 
 // 한쪽 끝의 코트 선 (왼쪽 기준, 오른쪽은 뒤집어 그린다)
@@ -82,22 +82,30 @@ export default function FullCourt({ anim, scene, colors, labels, mySide, selecte
   useEffect(() => {
     if (!anim) return;
     let raf = 0;
+    const end = anim.startAt + anim.timeline.duration;
     const loop = () => {
       const t = performance.now();
       setNow(t);
-      if (t < anim.startAt + anim.timeline.duration) raf = requestAnimationFrame(loop);
+      if (t < end) raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    // 브라우저가 화면 갱신(requestAnimationFrame)을 멈춰 둔 경우에도 움직이도록 타이머로도 갱신한다
+    const timer = setInterval(() => {
+      const t = performance.now();
+      setNow(t);
+      if (t >= end) clearInterval(timer);
+    }, 60);
+    return () => { cancelAnimationFrame(raf); clearInterval(timer); };
   }, [anim]);
 
-  const frame = anim ? sampleTimeline(anim.timeline, Math.max(0, now - anim.startAt)) : scene;
+  const frame = anim ? sampleTimeline(anim.timeline, Math.max(0, now - anim.startAt)) : { ...scene, caption: undefined };
   const { ball } = frame;
   const z = ball.z ?? 0;
 
   return (
     <svg className="fullcourt" viewBox={`-1.2 -1.4 ${COURT.length + 2.4} ${COURT.width + 2.8}`} role="img" aria-label="풀코트 위 선수와 공의 위치">
       <Lines />
+      {frame.caption && <text className="caption" x={COURT.length / 2} y="-0.42">{frame.caption}</text>}
       {frame.players.map((p) => {
         const mine = p.side === mySide;
         const hasBall = ball.holder === p.id;

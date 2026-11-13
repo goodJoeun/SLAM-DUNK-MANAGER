@@ -47,12 +47,14 @@ export interface SceneBall extends Point {
 export interface Scene {
   players: ScenePlayer[];
   ball: SceneBall;
+  caption?: string; // 지금 무슨 장면인지 짧은 설명 (픽앤롤, 작전 타임 ...)
 }
 
 export interface TimelineKey {
   t: number; // 시작부터 ms
   scene: Scene;
   arc?: boolean; // 이 키까지 공이 포물선으로 날아간다 (슛·자유투)
+  caption?: string; // 이 키로 가는 동안 보여 줄 설명
 }
 
 // 한 공격권 동안의 움직임. 키 사이는 화면이 부드럽게 이어 그린다.

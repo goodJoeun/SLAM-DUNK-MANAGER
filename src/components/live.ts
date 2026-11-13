@@ -80,11 +80,12 @@ export interface ActiveMatch extends UserMatch {
   display: { view: GameView; box: BoxTeam[] } | null; // 연출 중에 보여 줄 (이전) 점수판과 기록
   deferredLog: LogEvent[]; // 연출 중에 일어난 교체·작전 타임 (공격권을 드러낸 뒤에 중계에 붙인다)
   possessions: number;
+  logMark: number; // 엔진 중계 기록에서 화면이 이미 연출에 반영한 위치
 }
 
 export const newMatch = (m: UserMatch): ActiveMatch => ({
   ...m, feed: [], selected: null, timer: null, playing: false, pause: null, interlude: null, notes: [], flags: {},
-  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0,
+  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0,
 });
 
 const FEED_LIMIT = 400;
@@ -111,12 +112,15 @@ function animates(prefs: MatchPrefs, step: StepResult) {
 // 1) 엔진을 한 공격권 진행하고 코트 연출을 만든다. 끝났으면 null.
 export function beginPossession(m: ActiveMatch, prefs: MatchPrefs): { pending: Pending; ms: number } | null {
   const before = m.game.view();
-  const box = m.game.result().box;
+  const result = m.game.result();
+  const box = result.box;
+  const pre = result.log.slice(m.logMark); // 지난 공격권 뒤에 감독이 직접 한 교체·작전 타임
   const step = m.game.step();
   if (!step) return null;
+  m.logMark = result.log.length; // result().log는 엔진의 기록 배열 그 자체라 step 뒤의 길이를 담는다
   const after = m.game.view();
   const c = choreograph({
-    period: before.period, after, step, prev: m.scene ?? tipOffScene(before), prevEnd: m.lastEnd, seed: ++m.possessions,
+    period: before.period, after, step, pre, prev: m.scene ?? tipOffScene(before), prevEnd: m.lastEnd, seed: ++m.possessions,
     msPerSecond: SPEEDS[prefs.speed].perSecond, targetSeconds: clamp(step.elapsed, 4, 18),
   });
   const ms = animates(prefs, step) ? Math.round(c.timeline.duration) : 0;
