@@ -5,18 +5,19 @@
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
 import { createCareer, today, playDay, prepareUserMatch } from '@/game/season';
-import type { UserMatch } from '@/game/season';
+import type { DayDecision, UserMatch } from '@/game/season';
 import type {
-  Career, DayReport, Defense, Focus, GrowthEvent, InjuryEvent, IntensityKey, LogEvent, NameStyle, ProgramKey, Tactics,
+  Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, LogEvent, NameStyle, ProgramKey, Tactics,
 } from '@/game/types';
+import { buildMessages, teamNames, trainingDigest, welcomeMessage } from './inbox';
+import type { Message, MessageDraft } from './inbox';
 
 const SAVE_KEY = 'hoops-manager-save-v2';
+const INBOX_KEY = 'hoops-manager-inbox-v1';
+const INBOX_LIMIT = 80;
 const STEP_MS = 320; // 경기 자동 진행 속도
 
-export type TabKey = 'today' | 'squad' | 'comp' | 'records';
-
-// 하루의 결과. 여러 날을 자동 진행했으면 autoDays에 일수가 들어간다.
-export type Report = DayReport & { autoDays?: number };
+export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'comp' | 'records';
 
 // 직접 지휘 중인 경기
 export interface ActiveMatch extends UserMatch {
@@ -27,12 +28,13 @@ export interface ActiveMatch extends UserMatch {
 
 export interface GameState {
   career: Career | null;
-  tab: TabKey;
+  screen: ScreenKey;
   startSeed: number;
   nameStyle: NameStyle;
   program: ProgramKey;
   intensity: IntensityKey;
-  report: Report | null;
+  inbox: Message[]; // 최신이 앞
+  messageId: number | null;
   match: ActiveMatch | null;
   playerId: string | null;
 }
@@ -42,25 +44,42 @@ export type PlayingState = GameState & { career: Career };
 
 const randomSeed = () => Math.floor(Math.random() * 90000) + 1;
 
-function load(): Career | null {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null'); } catch { return null; }
+// 저장소는 막혀 있거나 비어 있을 수 있다. 그래도 게임은 계속된다.
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeJson(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* 저장 실패는 무시한다 */ }
+}
+function removeKey(key: string) {
+  try { localStorage.removeItem(key); } catch { /* 저장 실패는 무시한다 */ }
 }
 
 function save(S: GameState) {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S.career)); } catch { /* 저장 공간이 없어도 게임은 계속된다 */ }
+  writeJson(SAVE_KEY, S.career);
+  writeJson(INBOX_KEY, S.inbox);
 }
 
-const initialState = (): GameState => ({
-  career: load(),
-  tab: 'today',
-  startSeed: randomSeed(),
-  nameStyle: 'kr',
-  program: 'shooting',
-  intensity: 'normal',
-  report: null,
-  match: null,
-  playerId: null,
-});
+const initialState = (): GameState => {
+  const career = readJson<Career | null>(SAVE_KEY, null);
+  return {
+    career,
+    screen: 'home',
+    startSeed: randomSeed(),
+    nameStyle: 'kr',
+    program: 'shooting',
+    intensity: 'normal',
+    inbox: career ? readJson<Message[]>(INBOX_KEY, []) : [],
+    messageId: null,
+    match: null,
+    playerId: null,
+  };
+};
 
 function careerOf(S: GameState): Career {
   if (!S.career) throw new Error('진행 중인 게임이 없습니다.');
@@ -76,6 +95,31 @@ const userTeam = (S: GameState) => {
   const career = careerOf(S);
   return career.teams[career.userTeamId];
 };
+
+// 새 메시지를 받은 소식 맨 위에 넣는다
+function deliver(S: GameState, drafts: MessageDraft[]): Message[] {
+  let id = S.inbox.reduce((max, m) => Math.max(max, m.id), 0);
+  const fresh = drafts.map((d) => ({ ...d, id: ++id, unread: true }));
+  S.inbox = [...[...fresh].reverse(), ...S.inbox].slice(0, INBOX_LIMIT);
+  return fresh;
+}
+
+// 하루를 진행하고 그날의 소식을 받는다
+function advance(S: GameState, decision: DayDecision = {}): Message[] {
+  const career = careerOf(S);
+  const names = teamNames(career);
+  const report = playDay(career, decision);
+  return report ? deliver(S, buildMessages(career, report, names)) : [];
+}
+
+// 경기 결과 메시지를 바로 연다
+function openMatchReport(S: GameState, messages: Message[]) {
+  const m = messages.find((x) => x.kind === 'match');
+  if (!m) return;
+  m.unread = false;
+  S.messageId = m.id;
+  S.screen = 'inbox';
+}
 
 function stopMatchTimer(S: GameState) {
   if (S.match?.timer) { clearInterval(S.match.timer); S.match.timer = null; }
@@ -95,6 +139,16 @@ function pushLastLog(m: ActiveMatch) {
   if (last) m.feed.unshift({ ...last });
 }
 
+function trainDay(S: GameState) {
+  advance(S, { program: S.program, intensity: S.intensity });
+  save(S);
+}
+
+function startCommand(S: GameState) {
+  const match = prepareUserMatch(careerOf(S));
+  if (match) S.match = { ...match, feed: [], selected: null, timer: null };
+}
+
 interface Ctx {
   S: GameState;
   rerender: () => void;
@@ -103,44 +157,57 @@ interface Ctx {
 const actions = {
   namestyle({ S }: Ctx) { S.nameStyle = S.nameStyle === 'kr' ? 'jp' : 'kr'; },
   start({ S }: Ctx, index: number) {
-    S.career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
-    S.tab = 'today';
-    S.report = null;
+    const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
+    Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null });
+    deliver(S, [welcomeMessage(career)]);
     save(S);
   },
   reset({ S }: Ctx) {
     if (!window.confirm('지금 진행 중인 게임을 지우고 새로 시작할까요?')) return;
     stopMatchTimer(S);
-    localStorage.removeItem(SAVE_KEY);
-    Object.assign(S, { career: null, match: null, report: null, playerId: null, startSeed: randomSeed() });
+    removeKey(SAVE_KEY);
+    removeKey(INBOX_KEY);
+    Object.assign(S, { career: null, match: null, inbox: [], messageId: null, playerId: null, screen: 'home', startSeed: randomSeed() });
   },
-  tab({ S }: Ctx, tab: TabKey) { S.tab = tab; },
+  screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; },
+  openMessage({ S }: Ctx, id: number | null) {
+    S.screen = 'inbox';
+    S.messageId = id;
+    const m = S.inbox.find((x) => x.id === id);
+    if (m?.unread) { m.unread = false; save(S); }
+  },
+  readAll({ S }: Ctx) { for (const m of S.inbox) m.unread = false; save(S); },
   program({ S }: Ctx, key: ProgramKey) { S.program = key; },
   intensity({ S }: Ctx, key: IntensityKey) { S.intensity = key; },
-  train({ S }: Ctx) { S.report = playDay(careerOf(S), { program: S.program, intensity: S.intensity }); save(S); },
+  train({ S }: Ctx) { trainDay(S); },
+  // 상단의 계속 버튼: 경기일이면 경기장으로, 아니면 정해 둔 훈련으로 하루를 보낸다
+  proceed({ S }: Ctx) {
+    const d = today(careerOf(S));
+    if (!d) return;
+    if (d.userMatch) startCommand(S);
+    else trainDay(S);
+  },
   auto({ S }: Ctx) {
     const career = careerOf(S);
     const growth: GrowthEvent[] = [];
-    const injuries: InjuryEvent[] = [];
     let last: DayReport | null = null;
     let days = 0;
     while (!career.finished && !today(career)?.userMatch) {
-      last = playDay(career);
-      if (!last) break;
+      const names = teamNames(career);
+      const report = playDay(career);
+      if (!report) break;
       days++;
-      growth.push(...last.growth);
-      injuries.push(...last.injuries);
-      if (last.yearEnd) break;
+      last = report;
+      growth.push(...report.growth);
+      deliver(S, buildMessages(career, report, names, { training: false }));
+      if (report.yearEnd) break;
     }
-    if (last) S.report = { ...last, growth, injuries, autoDays: days, training: null };
+    if (last) deliver(S, [trainingDigest(last, days, growth)]);
     save(S);
   },
-  simulate({ S }: Ctx) { S.report = playDay(careerOf(S)); save(S); },
-  command({ S }: Ctx) {
-    const match = prepareUserMatch(careerOf(S));
-    if (match) S.match = { ...match, feed: [], selected: null, timer: null };
-  },
-  player({ S }: Ctx, id: string | null) { S.playerId = id || null; },
+  simulate({ S }: Ctx) { openMatchReport(S, advance(S)); save(S); },
+  command({ S }: Ctx) { startCommand(S); },
+  player({ S }: Ctx, id: string | null) { S.playerId = id || null; S.screen = 'squad'; },
   tactic({ S }: Ctx, key: 'focus' | 'defense' | 'pace', value: string) {
     const tactics = userTeam(S).tactics;
     if (key === 'pace') tactics.pace = Number(value);
@@ -183,8 +250,7 @@ const actions = {
     const m = matchOf(S);
     stopMatchTimer(S);
     S.match = null;
-    S.report = playDay(careerOf(S), { match: m });
-    S.tab = 'today';
+    openMatchReport(S, advance(S, { match: m }));
     save(S);
   },
 };
