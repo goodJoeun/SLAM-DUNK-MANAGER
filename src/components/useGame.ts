@@ -7,7 +7,7 @@ import { useEffect, useReducer, useState } from 'react';
 import { createCareer, today, playDay, prepareUserMatch } from '@/game/season';
 import type { DayDecision } from '@/game/season';
 import type {
-  Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, ProgramKey, Tactics,
+  Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, PlayerRole, ProgramKey, Tactics,
 } from '@/game/types';
 import { BREAK_MS, DEFAULT_PREFS, SPEEDS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
@@ -315,6 +315,23 @@ const actions = {
     save(S);
   },
   dismissEnd({ S }: Ctx) { matchOf(S).endSeen = true; },
+  // 경기 시작 전에는 경기 화면을 나갈 수 있다 (경기일은 그대로라 다시 들어오면 된다)
+  leaveMatch({ S }: Ctx) {
+    const m = matchOf(S);
+    if (m.possessions > 0 || m.feed.length) return;
+    stopMatchTimer(S);
+    S.match = null;
+    S.screen = 'home';
+  },
+  // 선수별 개인 지시 (경기 중 바로 적용)
+  playerRole({ S }: Ctx, id: string, kind: 'offense' | 'defense', value: string) {
+    const m = matchOf(S);
+    const roles = { ...(m.game.view().teams[m.side].tactics.roles ?? {}) };
+    const role = { ...roles[id], [kind]: value || undefined };
+    if (!role.offense && !role.defense) delete roles[id];
+    else roles[id] = role as PlayerRole;
+    m.game.setTactics(m.side, { roles });
+  },
   pause({ S }: Ctx) {
     const m = matchOf(S);
     m.playing = false;

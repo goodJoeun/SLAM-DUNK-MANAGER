@@ -12,8 +12,17 @@ export type ProgramKey = 'shooting' | 'inside' | 'ballwork' | 'defense' | 'physi
 export type IntensityKey = 'light' | 'normal' | 'hard';
 export type NameStyle = 'kr' | 'jp';
 
-export type Focus = 'balanced' | 'inside' | 'outside';
-export type Defense = 'man' | 'zone' | 'press';
+// spread: 5아웃 스페이싱 (골밑·3점 위주) / switch: 스크린마다 수비를 바꿔 맡음 / drop: 빅맨이 골밑까지 물러나 림을 지킴
+export type Focus = 'balanced' | 'inside' | 'outside' | 'spread';
+export type Defense = 'man' | 'zone' | 'press' | 'switch' | 'drop';
+
+// 선수별 개인 지시
+export type OffenseRole = 'aggressive' | 'conservative' | 'three' | 'drive' | 'post' | 'pass';
+export type DefenseRole = 'tight' | 'safe';
+export interface PlayerRole {
+  offense?: OffenseRole;
+  defense?: DefenseRole;
+}
 
 export interface Tactics {
   pace: number;
@@ -21,6 +30,7 @@ export interface Tactics {
   defense: Defense;
   keyPlayerId: string | null; // 에이스 지정
   denyPlayerId: string | null; // 집중 마크
+  roles?: Record<string, PlayerRole>; // 선수 id -> 개인 지시
 }
 
 // 경기 엔진이 요구하는 최소한의 선수 정보

@@ -13,10 +13,16 @@ export interface ViewProps {
 export const NAME_STYLE: Record<NameStyle, string> = { kr: '한국어판', jp: '원작' };
 export const POS = ['', 'PG', 'SG', 'SF', 'PF', 'C'];
 export const POS_NAME = ['', '포인트 가드', '슈팅 가드', '스몰 포워드', '파워 포워드', '센터'];
-export const FOCUS: Record<Focus, string> = { balanced: '균형', inside: '골밑 중심', outside: '외곽 중심' };
-export const DEFENSE: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스' };
+export const FOCUS: Record<Focus, string> = { balanced: '균형', inside: '골밑 중심', outside: '외곽 중심', spread: '5아웃' };
+export const DEFENSE: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스', switch: '스위치', drop: '드롭' };
 // 객체로 두면 "0", "1"이 "-1"보다 앞에 나열되므로 순서를 배열로 고정한다
 export const PACE: [string, string][] = [['-1', '느리게'], ['0', '보통'], ['1', '빠르게']];
+
+// 선수별 개인 지시
+export const OFFENSE_ROLE: [string, string][] = [
+  ['aggressive', '적극 공격'], ['conservative', '슛 자제'], ['three', '3점 위주'], ['drive', '돌파'], ['post', '포스트업'], ['pass', '패스 우선'],
+];
+export const DEFENSE_ROLE: [string, string][] = [['tight', '타이트 마크'], ['safe', '파울 조심']];
 
 type Options = Record<string, string> | [string, string][];
 const entries = (options: Options) => (Array.isArray(options) ? options : Object.entries(options));

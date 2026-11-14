@@ -180,8 +180,8 @@ export function buildMessages(
   return out;
 }
 
-const FOCUS_NAME: Record<Focus, string> = { balanced: '균형', inside: '골밑 중심', outside: '외곽 중심' };
-const DEFENSE_NAME: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스' };
+const FOCUS_NAME: Record<Focus, string> = { balanced: '균형', inside: '골밑 중심', outside: '외곽 중심', spread: '5아웃' };
+const DEFENSE_NAME: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스', switch: '스위치', drop: '드롭' };
 
 // 코치의 상대 분석: 주요 선수, 즐겨 쓰는 전술, 노려 볼 만한 약점
 function analyse(team: Team) {

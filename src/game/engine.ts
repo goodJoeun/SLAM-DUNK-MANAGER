@@ -74,6 +74,21 @@ export const TUNING = {
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
   zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
   press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.04, rimMix: 1.2, foul: 1.25, drain: 1.25, paceSec: 1.5 },
+  // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
+  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56 },
+  // 스위치: 스크린에 오픈 3점을 덜 내주지만, 키 작은 수비수가 빅맨을 막는 미스매치를 상대가 노린다
+  switchD: { outsideMake: -0.012, postMake: 0.06, postMix: 1.35 },
+  // 드롭: 빅맨이 골밑을 지켜 림 공격은 막지만 중거리 풀업은 내준다
+  drop: { rimMake: -0.03, midMake: 0.05, midMix: 1.5, threeMake: 0.005 },
+  // 선수별 개인 지시
+  roles: {
+    aggressiveUsage: 1.45, aggressiveMake: -0.01, aggressiveTov: 1.3, // 적극 공격: 많이 쏘지만 무리한 슛도 섞인다
+    conservativeUsage: 0.55, conservativeMake: 0.012, conservativeTov: 0.008, // 슛 자제: 좋은 기회에만 쏘지만, 미루다 실책이 는다
+    passUsage: 0.6, passAssist: 2.5, // 패스 우선: 덜 쏘고 어시스트를 노린다
+    specialtyMix: 2.2, // 3점 위주·돌파·포스트업: 그 슛 비중
+    tightMake: -0.015, tightFoul: 1.5, tightSteal: 1.5, // 타이트 마크: 덜 내주지만 파울이 는다
+    safeMake: 0.015, safeFoul: 0.65, // 파울 조심
+  },
 };
 
 const r = (p: BasePlayer, k: RatingKey) => p.ratings[k] / 100;
@@ -307,11 +322,23 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   }
 
   // 누가 쏠지: 공격 비중 + 전술 중심에 맞는 선수 + 에이스 지정 / 상대의 집중 마크
+  const offenseRole = (team: GameTeam, p: GamePlayer) => team.tactics.roles?.[p.id]?.offense;
+  const defenseRole = (team: GameTeam, p: GamePlayer) => team.tactics.roles?.[p.id]?.defense;
+  // 수비 지시에 따른 파울 가능성 배율
+  const foulRisk = (team: GameTeam, p: GamePlayer) => {
+    const r = defenseRole(team, p);
+    return r === 'tight' ? T.roles.tightFoul : r === 'safe' ? T.roles.safeFoul : 1;
+  };
+
   function chooseShooter(off: GameTeam, def: GameTeam) {
     const focus = off.tactics.focus;
     return rng.weighted(
       off.court.map((p) => {
         let w = p.c.usage ** 3 * (0.5 + 0.5 * p.energy);
+        const role = offenseRole(off, p);
+        if (role === 'aggressive') w *= T.roles.aggressiveUsage;
+        else if (role === 'conservative') w *= T.roles.conservativeUsage;
+        else if (role === 'pass') w *= T.roles.passUsage;
         const lean = Math.max(p.c.rim, p.c.post) - Math.max(p.c.mid, p.c.three); // +면 인사이드형
         if (focus === 'inside') w *= clamp(1 + T.focusUsageBias * lean, 0.5, 1.8);
         if (focus === 'outside') w *= clamp(1 - T.focusUsageBias * lean, 0.5, 1.8);
@@ -328,6 +355,13 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     if (off.tactics.focus === 'outside') { w.three *= T.focusShotBoost; }
     if (def.tactics.defense === 'zone') { w.three *= T.zone.threeMix; w.rim *= T.zone.rimMix; }
     if (def.tactics.defense === 'press') { w.rim *= T.press.rimMix; }
+    if (off.tactics.focus === 'spread') { w.three *= T.spread.threeMix; w.rim *= T.spread.rimMix; w.mid *= T.spread.midMix; w.post *= T.spread.postMix; }
+    if (def.tactics.defense === 'switch') w.post *= T.switchD.postMix; // 미스매치를 찾아 포스트업
+    if (def.tactics.defense === 'drop') w.mid *= T.drop.midMix; // 물러난 빅맨 앞에서 풀업 점퍼
+    const role = offenseRole(off, shooter);
+    if (role === 'three') w.three *= T.roles.specialtyMix;
+    else if (role === 'drive') w.rim *= T.roles.specialtyMix;
+    else if (role === 'post') w.post *= T.roles.specialtyMix;
     w.three *= threeUrgency;
     const types: ShotType[] = ['rim', 'post', 'mid', 'three'];
     return types[rng.weighted(types.map((t) => w[t] * shooter.c[t] ** 2.5))];
@@ -377,7 +411,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       // 1) 일반 파울
       const pressing = def.tactics.defense === 'press';
       if (rng.chance(T.nonShootingFoul * (pressing ? T.press.foul : 1))) {
-        const fouler = pick(def.court, (p) => 1.3 - p.c.defPerimeter);
+        const fouler = pick(def.court, (p) => (1.3 - p.c.defPerimeter) * foulRisk(def, p));
         addFoul(def, fouler);
         say(def, `${fouler.name} 파울`, { kind: 'foul', actor: fouler.id });
         if (bonus()) {
@@ -392,12 +426,14 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       // 2) 턴오버. 프레스는 볼 핸들링이 약한 팀을 상대로 특히 잘 먹힌다
       const gap = avg(def, 'stealing') - avg(off, 'ballHandling');
       const pressTov = pressing ? Math.max(0.005, T.press.tovBase + T.press.tovSkill * gap) : 0;
-      const pTov = T.turnoverBase + pressTov + T.turnoverSkill * gap;
+      // 슛 자제 지시를 받은 선수가 많으면 슛을 미루다 공격 시간에 쫓겨 실책이 는다
+      const holdBack = T.roles.conservativeTov * off.court.filter((p) => offenseRole(off, p) === 'conservative').length;
+      const pTov = T.turnoverBase + pressTov + T.turnoverSkill * gap + holdBack;
       if (rng.chance(clamp(pTov, 0.04, 0.4))) {
-        const loser = pick(off.court, (p) => p.c.usage * (1.3 - p.c.ballHandling));
+        const loser = pick(off.court, (p) => p.c.usage * (1.3 - p.c.ballHandling) * (offenseRole(off, p) === 'aggressive' ? T.roles.aggressiveTov : 1));
         loser.stat.tov++;
         if (rng.chance(T.stealShare)) {
-          const thief = pick(def.court, (p) => eff(p, 'stealing') ** 3);
+          const thief = pick(def.court, (p) => eff(p, 'stealing') ** 3 * (defenseRole(def, p) === 'tight' ? T.roles.tightSteal : 1));
           thief.stat.stl++;
           say(def, `${thief.name} 스틸 (${loser.name} 턴오버)`, { kind: 'steal', actor: thief.id, other: loser.id });
         } else {
@@ -427,12 +463,24 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       if (T.focusExploit && off.tactics.focus === 'inside' && inside) pMake += T.focusExploit * (Math.max(avg(off, 'rim'), avg(off, 'post')) - avg(def, 'defInterior'));
       if (T.focusExploit && off.tactics.focus === 'outside' && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
       if (shooter.id === off.tactics.keyPlayerId) pMake += T.keyPlayerMake;
+      if (off.tactics.focus === 'spread') {
+        if (type === 'rim') pMake += T.spread.rimSpacing * (avg(off, 'three') - T.spread.spacingPivot); // 슈터가 많으면 돌파 공간이 열리고, 없으면 막힌다
+        if (T.focusExploit && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+      }
+      if (def.tactics.defense === 'switch') pMake += type === 'post' ? T.switchD.postMake : inside ? 0 : T.switchD.outsideMake;
+      if (def.tactics.defense === 'drop') pMake += type === 'rim' ? T.drop.rimMake : type === 'mid' ? T.drop.midMake : type === 'three' ? T.drop.threeMake : 0;
+      const shooterRole = offenseRole(off, shooter);
+      if (shooterRole === 'aggressive') pMake += T.roles.aggressiveMake;
+      else if (shooterRole === 'conservative') pMake += T.roles.conservativeMake;
+      const guardRole = defenseRole(def, defender);
+      if (guardRole === 'tight') pMake += T.roles.tightMake;
+      else if (guardRole === 'safe') pMake += T.roles.safeMake;
       if (pressing && type === 'rim') pMake += T.press.rimMake; // 프레스가 뚫리면 쉬운 득점
       if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make : T.deny.othersMake;
       if (off.run >= T.runThreshold) pMake += Math.min(T.runBoostMax, off.run * T.runBoostPerPoint); // 기세
       pMake = clamp(pMake, 0.05, 0.9);
 
-      const fouled = rng.chance(S.foul * (zone ? T.zone.shootingFoul : 1));
+      const fouled = rng.chance(S.foul * (zone ? T.zone.shootingFoul : 1) * foulRisk(def, defender));
       if (fouled) addFoul(def, pick(def.court, (p) => (p === defender ? 3 : 1)));
 
       if (!fouled && rng.chance(S.block * (avg(def, 'blocking') / 0.5) ** 2)) {
@@ -458,7 +506,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         let text = `${shooter.name} ${SHOT_LABEL[type]} 성공`;
         let assist: string | undefined;
         if (rng.chance(S.assist * (0.6 + 0.8 * avg(off, 'passing')))) {
-          const passer = pick(mates, (p) => eff(p, 'passing') ** 4);
+          const passer = pick(mates, (p) => eff(p, 'passing') ** 4 * (offenseRole(off, p) === 'pass' ? T.roles.passAssist : 1));
           passer.stat.ast++;
           assist = passer.id;
           text += ` (어시스트 ${passer.name})`;

@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { today } from '@/game/season';
-import type { BoxTeam, PlayerView, TeamView } from '@/game/types';
+import type { BoxTeam, PlayerRole, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
 import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
 import type { AlertKey, FeedMode, SpeedKey } from './live';
 import FullCourt, { shortName } from './court/FullCourt';
 import { tipOffScene } from './court/choreo';
-import { CondBar, Crest, Icon, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
+import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
 
 const SPEED_OPTIONS = Object.entries(SPEEDS).map(([k, v]) => [k, v.label] as [string, string]);
@@ -33,6 +33,16 @@ function Side({ team: t, mine, away = false, prep = 0 }: { team: TeamView; mine:
 }
 
 // 교체 대상 줄. onClick이 없으면 상대 팀처럼 누를 수 없는 줄이 된다
+// 선수 한 명의 개인 지시: 공격 역할 · 수비 지시
+function RoleRow({ role, onChange }: { role?: PlayerRole; onChange: (kind: 'offense' | 'defense', value: string) => void }) {
+  return (
+    <div className={`role-row ${role ? 'set' : ''}`}>
+      <Select options={OFFENSE_ROLE} value={role?.offense} onChange={(v) => onChange('offense', v)}><option value="">공격: 기본</option></Select>
+      <Select options={DEFENSE_ROLE} value={role?.defense} onChange={(v) => onChange('defense', v)}><option value="">수비: 기본</option></Select>
+    </div>
+  );
+}
+
 function PlayerRow({ player: p, selected = false, onClick }: { player: PlayerView; selected?: boolean; onClick?: () => void }) {
   return (
     <div className={`bench-row ${selected ? 'sel' : ''} ${onClick && p.out ? 'off' : ''} ${onClick ? '' : 'static'}`} onClick={onClick}>
@@ -185,6 +195,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <span className="spacer" />
             {!m.playing && <button className="btn ghost" disabled={Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
             <button className="btn ghost" onClick={() => act('skip')}>끝까지 AI에게 맡기기</button>
+            {!started && <button className="btn ghost" onClick={() => act('leaveMatch')} title="경기를 시작하기 전에는 홈으로 돌아가 준비를 마저 할 수 있습니다"><Icon name="back" />홈으로</button>}
           </>
         )}
       </div>
@@ -247,11 +258,21 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       <div className="match-grid">
         <Panel title={`${mine.name} 선수`} flush>
           <div className="sub-hint">
-            {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트의 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 막대는 체력입니다.'}
+            {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트의 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 막대는 체력입니다. 선수마다 공격·수비 지시를 줄 수 있습니다.'}
           </div>
-          {mine.court.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />)}
+          {mine.court.map((p) => (
+            <div key={p.id}>
+              <PlayerRow player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />
+              <RoleRow role={t.roles?.[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
+            </div>
+          ))}
           <div className="sub-hint">벤치</div>
-          {mine.bench.map((p) => <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />)}
+          {mine.bench.map((p) => (
+            <div key={p.id}>
+              <PlayerRow player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />
+              <RoleRow role={t.roles?.[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
+            </div>
+          ))}
         </Panel>
 
         <Panel

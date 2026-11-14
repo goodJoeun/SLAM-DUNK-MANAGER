@@ -29,8 +29,8 @@ const GAPS = [0, 3, 6, 9, 12, 15, 20]; // 생성 수준 차이 (약팀 50 고정
 const FOCI: Focus[] = ['balanced', 'inside', 'outside'];
 const DEFENSES: Defense[] = ['man', 'zone', 'press'];
 const PACES = [-1, 0, 1];
-const FOCUS_LABEL: Record<Focus, string> = { balanced: '균형', inside: '골밑', outside: '외곽' };
-const DEFENSE_LABEL: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스' };
+const FOCUS_LABEL: Record<Focus, string> = { balanced: '균형', inside: '골밑', outside: '외곽', spread: '5아웃' };
+const DEFENSE_LABEL: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스', switch: '스위치', drop: '드롭' };
 const PACE_LABEL: Record<string, string> = { '-1': '느리게', 0: '보통', 1: '빠르게' };
 
 let seedCounter = 1_000_000;

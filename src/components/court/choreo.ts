@@ -18,7 +18,8 @@ const BASKET: AttackPoint = { u: COURT.basketInset, v: 0 };
 const FORMATION: Record<Focus, Spot[]> = {
   balanced: [[8.2, 0], [6.0, 5.3], [6.0, -5.3], [4.6, 2.6], [1.9, -1.8]], // 4아웃 1인
   inside: [[8.0, 0.6], [6.4, 5.6], [5.8, -5.6], [2.0, 2.0], [1.8, -1.9]], // 빅맨 둘이 골밑
-  outside: [[8.6, 0], [6.6, 5.2], [6.6, -5.2], [1.0, 6.5], [7.6, -3.4]], // 5아웃
+  outside: [[8.6, 0], [6.6, 5.2], [6.6, -5.2], [1.0, 6.5], [7.6, -3.4]], // 외곽 중심
+  spread: [[8.6, 0], [6.6, 5.4], [6.6, -5.4], [1.0, 6.6], [1.0, -6.6]], // 5아웃: 다섯 명 모두 3점 라인 밖, 코너까지
 };
 const TRANSITION: Spot[] = [[15.0, 0.5], [12.5, 5.5], [13.0, -5.5], [14.5, 2.5], [15.5, -2.2]]; // 공을 몰고 넘어올 때
 const FAST_BREAK: Spot[] = [[7.0, 0.5], [5.0, 4.5], [5.2, -4.5], [11.0, 2.0], [12.5, -1.5]]; // 스틸 뒤 속공
@@ -146,7 +147,8 @@ export function choreograph(input: ChoreoInput): { timeline: Timeline; end: Scen
         return;
       }
       const onBall = offIds[i] === holder;
-      const guard = toward(man, BASKET, onBall ? 1.0 : 1.9);
+      const sag = onBall ? (defense === 'drop' && i >= 3 ? 2.6 : 1.0) : 1.9; // 드롭: 빅맨은 골밑 쪽으로 물러난다
+      const guard = toward(man, BASKET, sag);
       if (id === helper) pos[id] = lerp(guard, b, 0.6);
       else pos[id] = onBall ? guard : lerp(guard, b, 0.15); // 공 없는 쪽 수비는 도움 수비를 위해 공 쪽으로 처진다
     });
