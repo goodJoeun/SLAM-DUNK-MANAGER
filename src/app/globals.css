@@ -556,3 +556,31 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
   .fullcourt .nm { font-size: 0.74px; }
   .fullcourt .caption { font-size: 0.95px; }
 }
+
+/* 경기 중에는 점수판을 머리띠 바로 아래에 고정하고 나머지만 스크롤한다 */
+.app.in-match .scorebar {
+  position: sticky; top: var(--header-h); z-index: 12;
+  box-shadow: 0 -18px 0 var(--bg), 0 8px 18px rgb(0 0 0 / 0.28); /* 위 여백을 가려 아래 내용이 비치지 않게 */
+}
+@media (max-width: 860px) {
+  .app.in-match .scorebar { top: 0; padding: 10px 12px; box-shadow: 0 -14px 0 var(--bg), 0 6px 14px rgb(0 0 0 / 0.28); }
+  .app.in-match .sb-team .meta { display: none; }
+}
+
+/* 경기 화면: 코트를 화면 높이에 맞춰 전술과 함께 한 화면에 보이게 한다 */
+@media (min-width: 861px) {
+  .app.in-match .fullcourt { max-height: calc(100vh - var(--header-h) - 300px); min-height: 240px; }
+}
+
+/* 경기 종료 창 */
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 0.55); }
+.modal {
+  display: grid; gap: 14px; width: min(440px, 100%); padding: 22px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
+}
+.modal h2 { font-size: 28px; }
+.end-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; text-align: center; }
+.end-score > div { display: grid; justify-items: center; gap: 6px; min-width: 0; }
+.end-score b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.end-score .num { font-size: 34px; font-weight: 800; }

@@ -1,4 +1,5 @@
 // 화면 틀: 위쪽 학교 머리띠(날짜·다음 경기·계속 버튼)와 왼쪽 메뉴
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { today } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
@@ -23,17 +24,31 @@ function NextChip({ d }: { d: Today }) {
 }
 
 export default function Shell({ S, act, children }: ViewProps & { children: ReactNode }) {
+  // 머리띠 높이를 재어 두면, 그 아래에 붙는 요소(경기 점수판, 메뉴)가 머리띠가 두 줄로 늘어나도 겹치지 않는다
+  const appRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    const app = appRef.current;
+    if (!header || !app) return;
+    const update = () => app.style.setProperty('--header-h', `${header.offsetHeight}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, []);
+
   const c = S.career;
   const team = userTeam(c);
   const d = today(c); // 캠페인이 끝났으면 null
   const unread = S.inbox.filter((m) => m.unread).length;
   const inMatch = Boolean(S.match);
   const cond = Math.round(mean(team.players.filter((p) => !p.injuredDays).map((p) => p.condition)));
-  const plan = S.program === 'rest' ? '휴식' : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
+  const plan = S.program === 'rest' || S.program === 'scout' ? PROGRAMS[S.program].label : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
 
   return (
-    <div className={`app ${inMatch ? 'in-match' : ''}`} style={clubVars(team.name)}>
-      <header className="app-header">
+    <div ref={appRef} className={`app ${inMatch ? 'in-match' : ''}`} style={clubVars(team.name)}>
+      <header ref={headerRef} className="app-header">
         <div className="club">
           <Crest name={team.name} size={34} />
           <div><b>{team.name}</b><span>{c.prefecture} · 학교 수준 {team.prestige}</span></div>

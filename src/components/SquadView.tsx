@@ -13,7 +13,7 @@ import type { ViewProps } from './ui';
 
 type SortKey = 'lineup' | 'pos' | 'name' | 'year' | 'ovr' | 'pot' | 'cond' | 'pts' | RatingKey;
 
-const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) => k !== 'rest').map(([k, v]) => [k, v.label]));
+const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) => k !== 'rest' && k !== 'scout').map(([k, v]) => [k, v.label]));
 const VIEWS = { overview: '개요', attrs: '능력치' };
 
 const seasonAvg = (c: Career, p: Player) => {

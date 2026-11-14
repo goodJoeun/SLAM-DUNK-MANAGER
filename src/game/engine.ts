@@ -56,18 +56,23 @@ export const TUNING = {
 
   // 흐름과 작전 타임
   runThreshold: 4, // 연속 득점이 이만큼 쌓이면 기세가 붙는다
-  runBoostPerPoint: 0.004,
-  runBoostMax: 0.03,
+  runBoostPerPoint: 0.006,
+  runBoostMax: 0.05, // 기세가 커야 작전 타임으로 흐름을 끊는 판단이 의미 있다
   timeoutEnergy: 0.06, // 작전 타임 때 코트 위 선수 체력 회복
   aiTimeoutRun: 8, // AI는 상대가 이만큼 연속 득점하면 타임을 부른다
   timeouts: { firstHalf: 2, secondHalf: 3, overtime: 1 },
 
   // 전술
-  focusShotBoost: 1.6, // 중심 전술의 슛 종류 가중
+  focusShotBoost: 2.0, // 중심 전술의 슛 종류 가중
   focusUsageBias: 1.0, // 중심 전술에 맞는 선수에게 공이 몰리는 정도
-  keyPlayerUsage: 1.5, // 에이스 지정: 공격 비중 증가
-  deny: { usage: 0.7, make: -0.03, othersMake: 0.008 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
-  zone: { insideMake: -0.035, outsideMake: 0.025, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
+  keyPlayerUsage: 1.6, // 에이스 지정: 공격 비중 증가
+  keyPlayerMake: -0.02, // 에이스에게 공이 몰리면 수비도 그쪽으로 몰린다 (에이스 슛 성공률 보정)
+  focusExploit: 0.4, // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정 (능력 차 1.0당). 잘못 맞추면 손해
+  paceOffense: 4, // 템포 1단계당 공격 시간 변화(초)
+  paceDefense: 2, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
+  deny: { usage: 0.4, make: -0.09, othersMake: 0.012 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
+  // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
+  zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
   press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.04, rimMix: 1.2, foul: 1.25, drain: 1.25, paceSec: 1.5 },
 };
 
@@ -140,13 +145,21 @@ interface GameTeam {
   timeoutsLeft: number;
 }
 
-function setupTeam(team: EngineTeam, rng: Rng, auto: boolean): GameTeam {
+// 준비 보너스: 이 경기에서만 키를 뺀 능력치를 올린 것처럼 계산한다 (표시용 종합 능력치는 그대로)
+function prepared(p: BasePlayer, bonus: number): BasePlayer {
+  if (!bonus) return p;
+  const ratings = { ...p.ratings };
+  for (const k of Object.keys(ratings) as (keyof typeof ratings)[]) if (k !== 'hgt') ratings[k] = Math.min(99, ratings[k] + bonus);
+  return { ...p, ratings };
+}
+
+function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTeam {
   const T = TUNING;
   const players: GamePlayer[] = team.players.map((p, i) => {
     // 숨겨진 능력치: 일관성이 낮을수록 그날 컨디션이 크게 흔들린다
     const consistency = (p.hidden?.consistency ?? 50) / 100;
     return {
-      id: p.id, name: p.name, pos: p.pos, c: composites(p), ovr: overall(p),
+      id: p.id, name: p.name, pos: p.pos, c: composites(prepared(p, prep)), ovr: overall(p),
       form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)),
       energy: p.condition == null ? 1 : 0.85 + 0.15 * (p.condition / 100), // 지친 채로 경기에 나오면 체력이 덜 찬 상태
       injured: (p.injuredDays ?? 0) > 0,
@@ -168,7 +181,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   const rng = makeRng(opts.seed ?? Date.now());
   const T = TUNING;
   const manual = opts.manual ?? [false, false];
-  const teams = [setupTeam(homeTeam, rng, !manual[0]), setupTeam(awayTeam, rng, !manual[1])];
+  const prep = opts.prep ?? [0, 0];
+  const teams = [setupTeam(homeTeam, rng, !manual[0], prep[0]), setupTeam(awayTeam, rng, !manual[1], prep[1])];
   const log: LogEvent[] = [];
   let period = 1;
   let clock = T.periodSeconds;
@@ -352,7 +366,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         const d = def.tactics.defense;
         let mean = secondChance
           ? T.secondChanceMean
-          : T.possessionMean - 2 * off.tactics.pace - def.tactics.pace - (d === 'press' ? T.press.paceSec : 0);
+          : T.possessionMean - T.paceOffense * off.tactics.pace - T.paceDefense * def.tactics.pace - (d === 'press' ? T.press.paceSec : 0);
         let sd = T.possessionSd;
         if (hurry) { mean = Math.min(mean, 8); sd = 3; }
         if (milk && !secondChance) { mean = 20; sd = 2; }
@@ -408,7 +422,11 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
 
       let pMake = S.make + T.makeSkill * (eff(shooter, type) - defense);
       pMake += 0.04 * (avg(off, 'passing') - 0.5); // 팀 패스 시너지
-      if (zone) pMake += inside ? T.zone.insideMake : T.zone.outsideMake;
+      if (zone) pMake += inside ? T.zone.insideMake : T.zone.outsideMake + T.zone.shooterBurn * (avg(off, 'three') - 0.5); // 슈터가 좋으면 존이 뚫린다
+      // 공격 중심이 상대 수비의 약한 쪽을 노리면 더 잘 들어간다 (반대로 강한 쪽을 노리면 손해)
+      if (T.focusExploit && off.tactics.focus === 'inside' && inside) pMake += T.focusExploit * (Math.max(avg(off, 'rim'), avg(off, 'post')) - avg(def, 'defInterior'));
+      if (T.focusExploit && off.tactics.focus === 'outside' && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+      if (shooter.id === off.tactics.keyPlayerId) pMake += T.keyPlayerMake;
       if (pressing && type === 'rim') pMake += T.press.rimMake; // 프레스가 뚫리면 쉬운 득점
       if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make : T.deny.othersMake;
       if (off.run >= T.runThreshold) pMake += Math.min(T.runBoostMax, off.run * T.runBoostPerPoint); // 기세

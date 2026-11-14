@@ -23,6 +23,7 @@ export const PROGRAMS: Record<ProgramKey, { label: string; keys: RatingKey[] }> 
   physical: { label: '체력', keys: ['spd', 'jmp', 'end', 'str'] },
   tactics: { label: '전술 이해', keys: ['oiq', 'diq'] },
   rest: { label: '휴식', keys: [] },
+  scout: { label: '상대 분석', keys: [] }, // 다음 공식전 상대를 분석해 그 경기에서만 보너스를 얻는다 (season.ts)
 };
 
 // 강도: 성장 배율, 컨디션 소모, 부상 확률
@@ -49,6 +50,7 @@ export const GROWTH = {
 };
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+const SCOUT_COST = 2; // 상대 분석 하루의 컨디션 소모
 const ratingKeys = (p: BasePlayer) => Object.keys(p.ratings) as RatingKey[];
 const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
 export const RATING_LABEL: Record<RatingKey, string> = {
@@ -179,6 +181,10 @@ export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: 
   for (const p of team.players) {
     if (p.injuredDays) continue;
     for (const k of ratingKeys(p)) gain(p, k, k === 'hgt' ? GROWTH.heightPerDay * (p.year === 1 ? 1.5 : 1) : GROWTH.passivePerDay, report.growth);
+    if (program === 'scout') {
+      p.condition = Math.max(0, p.condition - SCOUT_COST); // 영상 분석과 맞춤 연습: 성장은 없고 조금만 지친다
+      continue;
+    }
     if (program === 'rest') {
       p.condition = Math.min(100, p.condition + GROWTH.restRecovery);
       continue;
@@ -233,7 +239,7 @@ export function aiTraining(rng: Rng, team: Team, matchTomorrow = false): Trainin
   const fit = team.players.filter((p) => !p.injuredDays);
   const condition = mean(fit.map((p) => p.condition));
   if (condition < 55 || (matchTomorrow && condition < 85)) return { program: 'rest', intensity: 'normal' };
-  const menu = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'rest');
+  const menu = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'rest' && k !== 'scout');
   const intensity = matchTomorrow ? 'light' : rng.chance(0.2) ? 'hard' : 'normal'; // 경기 전날은 가볍게
   return { program: menu[rng.int(0, menu.length - 1)], intensity };
 }

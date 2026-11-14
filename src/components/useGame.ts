@@ -31,6 +31,7 @@ export interface GameState {
   nameStyle: NameStyle;
   program: ProgramKey;
   intensity: IntensityKey;
+  resumeProgram: ProgramKey; // 상대 분석이 끝나면 돌아갈 훈련 메뉴
   inbox: Message[]; // 최신이 앞
   messageId: number | null;
   match: ActiveMatch | null;
@@ -79,6 +80,7 @@ const initialState = (): GameState => {
     nameStyle: 'kr',
     program: 'shooting',
     intensity: 'normal',
+    resumeProgram: 'shooting',
     inbox: career ? readJson<Message[]>(INBOX_KEY, []) : [],
     messageId: null,
     match: null,
@@ -188,7 +190,13 @@ function pushLastLog(m: ActiveMatch) {
 
 function trainDay(S: GameState) {
   advance(S, { program: S.program, intensity: S.intensity });
+  resumeAfterScouting(S);
   save(S);
+}
+
+// 상대 분석은 다음 공식전 직전에만 할 수 있다. 더 할 수 없게 되면 원래 훈련 메뉴로 돌아간다.
+function resumeAfterScouting(S: GameState) {
+  if (S.program === 'scout' && !today(careerOf(S))?.prep?.canScout) S.program = S.resumeProgram;
 }
 
 function startCommand(S: GameState) {
@@ -238,7 +246,10 @@ const actions = {
     writeJson(PORTRAIT_KEY, next);
   },
   readAll({ S }: Ctx) { for (const m of S.inbox) m.unread = false; save(S); },
-  program({ S }: Ctx, key: ProgramKey) { S.program = key; },
+  program({ S }: Ctx, key: ProgramKey) {
+    if (key === 'scout' && S.program !== 'scout') S.resumeProgram = S.program;
+    S.program = key;
+  },
   intensity({ S }: Ctx, key: IntensityKey) { S.intensity = key; },
   train({ S }: Ctx) { trainDay(S); },
   // 상단의 계속 버튼: 경기일이면 경기장으로, 아니면 정해 둔 훈련으로 하루를 보낸다
@@ -266,7 +277,7 @@ const actions = {
     if (last) deliver(S, [trainingDigest(last, days, growth)]);
     save(S);
   },
-  simulate({ S }: Ctx) { openMatchReport(S, advance(S)); save(S); },
+  simulate({ S }: Ctx) { openMatchReport(S, advance(S)); resumeAfterScouting(S); save(S); },
   command({ S }: Ctx) { startCommand(S); },
   player({ S }: Ctx, id: string | null) { S.playerId = id || null; S.screen = 'squad'; },
   tactic({ S }: Ctx, key: 'focus' | 'defense' | 'pace', value: string) {
@@ -292,6 +303,18 @@ const actions = {
     m.timer = setTimeout(() => tick(S, rerender), 0);
   },
   // 일시정지: 연출 중인 공격권은 끝까지 보여 준 뒤 멈춘다
+  // 코치의 대응 계획대로 팀 전술을 바꾼다 (공격 중심·수비·집중 마크)
+  applyPlan({ S }: Ctx) {
+    const plan = today(careerOf(S))?.prep?.plan;
+    if (!plan) return;
+    const tactics = userTeam(S).tactics;
+    tactics.focus = plan.focus;
+    tactics.defense = plan.defense;
+    if (plan.denyId) tactics.denyPlayerId = plan.denyId;
+    else delete tactics.denyPlayerId;
+    save(S);
+  },
+  dismissEnd({ S }: Ctx) { matchOf(S).endSeen = true; },
   pause({ S }: Ctx) {
     const m = matchOf(S);
     m.playing = false;
@@ -340,6 +363,7 @@ const actions = {
     stopMatchTimer(S);
     S.match = null;
     openMatchReport(S, advance(S, { match: m }));
+    resumeAfterScouting(S);
     save(S);
   },
 };

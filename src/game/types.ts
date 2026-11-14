@@ -8,7 +8,7 @@ export type RatingKey =
   | 'mid' | 'tp' | 'oiq' | 'diq' | 'drb' | 'pss' | 'reb';
 export type Ratings = Record<RatingKey, number>;
 
-export type ProgramKey = 'shooting' | 'inside' | 'ballwork' | 'defense' | 'physical' | 'tactics' | 'rest';
+export type ProgramKey = 'shooting' | 'inside' | 'ballwork' | 'defense' | 'physical' | 'tactics' | 'rest' | 'scout';
 export type IntensityKey = 'light' | 'normal' | 'hard';
 export type NameStyle = 'kr' | 'jp';
 
@@ -128,6 +128,7 @@ export interface GameOptions {
   seed?: number;
   log?: boolean;
   manual?: [boolean, boolean]; // 직접 지휘하는 쪽 [홈, 원정]
+  prep?: [number, number]; // 경기 전 상대 분석으로 얻은 보너스 [홈, 원정]. 이 경기에서만 능력치(키 제외)에 더한다
 }
 
 export interface PlayerView {
@@ -327,6 +328,31 @@ export interface Career {
   yearPoints: Record<string, number>; // 학교별 올해 대회 성적 점수
   calendar: CalendarDay[];
   dayIndex: number;
+  prep?: Record<string, number>; // 다음 공식전 상대별 분석 일수 (대회가 바뀌면 비운다)
+  prepPlans?: Record<string, PrepPlan>; // 상대별 코치의 대응 계획
+}
+
+// 코치가 상대 분석으로 세운 대응 계획
+export interface PrepPlan {
+  focus: Focus;
+  defense: Defense;
+  denyId: string | null; // 집중 마크할 상대 선수 (없으면 팀 수비)
+  denyName: string | null;
+  notes: string[]; // 코치의 설명
+}
+
+// 다음 공식전 상대와 준비 상황
+export interface PrepInfo {
+  opponentId: string;
+  opponent: string;
+  label: string; // 어떤 경기인지 (예: 인터하이 현 예선 A조 2차전)
+  daysUntil: number; // 0이면 오늘
+  days: number; // 지금까지 분석한 날 수
+  bonus: number; // 지금 전술로 경기에 나가면 받는 능력치 보너스
+  maxBonus: number; // 코치의 계획을 모두 따르면 받는 보너스
+  plan: PrepPlan | null; // 코치의 대응 계획 (분석을 시작해야 생긴다)
+  followed: number; // 지금 팀 전술이 계획을 따르는 가짓수 (0~3)
+  canScout: boolean; // 오늘 분석할 수 있는지
 }
 
 export interface UserMatchInfo {
@@ -347,6 +373,7 @@ export interface Today {
   daysToNextMatch: number | null; // 0이면 오늘이 경기일. 남은 경기가 없으면 null
   userTrains: boolean; // 공식전 날인데 내 팀 경기가 없으면(탈락) 훈련일이 된다
   userMatch: UserMatchInfo | null;
+  prep: PrepInfo | null; // 다음 공식전 준비 상황 (상대가 정해지지 않았으면 null)
 }
 
 export interface YearSummary {
@@ -370,6 +397,7 @@ export interface DayReport {
   growth: GrowthEvent[];
   injuries: InjuryEvent[];
   competitionEnd: CompetitionResult | null;
+  scout: PrepInfo | null; // 오늘 상대 분석을 했으면 그 결과
   yearEnd: YearSummary | null;
 }
 

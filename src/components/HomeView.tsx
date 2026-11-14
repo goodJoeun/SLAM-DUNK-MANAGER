@@ -1,4 +1,4 @@
-import { SEASON, today } from '@/game/season';
+import { PREPARATION, SEASON, today } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
@@ -36,6 +36,11 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
           <span>{m.opponentOverall}</span>
         </div>
         <p className="muted" style={{ textAlign: 'center' }}>{m.label}</p>
+        {m.official && d.prep && d.prep.daysUntil === 0 && (
+          <p style={{ textAlign: 'center' }}>{d.prep.days
+            ? <span className="pill good">상대 분석 {d.prep.days}일 · 계획 {d.prep.followed}/3 따름 · 능력치 +{d.prep.bonus.toFixed(1)}</span>
+            : <span className="pill">상대 분석 없이 치르는 경기</span>}</p>
+        )}
         <div className="row" style={{ justifyContent: 'center' }}>
           <button className="btn primary" onClick={() => act('command')}>벤치에서 직접 지휘</button>
           <button className="btn" onClick={() => act('simulate')}>결과만 보기</button>
@@ -44,7 +49,8 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
     );
   }
   const next = nextFixture(c);
-  const plan = S.program === 'rest' ? '휴식' : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
+  const plan = S.program === 'rest' || S.program === 'scout' ? PROGRAMS[S.program].label : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
+  const prep = d.prep;
   return (
     <Panel title="오늘" className="span-8">
       <div className="kv">
@@ -59,6 +65,17 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
         {d.camp && <div><small>특별 일정</small><b style={{ fontSize: 15 }}>여름 합숙</b><span className="muted">성장 ×1.4</span></div>}
       </div>
       {d.type === 'official' && <p className="hint">오늘은 다른 학교들의 대회 경기가 열립니다. 우리 팀은 훈련합니다.</p>}
+      {prep && (
+        <div className="notice" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ flex: 1, minWidth: 200 }}>
+            다음 공식전 <b>{prep.opponent}</b> ({prep.daysUntil}일 후) · 상대 분석 {prep.days}/{PREPARATION.maxDays}일
+            {prep.plan && <> · 계획 {prep.followed}/3 따름 · 그 경기 능력치 +{prep.bonus.toFixed(1)} (최대 +{prep.maxBonus.toFixed(1)})</>}
+          </span>
+          {prep.canScout && S.program !== 'scout' && <button className="btn small primary" onClick={() => act('program', 'scout')}>오늘 상대 분석하기</button>}
+          {S.program === 'scout' && <span className="pill club">오늘 분석 예정</span>}
+          {prep.plan && prep.followed < 3 && <button className="btn small" onClick={() => act('applyPlan')}>계획대로 전술 적용</button>}
+        </div>
+      )}
       <div className="row">
         <button className="btn" onClick={() => act('screen', 'training')}><Icon name="training" />훈련 설정</button>
         <button className="btn" onClick={() => act('screen', 'tactics')}><Icon name="tactics" />전술 확인</button>

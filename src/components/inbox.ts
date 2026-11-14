@@ -1,11 +1,11 @@
 // 받은 소식: 하루 결과(DayReport)를 감독에게 오는 메시지 여러 통으로 나눈다.
 // 메시지는 화면에만 쓰이고 따로 저장되므로, 나중에 팀이 사라져도 읽을 수 있게 이름을 미리 풀어 둔다.
-import { overall } from '@/game/engine';
+import { composites, overall } from '@/game/engine';
 import { PROGRAMS, INTENSITY } from '@/game/school';
-import { today } from '@/game/season';
-import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent } from '@/game/types';
+import { PREPARATION, today } from '@/game/season';
+import type { BoxTeam, Career, CompetitionResult, Composites, DayReport, Defense, Focus, GrowthEvent, InjuryEvent, Team } from '@/game/types';
 
-export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season';
+export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout';
 
 export interface MatchLine {
   home: string;
@@ -45,6 +45,7 @@ export interface Message {
   final?: boolean;
   results?: CompetitionResult[];
   body?: string[];
+  scout?: { opponent: string; label: string; days: number; bonus: number; players: PlayerNote[]; tactics: string; hints: string[] };
 }
 
 export type MessageDraft = Omit<Message, 'id' | 'unread'>;
@@ -97,7 +98,22 @@ export function buildMessages(
     }
   }
 
-  if (training && r.training) {
+  if (r.scout) {
+    const sc = r.scout;
+    const opp = career.teams[sc.opponentId];
+    const first = sc.days === 1;
+    out.push({
+      ...when, kind: 'scout', from: '코치진',
+      title: first ? `상대 분석 보고서: ${sc.opponent}` : `${sc.opponent} 대비 ${sc.days}일째`,
+      summary: `${sc.label} · 계획대로 하면 그 경기 능력치 +${sc.maxBonus.toFixed(1)} (${sc.days}/${PREPARATION.maxDays}일)`,
+      scout: {
+        opponent: sc.opponent, label: sc.label, days: sc.days, bonus: sc.maxBonus,
+        ...(first && opp ? { ...analyse(opp), hints: sc.plan?.notes ?? analyse(opp).hints } : { players: [], tactics: '', hints: [] }),
+      },
+    });
+  }
+
+  if (training && r.training && r.training.program !== 'scout') {
     const { program, intensity } = r.training;
     const label = program === 'rest' ? '휴식' : `${PROGRAMS[program].label} · ${INTENSITY[intensity].label}`;
     out.push({
@@ -162,6 +178,33 @@ export function buildMessages(
     }
   }
   return out;
+}
+
+const FOCUS_NAME: Record<Focus, string> = { balanced: '균형', inside: '골밑 중심', outside: '외곽 중심' };
+const DEFENSE_NAME: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스' };
+
+// 코치의 상대 분석: 주요 선수, 즐겨 쓰는 전술, 노려 볼 만한 약점
+function analyse(team: Team) {
+  const starters = team.players.slice(0, 5);
+  const cs = starters.map(composites);
+  const avg = (f: (c: Composites) => number) => cs.reduce((s, c) => s + f(c), 0) / cs.length;
+  const players = [...team.players].sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p) }));
+  const t = team.tactics;
+  const tactics = `${FOCUS_NAME[t.focus ?? 'balanced']} 공격 · ${DEFENSE_NAME[t.defense ?? 'man']} 수비`;
+  const hints: string[] = [];
+  const inside = avg((c) => c.defInterior);
+  const perimeter = avg((c) => c.defPerimeter);
+  if (perimeter < inside - 0.02) hints.push('외곽 수비가 상대적으로 약합니다. 외곽 중심 공격이 통할 수 있습니다.');
+  else if (inside < perimeter - 0.02) hints.push('골밑 수비가 상대적으로 약합니다. 골밑 중심 공격을 노려 보세요.');
+  const three = avg((c) => c.three);
+  if (three < 0.45) hints.push('믿을 만한 슈터가 적습니다. 존 수비가 잘 통할 상대입니다.');
+  else if (three > 0.55) hints.push('외곽슛이 좋은 팀입니다. 존 수비는 위험합니다.');
+  if (avg((c) => c.ballHandling) < 0.48) hints.push('볼 핸들링이 불안합니다. 프레스로 실책을 노려 볼 만합니다.');
+  const ace = starters.reduce((a, b) => (composites(b).usage > composites(a).usage ? b : a));
+  const teamOvr = starters.reduce((s, p) => s + overall(p), 0) / starters.length;
+  if (overall(ace) >= teamOvr + 6) hints.push(`공격이 ${ace.name}에게 몰리는 팀입니다. 집중 마크를 고려하세요.`);
+  if (!hints.length) hints.push('뚜렷한 약점이 없는 팀입니다. 우리 팀의 강점을 살리는 쪽이 낫습니다.');
+  return { players, tactics, hints };
 }
 
 // AI 코치에게 여러 날을 맡겼을 때의 훈련 요약

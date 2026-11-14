@@ -15,7 +15,7 @@ const userWon = (state: Career, box: BoxTeam[]) => box.find((t) => t.id === stat
 
 // 간단한 감독 방침: 지치면 쉬고, 아니면 메뉴를 순서대로 돌린다
 function policy(intensity: IntensityKey, restBelow: number): Decide {
-  const menu = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'rest');
+  const menu = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'rest' && k !== 'scout');
   let i = 0;
   return (state) => {
     const fit = me(state).players.filter((p) => !p.injuredDays);

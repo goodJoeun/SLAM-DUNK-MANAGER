@@ -81,11 +81,12 @@ export interface ActiveMatch extends UserMatch {
   deferredLog: LogEvent[]; // 연출 중에 일어난 교체·작전 타임 (공격권을 드러낸 뒤에 중계에 붙인다)
   possessions: number;
   logMark: number; // 엔진 중계 기록에서 화면이 이미 연출에 반영한 위치
+  endSeen: boolean; // 경기 종료 창을 닫았는지
 }
 
 export const newMatch = (m: UserMatch): ActiveMatch => ({
   ...m, feed: [], selected: null, timer: null, playing: false, pause: null, interlude: null, notes: [], flags: {},
-  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0,
+  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0, endSeen: false,
 });
 
 const FEED_LIMIT = 400;

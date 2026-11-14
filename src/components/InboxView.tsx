@@ -1,3 +1,4 @@
+import { PREPARATION } from '@/game/season';
 import type { Career } from '@/game/types';
 import type { Message, MessageKind } from './inbox';
 import type { Act } from './useGame';
@@ -5,7 +6,7 @@ import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, isUs
 import type { IconName, ViewProps } from './ui';
 
 const KIND_ICON: Record<MessageKind, IconName> = {
-  welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad',
+  welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics',
 };
 
 function MessageBody({ m, career }: { m: Message; career: Career }) {
@@ -61,6 +62,21 @@ function MessageBody({ m, career }: { m: Message; career: Career }) {
             ))}</ul></>}
         </>
       );
+    case 'scout': {
+      const sc = m.scout;
+      if (!sc) return null;
+      return (
+        <>
+          <div className="notice good">{sc.label} · 분석 {sc.days}일 · 계획대로 하면 그 경기 능력치 +{sc.bonus.toFixed(1)}</div>
+          {sc.players.length > 0 && <><h3>주요 선수</h3>
+            <ul className="lines">{sc.players.map((p) => <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={p.ovr} /></li>)}</ul></>}
+          {sc.tactics && <><h3>즐겨 쓰는 전술</h3><p>{sc.tactics}</p></>}
+          {sc.hints.length > 0 && <><h3>코치의 대응 계획</h3><ul className="lines">{sc.hints.map((h) => <li key={h}><span>{h}</span></li>)}</ul></>}
+          {sc.hints.length > 0 && <p className="hint">경기 시작 때 팀 전술이 이 계획(공격 중심·수비·집중 마크)을 따를수록 준비 보너스가 커집니다. 하나도 따르지 않으면 {Math.round(PREPARATION.baseShare * 100)}%만 받습니다. 훈련·전술 화면에서 한 번에 적용할 수 있습니다.</p>}
+          {!sc.players.length && <p className="muted">분석을 하루 더 하면 그 경기에서 받는 보너스가 커집니다 (최대 {Math.round(sc.bonus / sc.days * 3 * 10) / 10}).</p>}
+        </>
+      );
+    }
     default:
       return <>{(m.body ?? [m.summary]).map((t) => <p key={t}>{t}</p>)}</>;
   }

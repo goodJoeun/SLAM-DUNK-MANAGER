@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
+import { today } from '@/game/season';
 import type { BoxTeam, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
 import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
@@ -11,12 +13,15 @@ import type { ViewProps } from './ui';
 const SPEED_OPTIONS = Object.entries(SPEEDS).map(([k, v]) => [k, v.label] as [string, string]);
 const NOTE_ICON = { info: 'bulb', warn: 'alert', bad: 'alert', good: 'ball' } as const;
 
-function Side({ team: t, mine, away = false }: { team: TeamView; mine: boolean; away?: boolean }) {
+function Side({ team: t, mine, away = false, prep = 0 }: { team: TeamView; mine: boolean; away?: boolean; prep?: number }) {
   return (
     <div className={`sb-team ${away ? 'away' : ''}`}>
       <Crest name={t.name} size={40} />
       <div className="who">
-        <span className="nm">{t.name}{mine && <span className="pill club" style={{ marginLeft: 6 }}>우리 팀</span>}</span>
+        <span className="nm">
+          {t.name}{mine && <span className="pill club" style={{ marginLeft: 6 }}>우리 팀</span>}
+          {prep > 0 && <span className="pill good" style={{ marginLeft: 6 }} title="경기 전 상대 분석으로 이 경기에서만 능력치가 오릅니다">준비 +{prep.toFixed(1)}</span>}
+        </span>
         <span className="meta">
           팀 파울 {t.teamFouls} · 작전 타임 {t.timeoutsLeft}
           {t.run >= 4 && <> · <b className={mine ? 'good' : 'bad'}>연속 {t.run}점</b></>}
@@ -80,6 +85,53 @@ function Compare({ box }: { box: BoxTeam[] }) {
 
 const MADE = /성공|블록|스틸/;
 
+// 경기 종료 창: 승패, 최종 점수, 양 팀 최다 득점자
+function EndModal({ view, box, side, label, onFinish, onClose }: {
+  view: { teams: TeamView[]; period: number };
+  box: BoxTeam[];
+  side: number;
+  label: string;
+  onFinish: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const [h, a] = view.teams;
+  const won = view.teams[side].score > view.teams[1 - side].score;
+  const top = (t: BoxTeam) => t.players.reduce((x, y) => (y.pts > x.pts ? y : x));
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="end-title" onClick={(e) => e.stopPropagation()}>
+        <span className="eyebrow">{label}{view.period > 4 ? ' · 연장' : ''}</span>
+        <h2 id="end-title" className={won ? 'good' : 'bad'}>{won ? '승리!' : '패배'}</h2>
+        <div className="end-score">
+          <div><Crest name={h.name} size={40} /><b>{h.name}</b></div>
+          <span className="num">{h.score} : {a.score}</span>
+          <div><Crest name={a.name} size={40} /><b>{a.name}</b></div>
+        </div>
+        <ul className="lines">
+          {box.map((t) => {
+            const p = top(t);
+            return (
+              <li key={t.name}>
+                <span className="muted">{t.name} 최다 득점</span>
+                <span><b>{p.name}</b> {p.pts}점 · 리바 {p.orb + p.drb} · 어시 {p.ast}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose}>기록 더 보기</button>
+          <button className="btn primary" autoFocus onClick={onFinish}>결과 반영</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MatchView({ S, act, match: m }: ViewProps & { match: ActiveMatch }) {
   // 점수판·기록은 연출 중인 공격권이 끝나기 전까지 이전 상태로 보여 준다. 선수 명단(교체)은 지금 상태.
   const live = m.game.view();
@@ -96,19 +148,27 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const rivals = Object.fromEntries([...opp.court, ...opp.bench].map((p) => [p.id, `${p.name} (${p.pts}점)`]));
   const t = mine.tactics;
   const prefs = S.prefs;
+  const upcoming = today(S.career)?.prep;
+  const prepBonus = upcoming && upcoming.daysUntil === 0 && (upcoming.opponentId === m.home || upcoming.opponentId === m.away) ? upcoming.bonus : 0;
   const feed = (prefs.feed === 'key' ? m.feed.filter((e) => KEY_EVENT.test(e.text)) : m.feed).slice(0, 150);
   const colors = { '--home': clubColor(v.teams[0].name), '--away': clubColor(v.teams[1].name) } as CSSProperties;
 
+  // 마지막 공격권 연출까지 끝난 뒤에 종료 창을 띄운다
+  const ended = live.finished && !m.pending;
+
   return (
     <div className="page" style={colors}>
+      {ended && !m.endSeen && (
+        <EndModal view={live} box={m.game.result().box} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
+      )}
       <div className="scorebar">
-        <Side team={v.teams[0]} mine={m.side === 0} />
+        <Side team={v.teams[0]} mine={m.side === 0} prep={m.side === 0 ? prepBonus : 0} />
         <div className="sb-mid">
           <span className="q">{status}</span>
           <span className="clock">{clock}</span>
           <span className="faint" style={{ fontSize: 11.5 }}>{m.label}</span>
         </div>
-        <Side team={v.teams[1]} mine={m.side === 1} away />
+        <Side team={v.teams[1]} mine={m.side === 1} away prep={m.side === 1 ? prepBonus : 0} />
       </div>
 
       <div className="controls-bar">
@@ -155,11 +215,23 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <span>숫자는 포지션(1 PG ~ 5 C) · 노란 고리는 공을 가진 선수 · 우리 선수를 누르면 교체할 선수로 고릅니다</span>
           </div>
         </Panel>
-        <div className="stack">
+        {/* 코트를 보면서 바로 지시할 수 있게 전술을 코트 옆에 둔다 */}
+        <div className="stack match-side">
+          <Panel title="전술" action={<span className="hint">경기 중에도 바로 적용</span>}>
+            <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
+            <div className="controls">
+              <label className="hint">에이스 지정
+                <Select options={everyone} value={t.keyPlayerId} onChange={(value) => act('matchTactic', 'keyPlayerId', value)}><option value="">없음</option></Select>
+              </label>
+              <label className="hint">집중 마크
+                <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
+              </label>
+            </div>
+          </Panel>
           <Panel title="코치 알림" flush>
             {m.notes.length ? (
               <ul className="notes">
-                {m.notes.slice(0, 6).map((n) => (
+                {m.notes.slice(0, 5).map((n) => (
                   <li key={n.id} className={`tone-${n.tone}`}>
                     <Icon name={NOTE_ICON[n.tone]} />
                     <span>{n.text}{n.paused && <span className="pill" style={{ marginLeft: 6 }}>자동 정지</span>}</span>
@@ -168,9 +240,6 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 ))}
               </ul>
             ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>}
-          </Panel>
-          <Panel title="경기 기록" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
-            <Compare box={box} />
           </Panel>
         </div>
       </div>
@@ -204,17 +273,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         </Panel>
 
         <div className="stack">
-          <Panel title="전술">
-            <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
-            <div className="controls">
-              <label className="hint">에이스 지정
-                <Select options={everyone} value={t.keyPlayerId} onChange={(value) => act('matchTactic', 'keyPlayerId', value)}><option value="">없음</option></Select>
-              </label>
-              <label className="hint">집중 마크
-                <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
-              </label>
-            </div>
-            <p className="hint">경기가 흐르는 중에도 바로 적용됩니다.</p>
+          <Panel title="경기 기록" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
+            <Compare box={box} />
           </Panel>
           <Panel title="자동 정지">
             <div className="toggles">

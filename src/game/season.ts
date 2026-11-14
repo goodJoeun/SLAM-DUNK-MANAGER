@@ -24,11 +24,12 @@ import {
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName } from './competition.ts';
 import { DATASETS, buildSchool } from './dataset.ts';
+import { followed, makePlan } from './scouting.ts';
 import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
   BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, YearSummary,
+  IntensityKey, Leader, LeaderKey, Match, NameStyle, PrepInfo, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, YearSummary,
 } from './types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -103,6 +104,11 @@ export const SEASON = {
   ] as CalendarBlock[],
 };
 
+// 경기 전 준비: 다음 공식전이 window일 안으로 다가오면 훈련 대신 상대를 분석할 수 있다.
+// 하루마다 그 상대와의 경기에서만 능력치(키 제외) +perDay, 최대 maxDays일까지 쌓인다. AI 학교는 준비하지 않는다.
+// 보너스는 코치의 대응 계획(공격 중심·수비·집중 마크)을 경기 시작 때 따른 만큼 커진다. 하나도 안 따르면 baseShare만 받는다.
+export const PREPARATION = { perDay: 1.4, maxDays: 3, window: 3, baseShare: 0.4 };
+
 const DAY_TYPE: Record<string, DayType> = { T: 'training', P: 'practice', M: 'official' };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const shuffle = <T>(rng: Rng, xs: T[]) => {
@@ -125,7 +131,7 @@ export function createCareer({ seed = 1, userTeamIndex = 0, dataset = null, name
     seed, counter: 0, nextId: 1, year: 1, finished: false,
     dataset: data ? dataset : null, nameStyle: data ? (nameStyle ?? 'kr') : nameStyle,
     prefecture: data?.prefecture ?? SEASON.prefecture,
-    teams: {}, regionIds: [], guestIds: [], userTeamId: '',
+    teams: {}, regionIds: [], guestIds: [], userTeamId: '', prep: {},
     results: [], // 지금까지 끝난 대회 기록
     comp: null, stats: {}, yearPoints: {}, calendar: [], dayIndex: 0, // startSeason이 채운다
   };
@@ -183,6 +189,8 @@ function startCompetition(state: Career, key: CompetitionKey, rng: Rng) {
     prefChampion: null, champion: null,
   };
   state.comp = c;
+  state.prep = {}; // 새 대회: 지난 대회를 위해 한 분석은 버린다
+  state.prepPlans = {};
   // 학교 수준(지난 성적 반영) 순으로 시드를 준다
   const seeded = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige);
   if (c.stage === 'knockout') {
@@ -211,11 +219,36 @@ function recordStats(state: Career, box: BoxTeam[]) {
   }
 }
 
+// 공식전에서 내 팀이 받는 준비 보너스 [홈, 원정]
+function prepFor(state: Career, home: string, away: string, official: boolean): [number, number] {
+  const me = state.userTeamId;
+  if (!official || (home !== me && away !== me)) return [0, 0];
+  const bonus = prepBonus(state, home === me ? away : home);
+  return home === me ? [bonus, 0] : [0, bonus];
+}
+
+// 분석 일수 × 하루 보너스 × (계획을 따른 정도)
+function prepBonus(state: Career, opponentId: string) {
+  const days = Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0);
+  if (!days) return 0;
+  const plan = state.prepPlans?.[opponentId];
+  const share = plan ? followed(state.teams[state.userTeamId].tactics, plan) / 3 : 0;
+  return days * PREPARATION.perDay * (PREPARATION.baseShare + (1 - PREPARATION.baseShare) * share);
+}
+
 function playMatch(state: Career, ctx: DayContext, home: string, away: string, official: boolean): Match {
   const pre = ctx.pre && ctx.pre.home === home && ctx.pre.away === away ? ctx.pre.game : null;
+  const prep = prepFor(state, home, away, official);
   const g = pre
     ? (pre.finished ? pre.result() : pre.playToEnd())
-    : simulateGame(state.teams[home], state.teams[away], { seed: ctx.rng.int(0, 2 ** 31) });
+    : simulateGame(state.teams[home], state.teams[away], { seed: ctx.rng.int(0, 2 ** 31), prep });
+  if (home === state.userTeamId || away === state.userTeamId) {
+    // 준비와 계획은 그 경기로 끝난다. 그 상대를 위해 건 집중 마크도 푼다 (다른 학교 선수를 계속 마크하지 않게).
+    const opp = home === state.userTeamId ? away : home;
+    delete state.prep?.[opp];
+    delete state.prepPlans?.[opp];
+    delete state.teams[state.userTeamId].tactics.denyPlayerId;
+  }
   if (official) recordStats(state, g.box);
   const match: Match = { home, away, homeScore: g.score.home, awayScore: g.score.away, winner: g.winner === 'home' ? home : away, overtime: g.periods > 4 };
 
@@ -384,10 +417,17 @@ function finishCompetition(state: Career) {
 function userPairing(state: Career): { home: string; away: string; official: boolean; label: string } | null {
   const day = state.calendar[state.dayIndex];
   const me = state.userTeamId;
-  const c = state.comp;
   if (!day) return null;
   if (day.type === 'practice') return { home: me, away: day.opponentId!, official: false, label: '연습 경기' };
-  if (day.type !== 'official' || !c) return null;
+  if (day.type !== 'official') return null;
+  return officialPairing(state);
+}
+
+// 대회 진행 상황으로 본 내 팀의 다음 공식전 대진 (대회 중이 아니거나 탈락했으면 null)
+function officialPairing(state: Career): { home: string; away: string; official: boolean; label: string } | null {
+  const me = state.userTeamId;
+  const c = state.comp;
+  if (!c) return null;
   if (c.stage === 'group') {
     const group = c.groups!.find((g) => g.ids.includes(me))!;
     const pair = group.schedule[c.groupPlayed].find((p) => p.includes(me))!;
@@ -426,7 +466,7 @@ export function today(state: Career): Today | null {
   }
   return {
     year: state.year, day: state.dayIndex + 1, of: state.calendar.length,
-    phase: day.phase, type: day.type, camp: day.camp,
+    phase: day.phase, type: day.type, camp: day.camp, prep: upcomingOfficial(state),
     daysToNextMatch: nextMatchIn(state), // 0이면 오늘이 경기일. 남은 경기가 없으면 null
     // 공식전 날인데 내 팀 경기가 없으면(탈락) 훈련일이 된다
     userTrains: !pairing,
@@ -441,6 +481,7 @@ export function prepareUserMatch(state: Career): UserMatch | null {
   const side = pairing.home === state.userTeamId ? 0 : 1;
   const game = createGame(state.teams[pairing.home], state.teams[pairing.away], {
     seed: rngFor(state).int(0, 2 ** 31), log: true, manual: side === 0 ? [true, false] : [false, true],
+    prep: prepFor(state, pairing.home, pairing.away, pairing.official),
   });
   return { game, side, home: pairing.home, away: pairing.away, label: pairing.label };
 }
@@ -448,13 +489,34 @@ export function prepareUserMatch(state: Career): UserMatch | null {
 // 하루를 진행한다.
 //   decision.program / decision.intensity : 오늘의 팀 훈련 (school.ts의 PROGRAMS, INTENSITY)
 //   decision.match                        : prepareUserMatch로 만들어 직접 지휘한 경기
+// 다음 공식전과 준비 상황. 대진이 아직 정해지지 않았으면 null
+export function upcomingOfficial(state: Career): PrepInfo | null {
+  const next = state.calendar.findIndex((d, i) => i >= state.dayIndex && d.type === 'official');
+  if (next < 0) return null;
+  const pairing = officialPairing(state);
+  if (!pairing) return null;
+  const opponentId = pairing.home === state.userTeamId ? pairing.away : pairing.home;
+  const days = Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0);
+  const daysUntil = next - state.dayIndex;
+  const plan = state.prepPlans?.[opponentId] ?? null;
+  return {
+    opponentId, opponent: state.teams[opponentId].name, label: pairing.label, daysUntil, days,
+    bonus: prepBonus(state, opponentId),
+    maxBonus: days * PREPARATION.perDay,
+    plan,
+    followed: plan ? followed(state.teams[state.userTeamId].tactics, plan) : 0,
+    canScout: daysUntil >= 1 && daysUntil <= PREPARATION.window && days < PREPARATION.maxDays,
+  };
+}
+
 export function playDay(state: Career, decision: DayDecision = {}): DayReport | null {
   if (state.finished) return null;
   const day = state.calendar[state.dayIndex];
+  const upcoming = upcomingOfficial(state); // 오늘 상대 분석을 하면 이 상대에 대한 준비가 쌓인다
   const report: DayReport = {
     year: state.year, day: state.dayIndex + 1, of: state.calendar.length, phase: day.phase, type: day.type,
     round: null, practice: null, training: null, userBox: null, growth: [], injuries: [],
-    competitionEnd: null, yearEnd: null,
+    competitionEnd: null, yearEnd: null, scout: null,
   };
   const ctx: DayContext = { rng: rngFor(state), pre: decision.match ?? null, played: new Set(), report };
 
@@ -477,6 +539,15 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
       : aiTraining(ctx.rng, team, matchTomorrow);
     const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp });
     if (mine) {
+      if (choice.program === 'scout' && upcoming?.canScout) {
+        const days = upcoming.days + 1;
+        state.prep = { ...state.prep, [upcoming.opponentId]: days };
+        // 첫날 코치가 대응 계획을 세운다
+        if (!state.prepPlans?.[upcoming.opponentId]) {
+          state.prepPlans = { ...state.prepPlans, [upcoming.opponentId]: makePlan(team, state.teams[upcoming.opponentId]) };
+        }
+        report.scout = upcomingOfficial(state);
+      }
       report.training = choice;
       report.growth.push(...result.growth);
       report.injuries.push(...result.injuries);
