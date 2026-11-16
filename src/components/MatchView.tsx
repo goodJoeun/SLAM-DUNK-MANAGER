@@ -5,7 +5,7 @@ import type { BoxTeam, PlayerRole, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
 import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
 import type { AlertKey, FeedMode, SpeedKey } from './live';
-import FullCourt, { shortName } from './court/FullCourt';
+import FullCourt from './court/FullCourt';
 import { tipOffScene } from './court/choreo';
 import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
@@ -149,7 +149,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const box = m.display?.box ?? m.game.result().box;
   const mine = live.teams[m.side];
   const opp = live.teams[1 - m.side];
-  const labels = Object.fromEntries(live.teams.flatMap((team) => [...team.court, ...team.bench]).map((p) => [p.id, shortName(p.name)]));
+  const labels = Object.fromEntries(live.teams.flatMap((team) => [...team.court, ...team.bench]).map((p) => [p.id, p.name]));
   const courtColors: [string, string] = [clubColor(v.teams[0].name), clubColor(v.teams[1].name)];
   const clock = `${Math.floor(v.clock / 60)}:${String(v.clock % 60).padStart(2, '0')}`;
   const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);

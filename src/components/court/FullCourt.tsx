@@ -72,7 +72,7 @@ export default function FullCourt({ anim, scene, colors, labels, mySide, selecte
   anim: CourtAnimation | null;
   scene: Scene;
   colors: [string, string];
-  labels: Record<string, string>; // 선수 id -> 짧은 이름
+  labels: Record<string, string>; // 선수 id -> 이름(성 포함)
   mySide: number;
   selected?: string | null;
   onPick?: (id: string) => void; // 우리 팀 선수를 누르면 (교체 선택)
@@ -128,6 +128,3 @@ export default function FullCourt({ anim, scene, colors, labels, mySide, selecte
     </svg>
   );
 }
-
-// 코트에 적을 짧은 이름: 한국어 이름은 이름 두 글자, 띄어 쓴 이름은 마지막 단어
-export const shortName = (name: string) => (name.includes(' ') ? name.split(' ').at(-1) ?? name : name.length >= 3 ? name.slice(-2) : name);
