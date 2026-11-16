@@ -156,12 +156,14 @@ interface GamePlayer {
   pos: number;
   c: Composites;
   ovr: number;
+  rank: number; // 교체 판단에 쓰는 가치. 선발은 감독이 고른 선수이므로 벤치보다 낮게 보지 않는다
   form: number; // 당일 컨디션 보정
   energy: number; // 0~1
   injured: boolean;
   since: number; // 마지막으로 코트에 들어오거나 나간 시각
   stat: StatLine;
   starter: boolean;
+  home: number; // 선발로 선 자리 (벤치는 -1)
 }
 
 interface GameTeam {
@@ -189,15 +191,18 @@ function prepared(p: BasePlayer, bonus: number): BasePlayer {
 
 function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTeam {
   const T = TUNING;
+  // 감독이 능력이 낮은 선수를 선발로 세웠더라도 자동 교체가 곧바로 빼 버리지 않게, 선발의 가치는 벤치 최고 선수보다 높게 본다
+  const benchBest = Math.max(0, ...team.players.slice(5).map(overall));
   const players: GamePlayer[] = team.players.map((p, i) => {
     // 숨겨진 능력치: 일관성이 낮을수록 그날 컨디션이 크게 흔들린다
     const consistency = (p.hidden?.consistency ?? 50) / 100;
     return {
       id: p.id, name: p.name, pos: p.pos, c: composites(prepared(p, prep)), ovr: overall(p),
+      rank: i < 5 ? Math.max(overall(p), benchBest * 1.05) : overall(p),
       form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)),
       energy: p.condition == null ? 1 : 0.85 + 0.15 * (p.condition / 100), // 지친 채로 경기에 나오면 체력이 덜 찬 상태
       injured: (p.injuredDays ?? 0) > 0,
-      since: 0, stat: emptyLine(), starter: i < 5,
+      since: 0, stat: emptyLine(), starter: i < 5, home: i < 5 ? i : -1,
     };
   });
   return {
@@ -291,13 +296,14 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       unavailable(p) ||
       (crunch ? p.energy < 0.25 : p.energy < T.tiredEnergy && now - p.since >= T.minStint);
     const ready = (p: GamePlayer) => !unavailable(p) && p.energy >= (crunch ? 0.3 : garbage ? 0 : T.restedEnergy);
-    const value = (p: GamePlayer, slot: number) => p.ovr * (1 - T.posMismatchPenalty * Math.abs(p.pos - (slot + 1)));
+    // 선발은 자기가 선 자리(home)에서는 포지션이 어긋나도 감독의 선택으로 보고 깎지 않는다
+    const value = (p: GamePlayer, slot: number) => (p.home === slot ? p.rank : p.ovr * (1 - T.posMismatchPenalty * Math.abs(p.pos - (slot + 1))));
 
     for (let slot = 0; slot < 5; slot++) {
       const cur = team.court[slot];
       if (!team.auto && !gone(cur)) continue;
       const offCourt = team.players.filter((p) => !team.court.includes(p));
-      let pool = offCourt.filter((p) => ready(p) && Math.abs(p.pos - (slot + 1)) <= 1);
+      let pool = offCourt.filter((p) => ready(p) && (p.home === slot || Math.abs(p.pos - (slot + 1)) <= 1));
       if (!pool.length && gone(cur)) pool = offCourt.filter((p) => !gone(p));
       if (!pool.length) continue;
       const best = pool.reduce((a, b) => (value(b, slot) > value(a, slot) ? b : a));

@@ -5,6 +5,7 @@
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
 import { createCareer, today, playDay, prepareUserMatch } from '@/game/season';
+import { setLineup } from '@/game/school';
 import type { DayDecision } from '@/game/season';
 import type {
   Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, PlayerRole, ProgramKey, Tactics,
@@ -285,6 +286,26 @@ const actions = {
     if (key === 'pace') tactics.pace = Number(value);
     else if (key === 'focus') tactics.focus = value as Focus;
     else tactics.defense = value as Defense;
+    save(S);
+  },
+  // 선발 자리(slot 0~4)에 선수를 세운다. 이미 다른 자리의 선발이면 두 선수가 자리를 바꾼다.
+  starter({ S }: Ctx, slot: number, id: string) {
+    const team = userTeam(S);
+    const player = team.players.find((p) => p.id === id);
+    if (!player || player.injuredDays || slot < 0 || slot > 4) return;
+    const current = team.players.slice(0, 5).map((p) => p.id);
+    const lineup = current.map((cur, i) => team.lineup?.[i] ?? cur); // 다친 선수의 지정은 그대로 둔다
+    const from = current.indexOf(id);
+    if (from >= 0) lineup[from] = current[slot];
+    lineup[slot] = id;
+    team.lineup = lineup.map((x, i) => (i !== slot && x === id ? current[slot] : x));
+    setLineup(team);
+    save(S);
+  },
+  autoLineup({ S }: Ctx) {
+    const team = userTeam(S);
+    delete team.lineup;
+    setLineup(team);
     save(S);
   },
   playerFocus({ S }: Ctx, id: string, value: string) {

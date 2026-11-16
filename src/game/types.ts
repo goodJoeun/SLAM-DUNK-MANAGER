@@ -59,6 +59,7 @@ export interface Team {
   prestige: number;
   players: Player[];
   tactics: Partial<Tactics>;
+  lineup?: (string | null)[]; // 감독이 직접 정한 선발: 포지션 1~5 자리의 선수 id. 없으면 매일 자동으로 정한다
 }
 
 // 경기 엔진의 입력. Team은 그대로 넣을 수 있고, 임시 생성 팀(generateTeam)은 id 없이도 된다.

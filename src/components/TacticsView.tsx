@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { composites, overall } from '@/game/engine';
 import { teamOverall } from '@/game/school';
 import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
 import { today } from '@/game/season';
-import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, PageTitle, Panel, PosBadge, mean, planSummary, userTeam } from './ui';
+import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, planSummary, userTeam } from './ui';
 import type { ViewProps } from './ui';
 
 const FOCUS_INFO: Record<Focus, string> = {
@@ -64,6 +65,21 @@ export default function TacticsView({ S, act }: ViewProps) {
   const focus = t.focus ?? 'balanced';
   const defense = t.defense ?? 'man';
   const pace = String(Math.round(t.pace ?? 0));
+  // 선발 교체: 코트의 선발을 고른 뒤 벤치 선수(교체)나 다른 선발(자리 바꿈)을 누른다
+  const [picked, setPicked] = useState<string | null>(null);
+  const pickedSlot = starters.findIndex((p) => p.id === picked);
+  const pickedPlayer = pickedSlot >= 0 ? starters[pickedSlot] : null;
+  const manual = !!team.lineup;
+  const pickStarter = (id: string) => {
+    if (pickedPlayer && id !== pickedPlayer.id) { act('starter', pickedSlot, id); setPicked(null); }
+    else setPicked(pickedPlayer ? null : id);
+  };
+  const pickBench = (id: string, injured: boolean) => {
+    if (!pickedPlayer) { act('player', id); return; }
+    if (injured) return;
+    act('starter', pickedSlot, id);
+    setPicked(null);
+  };
 
   return (
     <div className="page">
@@ -106,13 +122,35 @@ export default function TacticsView({ S, act }: ViewProps) {
         </div>
 
         <div className="stack">
-          <Panel title={`선발 라인업 · 팀 전력 ${teamOverall(team)}`}>
-            <Court players={starters.map((p) => ({ id: p.id, name: p.name, note: `종합 ${overall(p)}`, energy: p.condition }))} onPick={(id) => act('player', id)} />
-            <p className="hint">고리는 컨디션입니다. 선수를 누르면 상세 정보를 봅니다.</p>
+          <Panel
+            title={`선발 라인업 · 팀 전력 ${teamOverall(team)}`}
+            action={manual
+              ? <button className="btn small" onClick={() => { act('autoLineup'); setPicked(null); }}>자동 선발로 되돌리기</button>
+              : <span className="hint">코치가 매일 자동으로 정하는 중</span>}
+          >
+            <Court
+              players={starters.map((p, i) => ({
+                id: p.id, name: p.name, energy: p.condition, selected: p.id === picked,
+                note: p.pos === i + 1 ? `종합 ${overall(p)}` : `종합 ${overall(p)} · 본래 ${POS[p.pos]}`,
+              }))}
+              onPick={pickStarter}
+            />
+            {pickedPlayer ? (
+              <p className="hint">
+                <b>{POS[pickedSlot + 1]} {pickedPlayer.name}</b> 선택됨 · 벤치 선수를 누르면 교체하고, 다른 선발을 누르면 자리를 바꿉니다.{' '}
+                <button className="btn small" onClick={() => act('player', pickedPlayer.id)}>상세 보기</button>{' '}
+                <button className="btn small" onClick={() => setPicked(null)}>선택 해제</button>
+              </p>
+            ) : (
+              <p className="hint">
+                선발을 누른 뒤 벤치 선수를 누르면 교체합니다. 고리는 컨디션입니다.
+                {manual && ' 직접 정한 선발은 계속 유지되고, 다친 선수의 자리만 나을 때까지 코치가 채웁니다.'}
+              </p>
+            )}
           </Panel>
           <Panel title="벤치" flush>
             {bench.map((p) => (
-              <div key={p.id} className={`bench-row ${p.injuredDays ? 'off' : ''}`} onClick={() => act('player', p.id)}>
+              <div key={p.id} className={`bench-row ${p.injuredDays ? 'off' : ''}`} onClick={() => pickBench(p.id, !!p.injuredDays)}>
                 <PosBadge pos={p.pos} />
                 <span className="nm">{p.name}</span>
                 <CondBar value={p.condition} />

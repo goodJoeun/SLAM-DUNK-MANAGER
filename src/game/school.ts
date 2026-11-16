@@ -110,7 +110,14 @@ export function createSchool(rng: Rng, state: Career, name: string, prestige: nu
 // ---------- 라인업·전술 ----------
 
 // 앞의 5명 = 포지션 1~5 주전, 나머지는 능력 순 벤치 (엔진이 이 순서를 그대로 쓴다). 부상자는 맨 뒤.
+// team.lineup이 있으면 그 자리는 감독이 정한 선수를 쓴다. 그 선수가 다쳤거나 팀을 떠났으면 그 자리만 자동으로 채운다
+// (다친 선수의 지정은 남겨 두어, 나으면 다시 선발로 돌아온다).
 export function setLineup(team: Team) {
+  if (team.lineup) {
+    const onRoster = new Set(team.players.map((p) => p.id));
+    team.lineup = team.lineup.map((id) => (id && onRoster.has(id) ? id : null));
+    if (team.lineup.every((id) => !id)) delete team.lineup;
+  }
   const healthy = team.players.filter((p) => !p.injuredDays).sort((a, b) => overall(b) - overall(a));
   const injured = team.players.filter((p) => p.injuredDays);
   if (healthy.length < 5) { team.players = [...healthy, ...injured]; return; }
@@ -118,7 +125,9 @@ export function setLineup(team: Team) {
   // 자리마다 상위 후보 5명씩 따져 본다 (5명 미만이면 뛰어난 몇 명이 여러 자리의 후보를 독점해 조합이 안 나올 수 있다).
   const ovr = new Map(healthy.map((p) => [p, overall(p)]));
   const fit = (p: Player, pos: number) => ovr.get(p)! * (1 - 0.08 * Math.abs(p.pos - pos));
-  const candidates = [1, 2, 3, 4, 5].map((pos) => [...healthy].sort((a, b) => fit(b, pos) - fit(a, pos)).slice(0, 5));
+  const fixed = [0, 1, 2, 3, 4].map((slot) => healthy.find((p) => p.id === team.lineup?.[slot]) ?? null);
+  const free = healthy.filter((p) => !fixed.includes(p));
+  const candidates = [1, 2, 3, 4, 5].map((pos) => (fixed[pos - 1] ? [fixed[pos - 1]!] : [...free].sort((a, b) => fit(b, pos) - fit(a, pos)).slice(0, 5)));
   let best: Player[] | null = null;
   let bestScore = -1;
   const search = (slot: number, chosen: Player[], score: number): void => {

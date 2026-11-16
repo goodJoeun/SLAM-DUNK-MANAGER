@@ -149,7 +149,7 @@ export default function SquadView({ S, act }: ViewProps) {
 
   return (
     <div className="page">
-      <PageTitle title="선수단" sub={`${team.players.length}명 · 팀 전력 ${teamOverall(team)} · 주전은 능력과 포지션에 따라 매일 자동으로 정해집니다`}>
+      <PageTitle title="선수단" sub={`${team.players.length}명 · 팀 전력 ${teamOverall(team)} · 선발은 전술 화면에서 직접 정할 수 있습니다`}>
         <Seg options={VIEWS} value={view} onChange={(v) => setView(v as 'overview' | 'attrs')} />
       </PageTitle>
       <Panel title={view === 'overview' ? '선수 목록' : '능력치 비교'} flush action={<span className="hint">머리글을 누르면 정렬 · 선수를 누르면 상세</span>}>
