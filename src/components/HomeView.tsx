@@ -1,4 +1,4 @@
-import { PREPARATION, SEASON, today } from '@/game/season';
+import { PREPARATION, SEASON, seasonGoal, today } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
@@ -149,6 +149,7 @@ export default function HomeView({ S, act }: ViewProps) {
   const team = userTeam(c);
   const fit = team.players.filter((p) => !p.injuredDays);
   const cond = Math.round(mean(fit.map((p) => p.condition)));
+  const goal = seasonGoal(S.career);
   const injured = team.players.filter((p) => p.injuredDays);
   const tired = fit.filter((p) => p.condition < 60);
   const matches = S.inbox.filter((m) => m.kind === 'match');
@@ -164,6 +165,13 @@ export default function HomeView({ S, act }: ViewProps) {
           <div className="kv">
             <div><small>팀 전력</small><b><Attr v={teamOverall(team)} /></b></div>
             <div><small>컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
+          </div>
+          <div className="notice" style={{ marginTop: 8 }}>
+            <b>올해 목표</b> · {goal.label}<br />
+            <span className="muted">
+              {goal.achieved ? <span className="good">달성 ({goal.bestLabel})</span> : goal.bestLabel ? `아직 미달 · 올해 최고 성적: ${goal.bestLabel}` : '아직 끝난 대회가 없습니다'}
+              {' · '}교장의 신임 {goal.trust}
+            </span>
           </div>
           {injured.length > 0 && (
             <ul className="lines">

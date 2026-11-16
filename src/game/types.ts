@@ -340,6 +340,19 @@ export interface Career {
   calendar: CalendarDay[];
   dayIndex: number;
   prep?: Record<string, number>; // 다음 공식전 상대별 분석 일수 (대회가 바뀌면 비운다)
+  goal?: { tier: number }; // 교장이 정한 올해 목표 (대회 성적 등급). 세 대회 중 한 번이라도 이루면 달성
+  bestTier?: number; // 올해 끝난 대회 중 우리 학교의 가장 좋은 성적 등급
+  trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
+}
+
+// 연말 평가: 올해 목표를 이뤘는지와 그 결과
+export interface YearReview {
+  goal: string;
+  best: string; // 올해 가장 좋았던 성적
+  grade: number; // 2 초과 달성, 1 달성, -1 미달, -2 크게 미달
+  verdict: string;
+  prestigeBonus: number; // 평가에 따른 학교 수준 추가 변화
+  trust: number; // 평가 뒤의 신임
 }
 
 // 다음 공식전 상대와 준비 상황
@@ -380,6 +393,8 @@ export interface YearSummary {
   results: CompetitionResult[];
   graduates: Player[];
   recruits: Player[];
+  review?: YearReview;
+  prestige?: [number, number]; // 우리 학교 수준 [올해, 내년]
 }
 
 export interface DayReport {

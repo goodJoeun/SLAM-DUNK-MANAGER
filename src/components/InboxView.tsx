@@ -49,6 +49,19 @@ function MessageBody({ m, career }: { m: Message; career: Career }) {
       return (
         <>
           <p>{m.summary}</p>
+          {m.body?.map((line) => <p key={line}>{line}</p>)}
+          {m.yearReview && (
+            <>
+              <h3>올해의 평가</h3>
+              <div className={`notice ${m.yearReview.grade > 0 ? 'good' : 'bad'}`}>{m.yearReview.verdict}</div>
+              <div className="kv">
+                <div><small>올해 목표</small><b style={{ fontSize: 15 }}>{m.yearReview.goal}</b></div>
+                <div><small>가장 좋았던 성적</small><b style={{ fontSize: 15 }}>{m.yearReview.best}</b></div>
+                <div><small>교장의 신임</small><b>{m.yearReview.trust}</b><span className="muted">100 만점</span></div>
+                {m.prestige && <div><small>학교 수준</small><b>{m.prestige[0]} → {m.prestige[1]}</b><span className="muted">평가 반영 {m.yearReview.prestigeBonus > 0 ? '+' : ''}{m.yearReview.prestigeBonus}</span></div>}
+              </div>
+            </>
+          )}
           {m.results && m.results.length > 0 && (
             <div className="table-wrap"><table className="data">
               <thead><tr><th className="l">연도</th><th className="l">대회</th><th className="l">우리 학교</th><th className="l">전국 우승</th></tr></thead>

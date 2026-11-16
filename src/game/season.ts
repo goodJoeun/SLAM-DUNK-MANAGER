@@ -28,7 +28,7 @@ import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
   BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, PrepInfo, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, YearSummary,
+  IntensityKey, Leader, LeaderKey, Match, NameStyle, PrepInfo, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, YearReview, YearSummary,
 } from './types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -147,8 +147,50 @@ export function createCareer({ seed = 1, userTeamIndex = 0, dataset = null, name
   return state;
 }
 
+// ---------- 시즌 목표 ----------
+// 교장은 학교 수준 순위에 맞춰 올해 목표를 준다. 세 대회 중 한 번이라도 그 성적에 닿으면 달성이다.
+// 연말에 달성 여부로 학교 수준(다음 신입생의 질)과 교장의 신임이 달라진다.
+export const TIER_LABEL = ['조별 리그·초반 탈락', '조 2위 또는 8강', '현 예선 최종 단계', '전국 대회 진출', '전국 8강 이상', '전국 우승'];
+export const GOAL_LABEL = ['', '현 예선에서 조 2위 이내 또는 8강', '현 예선 최종 단계(결승 리그·결승) 진출', '전국 대회 진출', '전국 8강 이상', '전국 우승'];
+const GOAL_EFFECT: Record<number, { verdict: string; prestige: number; trust: number }> = {
+  2: { verdict: '목표를 넘어섰습니다. 학교의 지원이 크게 늘어납니다.', prestige: 2, trust: 15 },
+  1: { verdict: '목표를 이뤘습니다. 학교가 농구부를 믿고 지원합니다.', prestige: 1, trust: 8 },
+  [-1]: { verdict: '목표에 조금 못 미쳤습니다. 학교의 기대가 식고 있습니다.', prestige: -1, trust: -10 },
+  [-2]: { verdict: '목표에 크게 못 미쳤습니다. 농구부 지원이 줄어듭니다.', prestige: -2, trust: -20 },
+};
+
+function goalTierFor(state: Career) {
+  const rank = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige).indexOf(state.userTeamId) + 1;
+  if (rank === 1 && state.teams[state.userTeamId].prestige >= 64) return 4; // 현 내 최강의 명문은 전국에서의 성적을 요구받는다
+  return rank <= 2 ? 3 : rank <= 5 ? 2 : 1;
+}
+
+// 올해 목표와 지금까지의 진행 (예전 저장에는 목표가 없으므로 그 자리에서 정한다)
+export function seasonGoal(state: Career) {
+  state.goal ??= { tier: goalTierFor(state) };
+  const best = state.bestTier ?? null;
+  return {
+    tier: state.goal.tier, label: GOAL_LABEL[state.goal.tier],
+    best, bestLabel: best == null ? null : TIER_LABEL[best],
+    achieved: best != null && best >= state.goal.tier,
+    trust: state.trust ?? 50,
+  };
+}
+
+function reviewYear(state: Career): YearReview {
+  const goal = seasonGoal(state);
+  const best = goal.best ?? 0;
+  const diff = best - goal.tier;
+  const grade = diff >= 1 ? 2 : diff === 0 ? 1 : diff === -1 ? -1 : -2;
+  const effect = GOAL_EFFECT[grade];
+  state.trust = clamp((state.trust ?? 50) + effect.trust, 0, 100);
+  return { goal: goal.label, best: TIER_LABEL[best], grade, verdict: effect.verdict, prestigeBonus: effect.prestige, trust: state.trust };
+}
+
 function startSeason(state: Career) {
   const rng = rngFor(state);
+  state.goal = { tier: goalTierFor(state) };
+  delete state.bestTier;
   for (const id of state.regionIds) {
     const team = state.teams[id];
     setLineup(team);
@@ -395,6 +437,7 @@ function setupNational(state: Career, rng: Rng, reps: string[]) {
 function finishCompetition(state: Career) {
   const c = state.comp!;
   c.stage = 'done';
+  state.bestTier = Math.max(state.bestTier ?? 0, c.tier[state.userTeamId] ?? 0);
   for (const id of state.regionIds) {
     state.yearPoints[id] = (state.yearPoints[id] ?? 0) + SEASON.prestigeByTier[c.tier[id] ?? 0];
   }
@@ -563,9 +606,12 @@ function endYear(state: Career, rng: Rng): YearSummary {
 
   const comps = Object.keys(SEASON.competitions).length;
   for (const id of state.regionIds) {
+  summary.review = reviewYear(state); // 올해 목표를 이뤘는지
     const team = state.teams[id];
     // 성적이 좋으면 오르고, 해마다 평균(50)으로 조금씩 되돌아간다
-    const delta = (state.yearPoints[id] ?? 0) / comps + rng.gauss(0, 2);
+    const mine = id === state.userTeamId;
+    const before = team.prestige;
+    const delta = (state.yearPoints[id] ?? 0) / comps + rng.gauss(0, 2) + (mine ? summary.review.prestigeBonus : 0);
     team.prestige = Math.round(clamp(team.prestige + delta + (50 - team.prestige) * SEASON.prestigeRegression, 30, 75));
 
     const leaving = team.players.filter((p) => p.year >= 3);
@@ -574,6 +620,7 @@ function endYear(state: Career, rng: Rng): YearSummary {
     const recruits = recruitClass(rng, state, team);
     if (id === state.userTeamId) { summary.graduates = leaving; summary.recruits = recruits; }
   }
+    if (mine) summary.prestige = [before, team.prestige];
   for (const id of state.guestIds) delete state.teams[id];
   state.guestIds = [];
   state.year++;

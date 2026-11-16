@@ -119,13 +119,24 @@ function advance(S: GameState, decision: DayDecision = {}): Message[] {
   const career = careerOf(S);
   const names = teamNames(career);
   const report = playDay(career, decision);
-  return report ? deliver(S, buildMessages(career, report, names)) : [];
+  const fresh = report ? deliver(S, buildMessages(career, report, names)) : [];
+  openYearEnd(S, fresh);
+  return fresh;
+}
+
+// 한 해가 끝나면 연말 평가(졸업·신입생 포함)를 바로 띄운다
+function openYearEnd(S: GameState, messages: Message[]) {
+  const m = messages.find((x) => x.kind === 'season' && (x.yearReview || x.final));
+  if (!m) return;
+  m.unread = false;
+  S.messageId = m.id;
+  S.screen = 'inbox';
 }
 
 // 경기 결과 메시지를 바로 연다
 function openMatchReport(S: GameState, messages: Message[]) {
   const m = messages.find((x) => x.kind === 'match');
-  if (!m) return;
+  if (!m || messages.some((x) => x.kind === 'season')) return; // 연말 평가가 떴으면 그대로 둔다
   m.unread = false;
   S.messageId = m.id;
   S.screen = 'inbox';
@@ -272,7 +283,7 @@ const actions = {
       days++;
       last = report;
       growth.push(...report.growth);
-      deliver(S, buildMessages(career, report, names, { training: false }));
+      openYearEnd(S, deliver(S, buildMessages(career, report, names, { training: false })));
       if (report.yearEnd) break;
     }
     if (last) deliver(S, [trainingDigest(last, days, growth)]);

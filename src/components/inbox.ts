@@ -5,8 +5,8 @@ import { scoutReport } from '@/game/scouting';
 import { reviewMatch } from '@/game/review';
 import type { ScoutSection } from '@/game/scouting';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
-import { PREPARATION, today } from '@/game/season';
-import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent } from '@/game/types';
+import { PREPARATION, seasonGoal, today } from '@/game/season';
+import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent, YearReview } from '@/game/types';
 
 export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout';
 
@@ -38,6 +38,8 @@ export interface Message {
   unread: boolean;
   box?: BoxTeam[];
   review?: string[]; // 코치 총평
+  yearReview?: YearReview; // 연말 평가
+  prestige?: [number, number]; // 학교 수준 [올해, 내년]
   won?: boolean;
   official?: boolean;
   growth?: GrowthEvent[];
@@ -69,7 +71,8 @@ export function welcomeMessage(career: Career): MessageDraft {
     body: [
       `${team.name} 농구부를 맡아 주셔서 감사합니다. 학교의 기대 수준은 ${team.prestige}입니다.`,
       '매일 훈련 메뉴를 정하고, 경기 날에는 벤치에서 직접 지휘하거나 코치진에게 맡길 수 있습니다.',
-      '한 해에 인터하이, 국민체육대회, 윈터컵 세 대회가 열립니다. 현 예선을 통과해 전국 무대에 서 주십시오.',
+      '한 해에 인터하이, 국민체육대회, 윈터컵 세 대회가 열립니다.',
+      `올해 목표는 "${seasonGoal(career).label}"입니다. 세 대회 중 한 번이라도 이루면 됩니다. 연말에 달성 여부에 따라 학교의 지원(학교 수준)이 달라지고, 학교 수준은 신입생의 질을 좌우합니다.`,
     ],
   };
 }
@@ -169,7 +172,7 @@ export function buildMessages(
         ...when, kind: 'season', from: '교장',
         title: '3년의 임기를 마쳤습니다',
         summary: '그동안 수고 많으셨습니다. 지난 3년의 기록을 확인해 보세요.',
-        final: true, results: career.results,
+        final: true, results: career.results, yearReview: y.review,
       });
     } else {
       out.push({
@@ -178,7 +181,16 @@ export function buildMessages(
         summary: `졸업 ${y.graduates.length}명 · 신입생 ${y.recruits.length}명`,
         graduates: y.graduates.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p) })),
         recruits: y.recruits.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential })),
-        results: y.results,
+        results: y.results, yearReview: y.review, prestige: y.prestige,
+      });
+      out.push({
+        ...when, kind: 'season', from: '교장',
+        title: `${y.year + 1}년차 목표: ${seasonGoal(career).label}`,
+        summary: '세 대회 중 한 번이라도 이루면 달성입니다.',
+        body: [
+          `새 학년의 목표는 "${seasonGoal(career).label}"입니다. 지금 학교 수준(${career.teams[me].prestige})과 현 내 순위를 보고 정했습니다.`,
+          '인터하이, 국민체육대회, 윈터컵 중 한 번이라도 이 성적에 닿으면 됩니다. 연말에 달성 여부로 학교의 지원과 신임이 달라집니다.',
+        ],
       });
     }
   }
