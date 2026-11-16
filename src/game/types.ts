@@ -288,7 +288,7 @@ export interface Competition {
   groups: Group[] | null;
   groupPlayed: number;
   league: League | null;
-  bracket: string[];
+  bracket: string[]; // 대진 순서대로 둘씩 맞붙는다. BYE('')와 짝이 된 학교는 그 라운드를 쉰다
   runnerUp: string | null;
   rounds: Round[]; // 치른 라운드 기록
   finish: Record<string, string>; // 학교별 최종 성적 (표시용)
@@ -462,8 +462,11 @@ export interface SchoolSpec {
   prefecture?: string;
 }
 
+  draw?: number; // 전국 대회 대진표의 추첨 번호 (Dataset.draw 참고)
 export interface Dataset {
   prefecture: string;
   schools: SchoolSpec[];
   nationals: SchoolSpec[];
 }
+  // 인터하이 본선의 고정 대진표. size 참가 학교 수, home 우리 현 1위·2위의 추첨 번호, byes 1회전을 쉬는 번호
+  draw?: { size: number; home: [number, number]; byes: number[] };

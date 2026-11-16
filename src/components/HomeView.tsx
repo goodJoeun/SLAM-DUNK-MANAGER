@@ -1,4 +1,4 @@
-import { PREPARATION, SEASON, seasonGoal, today } from '@/game/season';
+import { PREPARATION, SEASON, seasonGoal, today, userHasBye } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
@@ -171,7 +171,7 @@ function CompetitionPanel({ c }: { c: Career }) {
       {showGroup && <StandingsTable career={c} title={group.name} ids={group.ids} matches={group.matches} />}
       {showLeague && <StandingsTable career={c} title="결승 리그" ids={comp.league!.ids} matches={comp.league!.matches} />}
       {!showGroup && !showLeague && comp.bracket.length > 1 && (
-        <p>남은 학교 <b>{comp.bracket.length}</b>곳 · {comp.bracket.includes(me) ? <span className="good">우리 학교 생존</span> : <span className="muted">우리 학교 탈락</span>}</p>
+        <p>남은 학교 <b>{comp.bracket.filter(Boolean).length}</b>곳 · {comp.bracket.includes(me) ? <span className="good">{userHasBye(c) ? '우리 학교 부전승 (이번 라운드는 쉽니다)' : '우리 학교 생존'}</span> : <span className="muted">우리 학교 탈락</span>}</p>
       )}
     </Panel>
   );
