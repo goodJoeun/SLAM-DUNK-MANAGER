@@ -172,6 +172,14 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
     act('feedMode', k as FeedMode);
   };
   const outgoing = v.finished ? undefined : mine.court.find((p) => p.id === m.selected);
+  const [confirmSkip, setConfirmSkip] = useState(false);
+
+  // 자동 정지 알림의 해결 버튼: 문제가 된 선수와, 대신 넣을 만한 벤치 선수(같은 포지션·체력·파울 여유 우선)
+  const fix = m.pause ? m.pauseFix : null;
+  const tiredOut = fix?.kind === 'sub' ? mine.court.find((p) => p.id === fix.playerId) : undefined;
+  const fit = (p: PlayerView) => p.ovr - 6 * Math.abs(p.pos - (tiredOut?.pos ?? p.pos)) - (p.energy < 50 ? 20 : 0) - (p.pf >= 4 ? 30 : 0);
+  const suggested = tiredOut ? mine.bench.filter((p) => !p.out).sort((a, b) => fit(b) - fit(a))[0] : undefined;
+  const fixShown = Boolean(tiredOut) || fix?.kind === 'timeout';
 
   // 마지막 공격권 연출까지 끝난 뒤에 종료 창을 띄운다
   const ended = live.finished && !m.pending;
@@ -204,7 +212,18 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <button className="btn" onClick={() => act('autosub')}>교체: {mine.auto ? 'AI 코치' : '직접'}</button>
             <span className="spacer" />
             {!m.playing && <button className="btn ghost" disabled={Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
-            <button className="btn ghost" onClick={() => act('skip')}>끝까지 AI에게 맡기기</button>
+            {confirmSkip ? (
+              <span className="skip-confirm">
+                <span>남은 경기를 바로 끝낼까요? 되돌릴 수 없습니다.</span>
+                <button className="btn primary" onClick={() => { setConfirmSkip(false); act('skip', 'game'); }}>끝까지 맡기기</button>
+                <button className="btn ghost" onClick={() => setConfirmSkip(false)}>취소</button>
+              </span>
+            ) : (
+              <>
+                <button className="btn ghost" onClick={() => act('skip', 'period')} title="이번 쿼터가 끝날 때까지만 AI 코치에게 맡기고, 다음 쿼터부터 다시 직접 지휘합니다">이번 쿼터만 맡기기</button>
+                <button className="btn ghost" onClick={() => setConfirmSkip(true)}>끝까지 AI에게 맡기기</button>
+              </>
+            )}
             {!started && <button className="btn ghost" onClick={() => act('leaveMatch')} title="경기를 시작하기 전에는 홈으로 돌아가 준비를 마저 할 수 있습니다"><Icon name="back" />홈으로</button>}
           </>
         )}
@@ -215,7 +234,19 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
           <Icon name="alert" />
           <div><b>경기를 멈췄습니다</b><span>{m.pause}</span></div>
           <span className="spacer" />
-          <button className="btn primary" onClick={() => act('play')}>계속 진행</button>
+          {/* 멈춘 이유를 그 자리에서 해결하는 버튼 */}
+          {tiredOut && suggested && (
+            <button className="btn primary" onClick={() => act('swap', tiredOut.id, suggested.id)} title={`종합 ${suggested.ovr} · 체력 ${suggested.energy} · 파울 ${suggested.pf}`}>
+              {tiredOut.name} → {suggested.name} 교체
+            </button>
+          )}
+          {tiredOut && m.selected !== tiredOut.id && (
+            <button className="btn" onClick={() => act('pick', 'court', tiredOut.id)}>교체 선수 직접 고르기</button>
+          )}
+          {m.pauseFix?.kind === 'timeout' && (
+            <button className="btn primary" disabled={!mine.timeoutsLeft} onClick={() => act('timeout')}>작전 타임 ({mine.timeoutsLeft})</button>
+          )}
+          <button className={`btn ${fixShown ? '' : 'primary'}`} onClick={() => act('play')}>계속 진행</button>
         </div>
       )}
 

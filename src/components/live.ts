@@ -57,6 +57,9 @@ export interface CoachNote {
   paused: boolean; // 이 알림 때문에 경기가 멈췄는지
 }
 
+// 자동 정지 알림에서 바로 할 수 있는 조치: 그 선수 교체, 또는 작전 타임
+export type PauseFix = { kind: 'sub'; playerId: string } | { kind: 'timeout' };
+
 // 엔진은 진행했지만 아직 화면에 드러내지 않은 공격권
 export interface Pending {
   step: StepResult;
@@ -70,6 +73,7 @@ export interface ActiveMatch extends UserMatch {
   timer: ReturnType<typeof setTimeout> | null;
   playing: boolean;
   pause: string | null; // 자동으로 멈춘 이유
+  pauseFix: PauseFix | null; // 멈춘 이유를 바로 해결할 방법 (알림 띠의 버튼)
   interlude: string | null; // 쿼터 사이 휴식 중이면 안내 문구
   notes: CoachNote[]; // 코치 알림 (최신이 앞)
   flags: Record<string, boolean>; // 같은 알림을 되풀이하지 않기 위한 표시
@@ -86,7 +90,7 @@ export interface ActiveMatch extends UserMatch {
 }
 
 export const newMatch = (m: UserMatch): ActiveMatch => ({
-  ...m, feed: [], selected: null, timer: null, playing: false, pause: null, interlude: null, notes: [], flags: {},
+  ...m, feed: [], selected: null, timer: null, playing: false, pause: null, pauseFix: null, interlude: null, notes: [], flags: {},
   scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0, endSeen: false,
 });
 
@@ -145,16 +149,17 @@ function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogE
   const opp = after.teams[1 - m.side];
   const manual = !me.auto; // 교체를 AI 코치에게 맡겼으면 파울·체력으로는 멈추지 않는다
   let stop: string | null = null;
-  const raise = (key: string, tone: NoteTone, text: string, pause: boolean) => {
+  const raise = (key: string, tone: NoteTone, text: string, pause: boolean, fix: PauseFix | null = null) => {
     if (m.flags[key]) return;
     m.flags[key] = true;
     addNote(m, after, tone, text, pause);
-    if (pause && !stop) stop = text;
+    if (pause && !stop) { stop = text; m.pauseFix = fix; }
   };
 
   for (const p of me.court) {
-    if (p.pf >= 4 && !p.out) raise(`pf4:${p.id}`, 'warn', `${p.name} 파울 4개 — 한 번 더 하면 퇴장입니다.`, prefs.alerts.foul && manual);
-    if (p.energy < 40) raise(`tired:${p.id}`, 'warn', `${p.name} 체력 ${p.energy} — 교체를 고려하세요.`, prefs.alerts.tired && manual);
+    const sub: PauseFix = { kind: 'sub', playerId: p.id };
+    if (p.pf >= 4 && !p.out) raise(`pf4:${p.id}`, 'warn', `${p.name} 파울 4개 — 한 번 더 하면 퇴장입니다.`, prefs.alerts.foul && manual, sub);
+    if (p.energy < 40) raise(`tired:${p.id}`, 'warn', `${p.name} 체력 ${p.energy} — 교체를 고려하세요.`, prefs.alerts.tired && manual, sub);
   }
   for (const p of [...me.court, ...me.bench]) if (p.energy >= 70) delete m.flags[`tired:${p.id}`]; // 회복하면 다시 알린다
 
@@ -166,7 +171,7 @@ function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogE
     if (e.info?.kind === 'timeout' && e.team === opp.name) addNote(m, after, 'info', `${opp.name} 작전 타임.`);
   }
 
-  if (opp.run >= 8) raise('run', 'bad', `${opp.name} 연속 ${opp.run}점 — 작전 타임으로 흐름을 끊어 보세요.`, prefs.alerts.run);
+  if (opp.run >= 8) raise('run', 'bad', `${opp.name} 연속 ${opp.run}점 — 작전 타임으로 흐름을 끊어 보세요.`, prefs.alerts.run, { kind: 'timeout' });
   else if (opp.run < 4) delete m.flags.run;
   if (me.run >= 8) raise('myrun', 'good', `우리 팀 연속 ${me.run}점 — 흐름을 탔습니다.`, false);
   else if (me.run < 4) delete m.flags.myrun;

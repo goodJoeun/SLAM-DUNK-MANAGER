@@ -290,7 +290,9 @@ const actions = {
     let days = 0;
     while (!career.finished && !today(career)?.userMatch) {
       const names = teamNames(career);
-      const report = playDay(career);
+      // 상대 분석을 하기로 해 뒀으면 분석할 수 있는 날은 AI 코치도 그 계획을 따른다
+      const scout = S.program === 'scout' && today(career)?.prep?.canScout;
+      const report = playDay(career, scout ? { program: 'scout' } : {});
       if (!report) break;
       days++;
       last = report;
@@ -299,6 +301,7 @@ const actions = {
       if (report.yearEnd) break;
     }
     if (last) deliver(S, [trainingDigest(last, days, growth)]);
+    resumeAfterScouting(S);
     save(S);
   },
   simulate({ S }: Ctx) { openMatchReport(S, advance(S)); resumeAfterScouting(S); save(S); },
@@ -393,20 +396,37 @@ const actions = {
     const text = '작전 타임: 상대의 기세를 끊고 코트 위 선수들이 숨을 돌렸습니다. 전술과 교체를 손본 뒤 계속 진행하세요.';
     addNote(m, m.game.view(), 'info', text, true);
     m.pause = text;
+    m.pauseFix = null;
     m.playing = false;
     m.interlude = null;
     if (!m.pending && m.timer) { clearTimeout(m.timer); m.timer = null; }
   },
   autosub({ S }: Ctx) { const m = matchOf(S); m.game.setAuto(m.side, !m.game.view().teams[m.side].auto); },
-  skip({ S }: Ctx) {
+  // AI 코치에게 맡기고 건너뛴다. scope가 'period'면 이번 쿼터 끝까지만, 'game'이면 경기 끝까지.
+  skip({ S }: Ctx, scope: 'period' | 'game' = 'game') {
     const m = matchOf(S);
+    if (m.game.finished) return;
     stopMatchTimer(S);
     m.pause = null;
+    m.selected = null;
+    const wasAuto = m.game.view().teams[m.side].auto;
+    const period = m.game.view().period;
     m.game.setAuto(m.side, true);
-    addNote(m, m.game.view(), 'info', 'AI 코치가 남은 경기를 맡았습니다.');
-    while (!m.game.finished) advanceMatch(m, S.prefs, false);
+    addNote(m, m.game.view(), 'info', scope === 'game' ? 'AI 코치가 남은 경기를 맡았습니다.' : `AI 코치가 ${periodLabel(period)} 남은 시간을 맡았습니다.`);
+    while (!m.game.finished) {
+      const r = advanceMatch(m, S.prefs, false);
+      if (scope === 'period' && r.periodEnded) break;
+    }
     const [h, a] = m.game.view().teams;
-    addNote(m, m.game.view(), 'info', `경기 종료 · ${h.name} ${h.score} : ${a.score} ${a.name}`);
+    if (m.game.finished) {
+      addNote(m, m.game.view(), 'info', `경기 종료 · ${h.name} ${h.score} : ${a.score} ${a.name}`);
+    } else {
+      m.game.setAuto(m.side, wasAuto); // 쿼터만 맡겼으면 교체 방식은 원래대로
+      const text = `${periodLabel(period)} 종료 · ${h.name} ${h.score} : ${a.score} ${a.name}. 다시 직접 지휘합니다.`;
+      addNote(m, m.game.view(), 'info', text, true);
+      m.pause = text;
+      m.pauseFix = null;
+    }
   },
   pick({ S }: Ctx, where: 'court' | 'bench', id: string) {
     const m = matchOf(S);
@@ -414,6 +434,15 @@ const actions = {
     if (where === 'court') { m.selected = m.selected === id ? null : id; return; }
     if (!m.selected) return;
     if (m.game.substitute(m.side, m.selected, id)) pushLastLog(m);
+    if (m.pauseFix?.kind === 'sub' && m.pauseFix.playerId === m.selected) m.pauseFix = null;
+    m.selected = null;
+  },
+  // 알림 띠의 추천 교체: 고르는 단계 없이 바로 바꾼다
+  swap({ S }: Ctx, outId: string, inId: string) {
+    const m = matchOf(S);
+    if (m.game.finished) return;
+    if (m.game.substitute(m.side, outId, inId)) pushLastLog(m);
+    m.pauseFix = null;
     m.selected = null;
   },
   matchTactic({ S }: Ctx, key: keyof Tactics, value: string) {
