@@ -360,7 +360,15 @@ const actions = {
   feedMode({ S }: Ctx, mode: FeedMode) { S.prefs.feed = mode; writeJson(PREFS_KEY, S.prefs); },
   timeout({ S }: Ctx) {
     const m = matchOf(S);
-    if (m.game.timeout(m.side)) pushLastLog(m);
+    if (!m.game.timeout(m.side)) return;
+    pushLastLog(m);
+    // 작전 타임 동안 경기를 멈춰 전술과 교체를 손볼 시간을 준다
+    const text = '작전 타임: 상대의 기세를 끊고 코트 위 선수들이 숨을 돌렸습니다. 전술과 교체를 손본 뒤 계속 진행하세요.';
+    addNote(m, m.game.view(), 'info', text, true);
+    m.pause = text;
+    m.playing = false;
+    m.interlude = null;
+    if (!m.pending && m.timer) { clearTimeout(m.timer); m.timer = null; }
   },
   autosub({ S }: Ctx) { const m = matchOf(S); m.game.setAuto(m.side, !m.game.view().teams[m.side].auto); },
   skip({ S }: Ctx) {

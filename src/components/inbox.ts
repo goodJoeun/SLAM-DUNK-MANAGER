@@ -2,8 +2,9 @@
 // 메시지는 화면에만 쓰이고 따로 저장되므로, 나중에 팀이 사라져도 읽을 수 있게 이름을 미리 풀어 둔다.
 import { overall } from '@/game/engine';
 import { scoutReport } from '@/game/scouting';
+import { reviewMatch } from '@/game/review';
 import type { ScoutSection } from '@/game/scouting';
-import { PROGRAMS, INTENSITY } from '@/game/school';
+import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import { PREPARATION, today } from '@/game/season';
 import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent } from '@/game/types';
 
@@ -36,6 +37,7 @@ export interface Message {
   summary: string;
   unread: boolean;
   box?: BoxTeam[];
+  review?: string[]; // 코치 총평
   won?: boolean;
   official?: boolean;
   growth?: GrowthEvent[];
@@ -95,6 +97,7 @@ export function buildMessages(
         title: `${won ? '승리' : '패배'} · ${mine.name} ${mine.score} : ${opp.score} ${opp.name}`,
         summary: `${official ? r.round?.name ?? '공식전' : '연습 경기'} · 최다 득점 ${top.name} ${top.pts}점`,
         box: r.userBox, won, official,
+        review: reviewMatch(mine, opp, career.teams[me].tactics, career.teams[opp.id ?? ''] ? [teamOverall(career.teams[me]), teamOverall(career.teams[opp.id!])] : undefined),
         growth: r.training ? undefined : r.growth, // 경기한 날은 훈련 대신 경기 경험으로 성장한다
       });
     }

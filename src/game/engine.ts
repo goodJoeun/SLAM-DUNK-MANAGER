@@ -47,6 +47,7 @@ export const TUNING = {
   tiredEnergy: 0.6, // 이 아래로 떨어지면 벤치로
   restedEnergy: 0.85, // 이 위로 회복하면 다시 투입 가능
   minStint: 90, // 한 번 들어가면 최소 이만큼(초)은 뛴다
+  minRest: 45, // 벤치로 나온 선수는 최소 이만큼(초)은 쉰다 (나가자마자 다른 자리로 다시 들어오는 연쇄 교체를 막는다)
   posMismatchPenalty: 0.06, // 포지션 1칸 어긋날 때마다 가치 감소
   crunchSeconds: 180, // 4쿼터 막판 접전: 베스트 5 고정
   crunchMargin: 8,
@@ -278,7 +279,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     cur.since = now;
     incoming.since = now;
     team.subs++;
-    say(team, `교체: ${cur.name} → ${incoming.name}`, { kind: 'sub', actor: incoming.id, other: cur.id });
+    say(team, `${team.name} 교체: ${incoming.name} 투입, ${cur.name} 벤치로`, { kind: 'sub', actor: incoming.id, other: cur.id });
   }
 
   // 자동 교체: 지친 선수는 쉬게 하고, 회복한 주전은 복귀. 접전 막판엔 베스트 5, 승부가 기울면 벤치.
@@ -295,7 +296,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     const mustLeave = (p: GamePlayer) =>
       unavailable(p) ||
       (crunch ? p.energy < 0.25 : p.energy < T.tiredEnergy && now - p.since >= T.minStint);
-    const ready = (p: GamePlayer) => !unavailable(p) && p.energy >= (crunch ? 0.3 : garbage ? 0 : T.restedEnergy);
+    const rested = (p: GamePlayer) => p.since === 0 || crunch || now - p.since >= T.minRest;
+    const ready = (p: GamePlayer) => !unavailable(p) && rested(p) && p.energy >= (crunch ? 0.3 : garbage ? 0 : T.restedEnergy);
     // 선발은 자기가 선 자리(home)에서는 포지션이 어긋나도 감독의 선택으로 보고 깎지 않는다
     const value = (p: GamePlayer, slot: number) => (p.home === slot ? p.rank : p.ovr * (1 - T.posMismatchPenalty * Math.abs(p.pos - (slot + 1))));
 
@@ -574,7 +576,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     team.timeoutsLeft--;
     teams[1 - side].run = 0;
     for (const p of team.court) p.energy = Math.min(1, p.energy + T.timeoutEnergy);
-    say(team, `작전 타임 (남은 횟수 ${team.timeoutsLeft})`, { kind: 'timeout' });
+    say(team, `${team.name} 작전 타임 (남은 횟수 ${team.timeoutsLeft})`, { kind: 'timeout' });
     return true;
   }
 

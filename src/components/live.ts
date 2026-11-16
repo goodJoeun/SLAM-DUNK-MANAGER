@@ -33,7 +33,8 @@ export const ALERTS: Record<AlertKey, string> = {
 export type FeedMode = 'all' | 'key';
 export const FEED_MODES: Record<FeedMode, string> = { key: '주요 장면', all: '전체' };
 // 주요 장면: 득점·턴오버·블록·파울·교체·작전 타임 (빗나간 슛과 리바운드는 뺀다)
-export const KEY_EVENT = /성공|턴오버|스틸|블록|파울|교체|작전 타임|퇴장/;
+// 주요 장면: 교체는 양이 많아 전체 보기에만 나온다
+export const KEY_EVENT = /성공|턴오버|스틸|블록|파울|작전 타임|퇴장/;
 
 export interface MatchPrefs {
   speed: SpeedKey;
