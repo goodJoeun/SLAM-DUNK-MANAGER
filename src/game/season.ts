@@ -19,7 +19,7 @@
 import { makeRng } from './rng.ts';
 import { createGame, simulateGame } from './engine.ts';
 import {
-  createSchool, setLineup, recruitClass, pickTactics, teamOverall,
+  createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL,
   trainTeam, applyMatch, overnight, aiTraining,
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName } from './competition.ts';
@@ -28,7 +28,7 @@ import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
   BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, PrepInfo, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, YearReview, YearSummary,
+  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
 } from './types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -187,10 +187,59 @@ function reviewYear(state: Career): YearReview {
   return { goal: goal.label, best: TIER_LABEL[best], grade, verdict: effect.verdict, prestigeBonus: effect.prestige, trust: state.trust };
 }
 
+// ---------- 신입생 스카우트 ----------
+// 해마다 중학 유망주 후보가 생기고, 감독은 그중 몇 명을 영입 목표로 정한다.
+// 연말에 목표마다 영입을 시도한다. 학교 수준이 유망주의 눈높이(level)보다 높을수록, 교장의 신임이 클수록 잘 온다.
+// 온 선수는 신입생 자리를 차지하고, 나머지 자리는 예전처럼 부족한 포지션 위주로 채운다.
+export const RECRUITING = { prospects: 8, maxTargets: 2, base: 0.6, perLevel: 0.04, perTrust: 0.004 };
+const PROSPECT_OFFSETS = [-6, -3, 0, 0, 3, 5, 8, 12]; // 우리 학교 수준 대비 유망주의 눈높이
+
+function makeProspects(state: Career, rng: Rng): Prospect[] {
+  const prestige = state.teams[state.userTeamId].prestige;
+  const positions = shuffle(rng, [1, 2, 3, 4, 5, rng.int(1, 5), rng.int(1, 5), rng.int(1, 5)]);
+  return shuffle(rng, [...PROSPECT_OFFSETS]).slice(0, RECRUITING.prospects).map((offset, i) => {
+    const level = Math.min(80, prestige + offset);
+    return { player: newPlayer(rng, state, positions[i % positions.length], level), level };
+  });
+}
+
+export function recruitChance(state: Career, prospect: Prospect) {
+  const prestige = state.teams[state.userTeamId].prestige;
+  return clamp(RECRUITING.base + RECRUITING.perLevel * (prestige - prospect.level) + RECRUITING.perTrust * ((state.trust ?? 50) - 50), 0.1, 0.95);
+}
+
+// 올해의 유망주 목록 (예전 저장에는 없으므로 그 자리에서 만든다)
+export function prospectsOf(state: Career): Prospect[] {
+  state.prospects ??= makeProspects(state, rngFor(state));
+  return state.prospects;
+}
+
+// 영입 목표를 켜고 끈다. 목표 수가 찼으면 false
+export function toggleRecruitTarget(state: Career, id: string) {
+  const targets = state.recruitTargets ?? [];
+  if (targets.includes(id)) { state.recruitTargets = targets.filter((x) => x !== id); return true; }
+  if (targets.length >= RECRUITING.maxTargets || !prospectsOf(state).some((p) => p.player.id === id)) return false;
+  state.recruitTargets = [...targets, id];
+  return true;
+}
+
+function resolveRecruiting(state: Career, rng: Rng) {
+  const joined: Player[] = [];
+  const missed: Player[] = [];
+  for (const id of state.recruitTargets ?? []) {
+    const prospect = state.prospects?.find((p) => p.player.id === id);
+    if (!prospect) continue;
+    (rng.chance(recruitChance(state, prospect)) ? joined : missed).push(prospect.player);
+  }
+  return { joined, missed };
+}
+
 function startSeason(state: Career) {
   const rng = rngFor(state);
   state.goal = { tier: goalTierFor(state) };
   delete state.bestTier;
+  state.prospects = makeProspects(state, rng);
+  state.recruitTargets = [];
   for (const id of state.regionIds) {
     const team = state.teams[id];
     setLineup(team);
@@ -606,6 +655,8 @@ function endYear(state: Career, rng: Rng): YearSummary {
     results: state.results.filter((r) => r.year === state.year),
     graduates: [], recruits: [],
   };
+  const scouting = summary.final ? { joined: [], missed: [] } : resolveRecruiting(state, rng); // 평가로 신임이 바뀌기 전의 가능성으로 정한다
+  summary.review = reviewYear(state); // 올해 목표를 이뤘는지
   if (summary.final) {
     state.finished = true;
     return summary;
@@ -613,21 +664,22 @@ function endYear(state: Career, rng: Rng): YearSummary {
 
   const comps = Object.keys(SEASON.competitions).length;
   for (const id of state.regionIds) {
-  summary.review = reviewYear(state); // 올해 목표를 이뤘는지
     const team = state.teams[id];
     // 성적이 좋으면 오르고, 해마다 평균(50)으로 조금씩 되돌아간다
     const mine = id === state.userTeamId;
     const before = team.prestige;
     const delta = (state.yearPoints[id] ?? 0) / comps + rng.gauss(0, 2) + (mine ? summary.review.prestigeBonus : 0);
     team.prestige = Math.round(clamp(team.prestige + delta + (50 - team.prestige) * SEASON.prestigeRegression, 30, 75));
+    if (mine) summary.prestige = [before, team.prestige];
 
     const leaving = team.players.filter((p) => p.year >= 3);
     team.players = team.players.filter((p) => p.year < 3);
     for (const p of team.players) { p.year++; p.condition = 100; p.injuredDays = 0; }
-    const recruits = recruitClass(rng, state, team);
-    if (id === state.userTeamId) { summary.graduates = leaving; summary.recruits = recruits; }
+    const joined = mine ? scouting.joined : [];
+    team.players.push(...joined); // 영입에 성공한 유망주가 먼저 자리를 차지한다
+    const recruits = [...joined, ...recruitClass(rng, state, team, SCHOOL.classSize - joined.length)];
+    if (mine) { summary.graduates = leaving; summary.recruits = recruits; summary.scouted = joined.map((p) => p.id); summary.missed = scouting.missed; }
   }
-    if (mine) summary.prestige = [before, team.prestige];
   for (const id of state.guestIds) delete state.teams[id];
   state.guestIds = [];
   state.year++;

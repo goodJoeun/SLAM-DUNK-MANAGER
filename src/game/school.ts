@@ -87,9 +87,9 @@ export function newPlayer(rng: Rng, state: Career, pos: number, prestige: number
 }
 
 // 인원이 부족한 포지션부터 신입생을 뽑는다
-export function recruitClass(rng: Rng, state: Career, team: Team) {
+export function recruitClass(rng: Rng, state: Career, team: Team, size = SCHOOL.classSize) {
   const recruits: Player[] = [];
-  for (let i = 0; i < SCHOOL.classSize; i++) {
+  for (let i = 0; i < size; i++) {
     const count = [1, 2, 3, 4, 5].map((pos) => team.players.filter((p) => p.pos === pos).length + rng.next() * 0.5);
     const pos = count.indexOf(Math.min(...count)) + 1;
     const p = newPlayer(rng, state, pos, team.prestige);

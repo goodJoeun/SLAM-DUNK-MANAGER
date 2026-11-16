@@ -4,7 +4,7 @@
 // 엔진이 커리어 객체를 제자리에서 고치기 때문에, 상태는 하나의 변경 가능한 객체로 두고
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
-import { createCareer, today, playDay, prepareUserMatch } from '@/game/season';
+import { createCareer, today, playDay, prepareUserMatch, toggleRecruitTarget } from '@/game/season';
 import { setLineup } from '@/game/school';
 import type { DayDecision } from '@/game/season';
 import type {
@@ -318,6 +318,10 @@ const actions = {
     delete team.lineup;
     setLineup(team);
     save(S);
+  },
+  // 신입생 스카우트: 영입 목표를 켜고 끈다
+  recruitTarget({ S }: Ctx, id: string) {
+    if (S.career && toggleRecruitTarget(S.career, id)) save(S);
   },
   playerFocus({ S }: Ctx, id: string, value: string) {
     const player = userTeam(S).players.find((p) => p.id === id);

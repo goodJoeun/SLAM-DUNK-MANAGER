@@ -72,7 +72,11 @@ function MessageBody({ m, career }: { m: Message; career: Career }) {
             <ul className="lines">{m.graduates.map((p) => <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={p.ovr} /></li>)}</ul></>}
           {m.recruits && <><h3>신입생</h3>
             <ul className="lines">{m.recruits.map((p) => (
-              <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><span className="row"><Stars value={potentialStars(p.potential ?? 50)} /><Attr v={p.ovr} /></span></li>
+              <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b>{p.scouted && <span className="pill good" style={{ marginLeft: 8 }}>영입 성공</span>}</span><span className="row"><Stars value={potentialStars(p.potential ?? 50)} /><Attr v={p.ovr} /></span></li>
+            ))}</ul></>}
+          {m.missed && m.missed.length > 0 && <><h3>놓친 영입 목표</h3>
+            <ul className="lines">{m.missed.map((p) => (
+              <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b> <span className="muted">다른 학교로 진학했습니다</span></span><span className="row"><Stars value={potentialStars(p.potential ?? 50)} /><Attr v={p.ovr} /></span></li>
             ))}</ul></>}
         </>
       );

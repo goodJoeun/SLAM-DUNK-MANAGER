@@ -343,6 +343,14 @@ export interface Career {
   goal?: { tier: number }; // 교장이 정한 올해 목표 (대회 성적 등급). 세 대회 중 한 번이라도 이루면 달성
   bestTier?: number; // 올해 끝난 대회 중 우리 학교의 가장 좋은 성적 등급
   trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
+  prospects?: Prospect[]; // 올해 눈여겨볼 중학 유망주 (우리 학교가 영입을 시도할 수 있는 후보)
+  recruitTargets?: string[]; // 영입 목표로 정한 유망주의 선수 id
+}
+
+// 중학 유망주. level = 이 선수가 보통 진학할 학교의 수준 (우리 학교 수준이 이보다 낮을수록 데려오기 어렵다)
+export interface Prospect {
+  player: Player;
+  level: number;
 }
 
 // 연말 평가: 올해 목표를 이뤘는지와 그 결과
@@ -394,6 +402,8 @@ export interface YearSummary {
   graduates: Player[];
   recruits: Player[];
   review?: YearReview;
+  scouted?: string[]; // 신입생 중 영입 목표였던 선수 id
+  missed?: Player[]; // 영입 목표였지만 다른 학교로 간 유망주
   prestige?: [number, number]; // 우리 학교 수준 [올해, 내년]
 }
 

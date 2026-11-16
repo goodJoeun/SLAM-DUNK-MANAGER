@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { PROGRAMS, teamOverall } from '@/game/school';
+import { PROGRAMS, SCHOOL, teamOverall } from '@/game/school';
+import { RECRUITING, SEASON, prospectsOf, recruitChance } from '@/game/season';
 import { overall } from '@/game/engine';
 import { RATING_KEYS } from '@/game/generate';
 import type { Career, Player, RatingKey } from '@/game/types';
@@ -14,7 +15,62 @@ import type { ViewProps } from './ui';
 type SortKey = 'lineup' | 'pos' | 'name' | 'year' | 'ovr' | 'pot' | 'cond' | 'pts' | RatingKey;
 
 const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) => k !== 'rest' && k !== 'scout').map(([k, v]) => [k, v.label]));
-const VIEWS = { overview: '개요', attrs: '능력치' };
+const VIEWS = { overview: '개요', attrs: '능력치', recruit: '신입생 스카우트' };
+type View = keyof typeof VIEWS;
+
+// 신입생 스카우트: 중학 유망주 가운데 영입 목표를 고른다. 결과는 학년이 바뀔 때 정해진다.
+function RecruitPanel({ c, act }: { c: Career; act: Act }) {
+  const team = userTeam(c);
+  if (c.year >= SEASON.campaignYears) {
+    return <Panel title="신입생 스카우트"><p className="muted">임기 마지막 해라 내년 신입생은 뽑지 않습니다.</p></Panel>;
+  }
+  const targets = c.recruitTargets ?? [];
+  const prospects = [...prospectsOf(c)].sort((a, b) => overall(b.player) - overall(a.player));
+  const leaving = team.players.filter((p) => p.year >= 3);
+  const staying = team.players.filter((p) => p.year < 3);
+  return (
+    <>
+      <Panel title="신입생 스카우트" flush action={<span className="hint">영입 목표 {targets.length}/{RECRUITING.maxTargets}명</span>}>
+        <div className="table-wrap"><table className="data">
+          <thead><tr>
+            <th className="l">포지션</th><th className="l">이름</th><th className="c">잠재력</th><th>종합</th><th>영입 가능성</th><th className="c">영입 목표</th>
+          </tr></thead>
+          <tbody>
+            {prospects.map((x) => {
+              const p = x.player;
+              const on = targets.includes(p.id);
+              const chance = Math.round(recruitChance(c, x) * 100);
+              return (
+                <tr key={p.id}>
+                  <td className="l"><PosBadge pos={p.pos} /></td>
+                  <td className="l name">{p.name}</td>
+                  <td className="c"><Stars value={potentialStars(p.potential)} /></td>
+                  <td><Attr v={overall(p)} /></td>
+                  <td><span className={`pill ${chance >= 65 ? 'good' : chance >= 40 ? '' : 'bad'}`}>{chance}%</span></td>
+                  <td className="c">
+                    <button className={`btn small ${on ? 'primary' : ''}`} disabled={!on && targets.length >= RECRUITING.maxTargets} onClick={() => act('recruitTarget', p.id)}>
+                      {on ? '목표 해제' : '목표로 정하기'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table></div>
+      </Panel>
+      <Panel title="내년 선수단 전망">
+        <p className="muted">3학년 {leaving.length}명이 졸업하고 신입생 {SCHOOL.classSize}명이 들어옵니다. 남는 선수의 포지션별 인원:</p>
+        <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
+          {[1, 2, 3, 4, 5].map((pos) => <span key={pos} className="row" style={{ gap: 6 }}><PosBadge pos={pos} /><b>{staying.filter((p) => p.pos === pos).length}명</b></span>)}
+        </div>
+      </Panel>
+      <p className="hint">
+        영입 목표는 {RECRUITING.maxTargets}명까지 정할 수 있고, 학년이 바뀔 때 결과가 나옵니다. 학교 수준({team.prestige})이 높을수록, 교장의 신임({c.trust ?? 50})이 클수록 잘 옵니다.
+        목표로 삼지 않은 자리와 영입에 실패한 자리는 코치가 부족한 포지션 위주로 채웁니다.
+      </p>
+    </>
+  );
+}
 
 const seasonAvg = (c: Career, p: Player) => {
   const s = c.stats[p.id];
@@ -128,7 +184,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
 }
 
 export default function SquadView({ S, act }: ViewProps) {
-  const [view, setView] = useState<'overview' | 'attrs'>('overview');
+  const [view, setView] = useState<View>('overview');
   const [sort, setSort] = useState<SortKey>('lineup');
   const c = S.career;
   const team = userTeam(c);
@@ -150,9 +206,9 @@ export default function SquadView({ S, act }: ViewProps) {
   return (
     <div className="page">
       <PageTitle title="선수단" sub={`${team.players.length}명 · 팀 전력 ${teamOverall(team)} · 선발은 전술 화면에서 직접 정할 수 있습니다`}>
-        <Seg options={VIEWS} value={view} onChange={(v) => setView(v as 'overview' | 'attrs')} />
+        <Seg options={VIEWS} value={view} onChange={(v) => setView(v as View)} />
       </PageTitle>
-      <Panel title={view === 'overview' ? '선수 목록' : '능력치 비교'} flush action={<span className="hint">머리글을 누르면 정렬 · 선수를 누르면 상세</span>}>
+      {view === 'recruit' ? <RecruitPanel c={c} act={act} /> : <><Panel title={view === 'overview' ? '선수 목록' : '능력치 비교'} flush action={<span className="hint">머리글을 누르면 정렬 · 선수를 누르면 상세</span>}>
         <div className="table-wrap"><table className="data">
           <thead>
             <tr>
@@ -208,7 +264,7 @@ export default function SquadView({ S, act }: ViewProps) {
           </tbody>
         </table></div>
       </Panel>
-      <p className="hint">★ 표시는 원작에 나오는 선수입니다. 현재 능력과 잠재력은 별 5개 만점으로 표시합니다.</p>
+      <p className="hint">★ 표시는 원작에 나오는 선수입니다. 현재 능력과 잠재력은 별 5개 만점으로 표시합니다.</p></>}
     </div>
   );
 }
