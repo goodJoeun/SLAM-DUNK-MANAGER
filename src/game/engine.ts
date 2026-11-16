@@ -23,12 +23,12 @@ export const TUNING = {
   overtimeSeconds: 300,
   foulOutLimit: 5,
   bonusTeamFouls: 5, // 쿼터 내 팀 파울 5개째부터 자유투 2개
-  possessionMean: 14.5,
+  possessionMean: 15.5,
   possessionSd: 4.5,
   secondChanceMean: 6,
   nonShootingFoul: 0.095,
   turnoverBase: 0.135,
-  turnoverSkill: 0.2,
+  turnoverSkill: 0.15,
   stealShare: 0.5,
   shot: {
     //        성공 기준값, 블록 기준, 슈팅 파울, 어시스트 비율, 점수, 공격 리바운드 보정
@@ -38,7 +38,7 @@ export const TUNING = {
     three: { make: 0.335, block: 0.01, foul: 0.02, assist: 0.75, pts: 3, orb: 0.92 },
   },
   shotMixWeight: { rim: 1.0, post: 0.55, mid: 0.75, three: 1.2 },
-  makeSkill: 0.36, // (공격 능력 - 수비 능력) 1.0 차이당 성공률 변화
+  makeSkill: 0.27, // (공격 능력 - 수비 능력) 1.0 차이당 성공률 변화. 크면 전력 차가 곧바로 큰 점수 차가 된다
   offReboundWeight: 0.38,
   energyDrain: 0.00045,
   energyRecover: 0.0012,
@@ -50,7 +50,10 @@ export const TUNING = {
   posMismatchPenalty: 0.06, // 포지션 1칸 어긋날 때마다 가치 감소
   crunchSeconds: 180, // 4쿼터 막판 접전: 베스트 5 고정
   crunchMargin: 8,
-  garbageMargin: 20, // 4쿼터 후반 이 점수 차 이상이면 벤치 가동
+  garbageMargin: 20, // 4쿼터에 이 점수 차 이상이면 양 팀 모두 벤치 가동
+  garbageMarginEarly: 30, // 3쿼터부터 이만큼 벌어지면 일찍 주전을 뺀다
+  coastMargin: 20, // 후반에 이만큼 앞선 팀은 공격 시간을 더 쓴다
+  coastSeconds: 3,
   formSd: 0.015, // 당일 컨디션 편차 (일관성이 낮을수록 커진다)
   formInconsistency: 0.05,
 
@@ -66,14 +69,30 @@ export const TUNING = {
   focusShotBoost: 2.0, // 중심 전술의 슛 종류 가중
   focusUsageBias: 1.0, // 중심 전술에 맞는 선수에게 공이 몰리는 정도
   keyPlayerUsage: 1.6, // 에이스 지정: 공격 비중 증가
+  // 한 선수에게 슛이 몰리는 데는 한계가 있고(상한), 몰릴수록 수비가 쏠려 그 선수는 어렵게 쏘고 동료는 편해진다
+  usageCap: 0.40, // 한 선수가 가져갈 수 있는 팀 슛 비중의 상한
+  usageCapKey: 0.50, // 에이스로 지정하면 더 몰아줄 수 있다
+  crowdFrom: 0.30, // 슛 비중이 이보다 크면 수비가 쏠리기 시작한다
+  crowdMake: -0.3, // 넘는 비중 1.0당 그 선수의 성공률 변화
+  crowdOthersMake: 0.25, // 팀에서 가장 몰리는 선수의 초과 비중 1.0당 동료의 성공률 변화
+  shotEnergy: 0.004, // 슛을 만들어 쏠 때마다 드는 체력
   keyPlayerMake: -0.02, // 에이스에게 공이 몰리면 수비도 그쪽으로 몰린다 (에이스 슛 성공률 보정)
+  focusRead: { inside: -0.02, outside: 0.012 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
   focusExploit: 0.4, // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정 (능력 차 1.0당). 잘못 맞추면 손해
   paceOffense: 4, // 템포 1단계당 공격 시간 변화(초)
   paceDefense: 2, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
+  // 템포의 득실(1단계당). 빠르게: 속공으로 쉬운 슛이 늘지만 실책과 체력 소모도 는다. 느리게는 그 반대.
+  // 볼 핸들링이 좋은 팀은 빨리 뛰어도 실책이 덜 늘고, 상대보다 체력이 남아 있을수록 속공이 잘 통한다.
+  paceMake: 0.012, // 슛 성공률
+  paceEnergyEdge: 0.15, // 코트 위 평균 체력이 상대보다 1.0 높을 때 속공 성공률 추가분
+  paceTov: 0.012, // 턴오버
+  paceTovSkill: 0.25, // (상대 스틸 - 우리 볼 핸들링) 1.0당 턴오버 추가분
+  paceDrain: 0.18, // 우리 선수 체력 소모 배율 변화
+  paceDrainOpp: 0.07, // 따라 뛰는 상대의 체력 소모 배율 변화
   deny: { usage: 0.4, make: -0.09, othersMake: 0.012 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
   zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
-  press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.04, rimMix: 1.2, foul: 1.25, drain: 1.25, paceSec: 1.5 },
+  press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1.5 },
   // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
   spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56 },
   // 스위치: 스크린에 오픈 3점을 덜 내주지만, 키 작은 수비수가 빅맨을 막는 미스매치를 상대가 노린다
@@ -217,6 +236,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   // 피로·컨디션 반영 능력치
   const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form);
   const avg = (team: GameTeam, key: keyof Composites) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
+  const avgEnergy = (team: GameTeam) => team.court.reduce((s, p) => s + p.energy, 0) / 5;
   const pick = (players: GamePlayer[], weightFn: (p: GamePlayer) => number) => players[rng.weighted(players.map(weightFn))];
   const isFinal = () => period >= 4;
   const gone = (p: GamePlayer) => p.injured || p.stat.pf >= T.foulOutLimit; // 더는 뛸 수 없는 선수
@@ -231,7 +251,9 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   function elapse(sec: number) {
     for (const team of teams) {
       const d = team.tactics.defense;
-      const style = d === 'press' ? T.press.drain : d === 'zone' ? T.zone.drain : 1;
+      const opp = teams[1 - teams.indexOf(team)];
+      const tempo = 1 + T.paceDrain * team.tactics.pace + T.paceDrainOpp * opp.tactics.pace;
+      const style = (d === 'press' ? T.press.drain : d === 'zone' ? T.zone.drain : 1) * tempo;
       for (const p of team.players) {
         if (team.court.includes(p)) {
           p.stat.sec += sec;
@@ -259,7 +281,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   function autoSubstitute(team: GameTeam, opp: GameTeam) {
     const margin = Math.abs(team.score - opp.score);
     const crunch = isFinal() && clock <= T.crunchSeconds && margin <= T.crunchMargin;
-    const garbage = period === 4 && clock <= 300 && margin >= T.garbageMargin;
+    const garbage = (period === 4 && margin >= T.garbageMargin) || (period === 3 && margin >= T.garbageMarginEarly);
     const foulTrouble = (p: GamePlayer) => {
       if (crunch || period > 4 || (period === 4 && clock <= 300)) return false;
       return p.stat.pf >= Math.min(4, period + 1); // 1Q 2개, 2Q 3개, 이후 4개면 아낀다
@@ -332,8 +354,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
 
   function chooseShooter(off: GameTeam, def: GameTeam) {
     const focus = off.tactics.focus;
-    return rng.weighted(
-      off.court.map((p) => {
+    const weights = off.court.map((p) => {
         let w = p.c.usage ** 3 * (0.5 + 0.5 * p.energy);
         const role = offenseRole(off, p);
         if (role === 'aggressive') w *= T.roles.aggressiveUsage;
@@ -345,8 +366,15 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         if (p.id === off.tactics.keyPlayerId) w *= T.keyPlayerUsage;
         if (p.id === def.tactics.denyPlayerId) w *= T.deny.usage;
         return w;
-      }),
-    );
+    });
+    // 상한: 가장 몰리는 선수의 비중이 상한을 넘으면 깎는다 (나머지 넷의 비율은 그대로)
+    const top = weights.indexOf(Math.max(...weights));
+    const others = weights.reduce((s, w) => s + w, 0) - weights[top];
+    const cap = off.court[top].id === off.tactics.keyPlayerId ? T.usageCapKey : T.usageCap;
+    if (others > 0) weights[top] = Math.min(weights[top], (cap / (1 - cap)) * others);
+    const total = others + weights[top];
+    const slot = rng.weighted(weights);
+    return { slot, share: weights[slot] / total, topShare: weights[top] / total, isTop: slot === top };
   }
 
   function chooseShot(off: GameTeam, def: GameTeam, shooter: GamePlayer, threeUrgency: number) {
@@ -404,6 +432,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         let sd = T.possessionSd;
         if (hurry) { mean = Math.min(mean, 8); sd = 3; }
         if (milk && !secondChance) { mean = 20; sd = 2; }
+        else if (!secondChance && period >= 3 && diff >= T.coastMargin) mean += T.coastSeconds; // 크게 앞서면 서두르지 않는다
         seconds = clamp(rng.gauss(mean, sd), 3, secondChance ? 14 : 24);
       }
       elapse(Math.min(clock, seconds));
@@ -428,7 +457,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const pressTov = pressing ? Math.max(0.005, T.press.tovBase + T.press.tovSkill * gap) : 0;
       // 슛 자제 지시를 받은 선수가 많으면 슛을 미루다 공격 시간에 쫓겨 실책이 는다
       const holdBack = T.roles.conservativeTov * off.court.filter((p) => offenseRole(off, p) === 'conservative').length;
-      const pTov = T.turnoverBase + pressTov + T.turnoverSkill * gap + holdBack;
+      const paceTov = off.tactics.pace * Math.max(0, T.paceTov + T.paceTovSkill * gap); // 빨리 뛸수록 실책이 늘고, 천천히 하면 준다
+      const pTov = T.turnoverBase + pressTov + T.turnoverSkill * gap + holdBack + paceTov;
       if (rng.chance(clamp(pTov, 0.04, 0.4))) {
         const loser = pick(off.court, (p) => p.c.usage * (1.3 - p.c.ballHandling) * (offenseRole(off, p) === 'aggressive' ? T.roles.aggressiveTov : 1));
         loser.stat.tov++;
@@ -443,8 +473,9 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       }
 
       // 3) 슛
-      const slot = chooseShooter(off, def);
+      const { slot, share, topShare, isTop } = chooseShooter(off, def);
       const shooter = off.court[slot];
+      shooter.energy = Math.max(0, shooter.energy - T.shotEnergy);
       const defender = def.court[slot];
       let threeUrgency = 1;
       if (hurry) threeUrgency = diff <= -6 ? 2.5 : 1.5;
@@ -460,9 +491,14 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       pMake += 0.04 * (avg(off, 'passing') - 0.5); // 팀 패스 시너지
       if (zone) pMake += inside ? T.zone.insideMake : T.zone.outsideMake + T.zone.shooterBurn * (avg(off, 'three') - 0.5); // 슈터가 좋으면 존이 뚫린다
       // 공격 중심이 상대 수비의 약한 쪽을 노리면 더 잘 들어간다 (반대로 강한 쪽을 노리면 손해)
+      if (off.tactics.focus === 'inside' && inside) pMake += T.focusRead.inside;
+      if (off.tactics.focus === 'outside' && !inside) pMake += T.focusRead.outside;
       if (T.focusExploit && off.tactics.focus === 'inside' && inside) pMake += T.focusExploit * (Math.max(avg(off, 'rim'), avg(off, 'post')) - avg(def, 'defInterior'));
       if (T.focusExploit && off.tactics.focus === 'outside' && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+      if (off.tactics.pace) pMake += off.tactics.pace * (T.paceMake + T.paceEnergyEdge * (avgEnergy(off) - avgEnergy(def))); // 속공: 상대가 지쳐 있을수록 잘 통한다
       if (shooter.id === off.tactics.keyPlayerId) pMake += T.keyPlayerMake;
+      pMake += T.crowdMake * Math.max(0, share - T.crowdFrom); // 공이 몰리는 선수에겐 수비도 몰린다
+      if (!isTop) pMake += T.crowdOthersMake * Math.max(0, topShare - T.crowdFrom); // 그만큼 동료는 편해진다
       if (off.tactics.focus === 'spread') {
         if (type === 'rim') pMake += T.spread.rimSpacing * (avg(off, 'three') - T.spread.spacingPivot); // 슈터가 많으면 돌파 공간이 열리고, 없으면 막힌다
         if (T.focusExploit && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));

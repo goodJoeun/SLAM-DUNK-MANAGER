@@ -83,4 +83,12 @@ if (process.argv[2] === 'game') {
   batch('전술: 존 vs 외곽 중심', 50, 50, N, { defense: 'zone' }, { focus: 'outside' });
   batch('전술: 존 vs 골밑 중심', 50, 50, N, { defense: 'zone' }, { focus: 'inside' });
   batch('전술: 빠른 템포 vs 느린 템포', 50, 50, N, { pace: 1 }, { pace: -1 });
+  batch('전술: 빠른 템포 vs 기본', 50, 50, N, { pace: 1 }, {});
+  batch('전술: 느린 템포 vs 기본', 50, 50, N, { pace: -1 }, {});
+  batch('전술: 약체(50)의 느린 템포 vs 55', 50, 55, N, { pace: -1 }, {});
+  batch('전술: 약체(50)의 빠른 템포 vs 55', 50, 55, N, { pace: 1 }, {});
+  batch('전술: 프레스+빠른 템포 vs 기본', 50, 50, N, { defense: 'press', pace: 1 }, {});
+  batch('전술: 5아웃 vs 기본', 50, 50, N, { focus: 'spread' }, {});
+  batch('전술: 스위치 vs 기본', 50, 50, N, { defense: 'switch' }, {});
+  batch('전술: 드롭 vs 기본', 50, 50, N, { defense: 'drop' }, {});
 }
