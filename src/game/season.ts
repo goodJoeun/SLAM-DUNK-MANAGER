@@ -485,9 +485,16 @@ function officialPairing(state: Career): { home: string; away: string; official:
 
 // ---------- 하루 진행 ----------
 
+// 내 팀이 실제로 뛰는 다음 경기일까지 남은 날. 탈락한 대회의 남은 공식전 날은 건너뛴다.
 function nextMatchIn(state: Career) {
-  const i = state.calendar.findIndex((d, idx) => idx >= state.dayIndex && d.type !== 'training');
-  return i < 0 ? null : i - state.dayIndex;
+  const alive = officialPairing(state) !== null; // 지금 대회에서 아직 다음 경기가 있다
+  let newCompetition = false; // 그 날까지 새 대회가 시작되면 다시 처음부터 뛴다
+  for (let i = state.dayIndex; i < state.calendar.length; i++) {
+    const d = state.calendar[i];
+    if (i > state.dayIndex && d.start) newCompetition = true;
+    if (d.type === 'practice' || (d.type === 'official' && (alive || newCompetition))) return i - state.dayIndex;
+  }
+  return null;
 }
 
 // 오늘의 일정
