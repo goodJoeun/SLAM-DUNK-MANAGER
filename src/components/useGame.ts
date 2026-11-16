@@ -12,7 +12,7 @@ import type {
 } from '@/game/types';
 import { BREAK_MS, DEFAULT_PREFS, SPEEDS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
-import { buildMessages, teamNames, trainingDigest, welcomeMessage } from './inbox';
+import { buildMessages, mergeTraining, quiet, supersedes, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
 
 const SAVE_KEY = 'hoops-manager-save-v2';
@@ -109,8 +109,20 @@ const userTeam = (S: GameState) => {
 // 새 메시지를 받은 소식 맨 위에 넣는다
 function deliver(S: GameState, drafts: MessageDraft[]): Message[] {
   let id = S.inbox.reduce((max, m) => Math.max(max, m.id), 0);
-  const fresh = drafts.map((d) => ({ ...d, id: ++id, unread: true }));
-  S.inbox = [...[...fresh].reverse(), ...S.inbox].slice(0, INBOX_LIMIT);
+  const fresh: Message[] = [];
+  for (const draft of drafts) {
+    // 주간 훈련 보고·상대 분석 보고서는 이전 것을 대신한다 (inbox.ts의 supersedes)
+    const old = supersedes(S.inbox, draft);
+    if (old) {
+      S.inbox = S.inbox.filter((m) => m !== old);
+      if (S.messageId === old.id) S.messageId = null;
+    }
+    const d = old && draft.kind === 'training' ? mergeTraining(old, draft) : draft;
+    const m: Message = { ...d, id: ++id, unread: !quiet(d) };
+    fresh.push(m);
+    S.inbox = [m, ...S.inbox];
+  }
+  S.inbox = S.inbox.slice(0, INBOX_LIMIT);
   return fresh;
 }
 

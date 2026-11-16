@@ -53,6 +53,8 @@ export interface Message {
   final?: boolean;
   results?: CompetitionResult[];
   body?: string[];
+  days?: number; // 훈련 보고: 이 보고에 묶인 훈련 일수
+  programs?: Record<string, number>; // 훈련 보고: 메뉴별 일수
   scout?: { opponent: string; label: string; days: number; bonus: number; players: PlayerNote[]; tactics: string; hints: string[]; sections?: ScoutSection[] }; // hints: 예전 저장에 남은 코치 메모
 }
 
@@ -130,7 +132,7 @@ export function buildMessages(
       ...when, kind: 'training', from: '코치진',
       title: `훈련 보고: ${label}`,
       summary: r.growth.length ? `능력치 상승 ${r.growth.length}건` : '눈에 띄는 변화 없음',
-      growth: r.growth,
+      growth: r.growth, days: 1, programs: { [label]: 1 },
     });
   }
 
@@ -199,6 +201,42 @@ export function buildMessages(
   }
   return out;
 }
+
+// ---------- 받은 소식 정리 ----------
+// 소식이 날마다 한 통씩 쌓이지 않도록, 새 소식을 넣기 전에 묶거나 바꿔치기할 이전 소식을 찾는다.
+const weekOf = (day: number) => Math.ceil(day / 7);
+
+// 새 소식 d가 대신할 이전 소식 (없으면 null)
+export function supersedes(inbox: Message[], d: MessageDraft): Message | null {
+  // 훈련 보고는 주 단위로 한 통에 모은다 (직접 지시한 훈련만. AI 코치 보고는 이미 묶여 있다)
+  if (d.kind === 'training' && d.days === 1) {
+    return inbox.find((m) => m.kind === 'training' && m.programs && m.year === d.year && weekOf(m.day) === weekOf(d.day)) ?? null;
+  }
+  // 상대 분석 보고서는 같은 상대의 최신판만 남긴다
+  if (d.kind === 'scout' && d.scout) {
+    return inbox.find((m) => m.kind === 'scout' && m.year === d.year && m.scout?.opponent === d.scout!.opponent && m.scout.label === d.scout!.label) ?? null;
+  }
+  return null;
+}
+
+// 이전 훈련 보고에 오늘 훈련을 더한다
+export function mergeTraining(old: Message, d: MessageDraft): MessageDraft {
+  const programs = { ...old.programs };
+  for (const [label, n] of Object.entries(d.programs ?? {})) programs[label] = (programs[label] ?? 0) + n;
+  const days = (old.days ?? 1) + (d.days ?? 1);
+  const all = [...(old.growth ?? []), ...(d.growth ?? [])];
+  const growth = all.filter((g, i) => !all.some((x, j) => j > i && x.id === g.id && x.key === g.key)); // 같은 능력치가 또 올랐으면 최근 값만
+  const menu = Object.entries(programs).sort((a, b) => b[1] - a[1]).map(([label, n]) => `${label} ${n}일`).join(', ');
+  return {
+    ...d,
+    title: `주간 훈련 보고: ${weekOf(d.day)}주차 (${days}일)`,
+    summary: `${growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음'} · ${menu}`,
+    growth, days, programs,
+  };
+}
+
+// 우리 학교와 상관없는 참고용 소식은 읽지 않은 소식으로 세지 않는다
+export const quiet = (d: MessageDraft) => d.kind === 'round' && !d.round?.matches.some((m) => m.mine);
 
 // AI 코치에게 여러 날을 맡겼을 때의 훈련 요약
 export function trainingDigest(last: DayReport, days: number, growth: GrowthEvent[]): MessageDraft {

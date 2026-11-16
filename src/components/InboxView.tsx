@@ -1,12 +1,20 @@
+import { useState } from 'react';
 import { PREPARATION } from '@/game/season';
 import type { Career } from '@/game/types';
 import type { Message, MessageKind } from './inbox';
 import type { Act } from './useGame';
-import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, isUser, potentialStars, Stars } from './ui';
+import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, Seg, isUser, potentialStars, Stars } from './ui';
 import type { IconName, ViewProps } from './ui';
 
 const KIND_ICON: Record<MessageKind, IconName> = {
   welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics',
+};
+
+// 목록 필터: 종류가 비슷한 소식끼리 묶어 본다
+const FILTERS = { all: '전체', match: '경기·분석', training: '훈련·부상', comp: '대회', school: '학교' };
+type FilterKey = keyof typeof FILTERS;
+const FILTER_OF: Record<MessageKind, FilterKey> = {
+  match: 'match', scout: 'match', training: 'training', injury: 'training', round: 'comp', competition: 'comp', welcome: 'school', season: 'school',
 };
 
 function MessageBody({ m, career }: { m: Message; career: Career }) {
@@ -26,7 +34,13 @@ function MessageBody({ m, career }: { m: Message; career: Career }) {
       );
     }
     case 'training':
-      return <><p className="muted">{m.summary}</p><GrowthList growth={m.growth ?? []} /></>;
+      return (
+        <>
+          <p className="muted">{m.summary}</p>
+          {m.programs && (m.days ?? 1) > 1 && <p className="hint">이번 주에 지시한 훈련을 한 통에 모았습니다. 능력치는 가장 최근 값입니다.</p>}
+          <GrowthList growth={m.growth ?? []} />
+        </>
+      );
     case 'round':
       return m.round ? <ResultList lines={m.round.matches} /> : null;
     case 'competition': {
@@ -120,14 +134,17 @@ function MessageView({ m, career, act }: { m: Message; career: Career; act: Act 
 export default function InboxView({ S, act }: ViewProps) {
   const selected = S.inbox.find((m) => m.id === S.messageId) ?? null;
   const unread = S.inbox.filter((m) => m.unread).length;
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const list = filter === 'all' ? S.inbox : S.inbox.filter((m) => FILTER_OF[m.kind] === filter);
   return (
     <div className="page">
       <PageTitle title="받은 소식" sub={unread ? `읽지 않은 소식 ${unread}건` : '모두 읽었습니다'}>
+        <Seg options={FILTERS} value={filter} onChange={(v) => setFilter(v as FilterKey)} />
         {unread > 0 && <button className="btn small" onClick={() => act('readAll')}>모두 읽음</button>}
       </PageTitle>
       <div className={`inbox ${selected ? 'has-sel' : ''}`}>
         <ul className="msg-list">
-          {S.inbox.map((m) => (
+          {list.map((m) => (
             <li key={m.id} className={`${m.unread ? 'unread' : ''} ${selected?.id === m.id ? 'on' : ''}`} onClick={() => act('openMessage', m.id)}>
               <span className={`msg-ico k-${m.kind}`}><Icon name={KIND_ICON[m.kind]} /></span>
               <div style={{ minWidth: 0 }}>
@@ -137,7 +154,7 @@ export default function InboxView({ S, act }: ViewProps) {
               </div>
             </li>
           ))}
-          {!S.inbox.length && <li className="empty" style={{ display: 'block', cursor: 'default' }}>아직 받은 소식이 없습니다.</li>}
+          {!list.length && <li className="empty" style={{ display: 'block', cursor: 'default' }}>{S.inbox.length ? '이 분류에는 소식이 없습니다.' : '아직 받은 소식이 없습니다.'}</li>}
         </ul>
         {selected
           ? <MessageView m={selected} career={S.career} act={act} />
