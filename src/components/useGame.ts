@@ -6,6 +6,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { createCareer, today, playDay, prepareUserMatch, toggleRecruitTarget } from '@/game/season';
 import { setLineup } from '@/game/school';
+import { resolveEvent } from '@/game/people';
 import type { DayDecision } from '@/game/season';
 import type {
   Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, PlayerRole, ProgramKey, Tactics,
@@ -39,6 +40,7 @@ export interface GameState {
   playerId: string | null;
   portraits: Record<string, string>;
   prefs: MatchPrefs;
+  lastEvent?: { title: string; chosen: string; result: string[]; day: number }; // 방금 결정한 사건의 결과 (그날 홈 화면에 보여 준다)
 }
 
 // 게임을 시작한 뒤의 상태
@@ -212,7 +214,16 @@ function pushLastLog(m: ActiveMatch) {
   else m.feed.unshift({ ...last });
 }
 
+// 감독의 결정을 기다리는 사건이 있으면 하루를 넘기지 않고 홈 화면에서 고르게 한다
+function blockedByEvent(S: GameState) {
+  if (!careerOf(S).event) return false;
+  S.screen = 'home';
+  S.playerId = null;
+  return true;
+}
+
 function trainDay(S: GameState) {
+  if (blockedByEvent(S)) return;
   advance(S, { program: S.program, intensity: S.intensity });
   resumeAfterScouting(S);
   save(S);
@@ -285,6 +296,7 @@ const actions = {
   },
   auto({ S }: Ctx) {
     const career = careerOf(S);
+    if (blockedByEvent(S)) return;
     const growth: GrowthEvent[] = [];
     let last: DayReport | null = null;
     let days = 0;
@@ -299,6 +311,7 @@ const actions = {
       growth.push(...report.growth);
       openYearEnd(S, deliver(S, buildMessages(career, report, names, { training: false })));
       if (report.yearEnd) break;
+      if (career.event) { S.screen = 'home'; break; } // 감독이 결정할 일이 생기면 거기서 멈춘다
     }
     if (last) deliver(S, [trainingDigest(last, days, growth)]);
     resumeAfterScouting(S);
@@ -337,6 +350,21 @@ const actions = {
   // 신입생 스카우트: 영입 목표를 켜고 끈다
   recruitTarget({ S }: Ctx, id: string) {
     if (S.career && toggleRecruitTarget(S.career, id)) save(S);
+  },
+  // 오늘의 사건에서 선택지를 고른다. 결과는 받은 소식에 남는다.
+  eventChoice({ S }: Ctx, choice: number) {
+    const career = careerOf(S);
+    const d = today(career);
+    const r = resolveEvent(career, choice);
+    if (r && d) {
+      deliver(S, [{
+        year: d.year, day: d.day, phase: d.phase, kind: 'event', from: r.from, title: r.title, summary: r.result[0] ?? r.chosen,
+        body: [...r.body, `감독의 결정: ${r.chosen}`, ...r.result],
+      }]).forEach((m) => { m.unread = false; });
+      S.lastEvent = { title: r.title, chosen: r.chosen, result: r.result, day: career.dayIndex };
+    }
+    setLineup(userTeam(S)); // 사건으로 빠지게 된 선수가 있으면 선발을 다시 짠다
+    save(S);
   },
   playerFocus({ S }: Ctx, id: string, value: string) {
     const player = userTeam(S).players.find((p) => p.id === id);

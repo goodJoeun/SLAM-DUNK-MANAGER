@@ -8,7 +8,7 @@ import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import { PREPARATION, seasonGoal, today } from '@/game/season';
 import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent, YearReview } from '@/game/types';
 
-export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout';
+export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout' | 'event';
 
 export interface MatchLine {
   home: string;
@@ -131,7 +131,7 @@ export function buildMessages(
     out.push({
       ...when, kind: 'training', from: '코치진',
       title: `훈련 보고: ${label}`,
-      summary: r.growth.length ? `능력치 상승 ${r.growth.length}건` : '눈에 띄는 변화 없음',
+      summary: milestones(r.growth) || (r.growth.length ? `능력치 상승 ${r.growth.length}건` : '눈에 띄는 변화 없음'),
       growth: r.growth, days: 1, programs: { [label]: 1 },
     });
   }
@@ -202,6 +202,12 @@ export function buildMessages(
   return out;
 }
 
+// 눈에 띄는 성장: 능력치가 10 단위 고비(60, 70, 80...)를 넘은 것만 추린다
+export function milestones(growth: GrowthEvent[]) {
+  const hit = growth.filter((g) => g.to >= 60 && g.to % 10 === 0);
+  return hit.slice(0, 2).map((g) => `${g.name} ${g.label} ${g.to} 돌파`).join(' · ') + (hit.length > 2 ? ` 외 ${hit.length - 2}건` : '');
+}
+
 // ---------- 받은 소식 정리 ----------
 // 소식이 날마다 한 통씩 쌓이지 않도록, 새 소식을 넣기 전에 묶거나 바꿔치기할 이전 소식을 찾는다.
 const weekOf = (day: number) => Math.ceil(day / 7);
@@ -230,7 +236,7 @@ export function mergeTraining(old: Message, d: MessageDraft): MessageDraft {
   return {
     ...d,
     title: `주간 훈련 보고: ${weekOf(d.day)}주차 (${days}일)`,
-    summary: `${growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음'} · ${menu}`,
+    summary: `${milestones(growth) || (growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음')} · ${menu}`,
     growth, days, programs,
   };
 }
@@ -244,7 +250,7 @@ export function trainingDigest(last: DayReport, days: number, growth: GrowthEven
     year: last.year, day: last.day, phase: last.phase,
     kind: 'training', from: 'AI 코치',
     title: `AI 코치 훈련 보고 (${days}일)`,
-    summary: growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음',
+    summary: milestones(growth) || (growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음'),
     growth,
   };
 }

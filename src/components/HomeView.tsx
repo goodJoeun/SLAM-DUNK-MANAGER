@@ -7,6 +7,7 @@ import {
   Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, clubColor, mean, teamName, userTeam,
 } from './ui';
 import { scoutReport } from '@/game/scouting';
+import { describeEvent, moraleLabel, teamMorale } from '@/game/people';
 import type { ViewProps } from './ui';
 
 const STAGE_SHORT: Record<string, string> = { group: '조별 리그', finalLeague: '결승 리그', playoff: '플레이오프', knockout: '토너먼트', national: '전국 대회', done: '종료' };
@@ -47,6 +48,36 @@ function OpponentBrief({ S, d }: { S: PlayingState; d: Today }) {
         <p className="hint">우리 전술: {FOCUS[mine.focus ?? 'balanced']} 공격 · {DEFENSE[mine.defense ?? 'man']} 수비</p>
       </div>
     </div>
+  );
+}
+
+// 오늘의 결정: 감독이 선택지를 골라야 하루를 진행할 수 있는 사건. 고른 뒤에는 그날 동안 결과를 보여 준다.
+function EventPanel({ S, act }: { S: PlayingState; act: Act }) {
+  const c = S.career;
+  const view = c.event ? describeEvent(c, c.event) : null;
+  if (view) {
+    return (
+      <Panel title={`오늘의 결정 · ${view.from}`} className="span-12 event">
+        <h3 style={{ margin: '0 0 6px' }}>{view.title}</h3>
+        {view.body.map((line) => <p key={line} style={{ margin: '0 0 10px' }}>{line}</p>)}
+        <div className="opts event-opts">
+          {view.options.map((o, i) => (
+            <button key={o.label} className="opt" onClick={() => act('eventChoice', i)}>
+              <b>{o.label}</b><span>{o.hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className="hint" style={{ marginTop: 8 }}>결정을 내려야 오늘 하루를 진행할 수 있습니다.</p>
+      </Panel>
+    );
+  }
+  const last = S.lastEvent;
+  if (!last || last.day !== c.dayIndex) return null;
+  return (
+    <Panel title="오늘의 결정 · 결과" className="span-12">
+      <p style={{ margin: '0 0 6px' }}><b>{last.title}</b> <span className="muted">— {last.chosen}</span></p>
+      <ul className="lines">{last.result.map((line) => <li key={line}><span>{line}</span></li>)}</ul>
+    </Panel>
   );
 }
 
@@ -185,6 +216,7 @@ export default function HomeView({ S, act }: ViewProps) {
   const fit = team.players.filter((p) => !p.injuredDays);
   const cond = Math.round(mean(fit.map((p) => p.condition)));
   const goal = seasonGoal(S.career);
+  const morale = teamMorale(team);
   const injured = team.players.filter((p) => p.injuredDays);
   const tired = fit.filter((p) => p.condition < 60);
   const matches = S.inbox.filter((m) => m.kind === 'match');
@@ -194,12 +226,14 @@ export default function HomeView({ S, act }: ViewProps) {
     <div className="page">
       <PageTitle title="홈" sub={`${d.year}년차 ${d.day}일째 · ${d.phase}`} />
       <div className="dash">
+        <EventPanel S={S} act={act} />
         <NextMatchPanel S={S} act={act} d={d} team={team} />
 
         <Panel title="팀 상태" className="span-4">
           <div className="kv">
             <div><small>팀 전력</small><b><Attr v={teamOverall(team)} /></b></div>
             <div><small>컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
+            <div title="60이 보통입니다. 승패·출전 시간·훈련 강도·감독의 결정에 따라 오르내리고, 경기력과 훈련 효율에 영향을 줍니다."><small>팀 사기</small><b>{moraleLabel(morale)}</b><span className="muted">{Math.round(morale)} / 100</span></div>
           </div>
           <div className="notice" style={{ marginTop: 8 }}>
             <b>올해 목표</b> · {goal.label}<br />

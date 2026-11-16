@@ -24,6 +24,7 @@ import {
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName } from './competition.ts';
 import { DATASETS, buildSchool } from './dataset.ts';
+import { moraleAfterMatch, moraleAfterTraining, moraleOvernight, rollEvent } from './people.ts';
 import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
@@ -45,6 +46,7 @@ export interface DayDecision {
   program?: ProgramKey;
   intensity?: IntensityKey;
   match?: Pick<UserMatch, 'game' | 'home' | 'away'> | null;
+  events?: boolean; // false면 다음 날 사건을 만들지 않는다 (자동 진행 스크립트용)
 }
 
 interface CalendarBlock {
@@ -344,6 +346,8 @@ function playMatch(state: Career, ctx: DayContext, home: string, away: string, o
     if (!state.regionIds.includes(id)) return;
     const result = applyMatch(ctx.rng, state.teams[id], g.box[side], strength[1 - side], official);
     if (id === state.userTeamId) {
+      const minutes = Object.fromEntries(g.box[side].players.map((p) => [p.id, p.sec]));
+      moraleAfterMatch(state.teams[id], minutes, match.winner === id, official, strength[1 - side] - strength[side]);
       ctx.report.userBox = g.box;
       ctx.report.growth.push(...result.growth);
       ctx.report.injuries.push(...result.injuries);
@@ -623,11 +627,13 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
     const team = state.teams[id];
     const mine = id === state.userTeamId;
     const matchTomorrow = tomorrow?.type === 'official' || (mine && tomorrow?.type === 'practice');
-    const choice: TrainingChoice = mine && decision.program
+    let choice: TrainingChoice = mine && decision.program
       ? { program: decision.program, intensity: decision.intensity ?? 'normal' }
       : aiTraining(ctx.rng, team, matchTomorrow);
+    if (mine && state.forcedRest) choice = { program: 'rest', intensity: 'normal' }; // 사건의 결과로 오늘은 쉰다
     const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp });
     if (mine) {
+      moraleAfterTraining(team, choice.program, choice.intensity);
       if (choice.program === 'scout' && upcoming?.canScout) {
         const days = upcoming.days + 1;
         state.prep = { ...state.prep, [upcoming.opponentId]: days };
@@ -643,9 +649,17 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
     overnight(state.teams[id]);
     setLineup(state.teams[id]);
   }
+  moraleOvernight(state.teams[state.userTeamId]);
+  delete state.forcedRest;
+  delete state.event; // 고르지 않고 넘어간 사건은 사라진다
   state.dayIndex++;
   if (state.dayIndex >= state.calendar.length) report.yearEnd = endYear(state, ctx.rng);
   else if (state.calendar[state.dayIndex].start) startCompetition(state, state.calendar[state.dayIndex].start!, ctx.rng);
+  // 새 날 아침: 경기가 없는 날이면 감독이 결정할 사건이 생길 수 있다
+  if (!state.finished && decision.events !== false && !userPairing(state)) {
+    const event = rollEvent(state, ctx.rng);
+    if (event) state.event = event;
+  }
   return report;
 }
 

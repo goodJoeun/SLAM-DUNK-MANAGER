@@ -203,6 +203,10 @@ select {
 .span-6 { grid-column: span 6; }
 .span-7 { grid-column: span 7; }
 .span-8 { grid-column: span 8; }
+.span-12 { grid-column: 1 / -1; }
+.panel.event { border-color: var(--gold); }
+.event-opts { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.event-opts .opt { text-align: left; }
 .span-12 { grid-column: span 12; }
 @media (max-width: 1100px) {
   .span-4 { grid-column: span 6; }

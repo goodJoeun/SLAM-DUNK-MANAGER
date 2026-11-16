@@ -7,14 +7,14 @@ import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, Seg,
 import type { IconName, ViewProps } from './ui';
 
 const KIND_ICON: Record<MessageKind, IconName> = {
-  welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics',
+  welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics', event: 'squad',
 };
 
 // 목록 필터: 종류가 비슷한 소식끼리 묶어 본다
 const FILTERS = { all: '전체', match: '경기·분석', training: '훈련·부상', comp: '대회', school: '학교' };
 type FilterKey = keyof typeof FILTERS;
 const FILTER_OF: Record<MessageKind, FilterKey> = {
-  match: 'match', scout: 'match', training: 'training', injury: 'training', round: 'comp', competition: 'comp', welcome: 'school', season: 'school',
+  match: 'match', scout: 'match', training: 'training', injury: 'training', round: 'comp', competition: 'comp', welcome: 'school', season: 'school', event: 'school',
 };
 
 function MessageBody({ m, career }: { m: Message; career: Career }) {

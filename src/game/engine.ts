@@ -63,6 +63,8 @@ export const TUNING = {
   coastMake: -0.03, // 크게 앞선 팀은 무리하지 않는다 (슛 성공률 보정)
   formSd: 0.015, // 당일 컨디션 편차 (일관성이 낮을수록 커진다)
   formInconsistency: 0.05,
+  moraleForm: 0.02, // 사기 40 차이당 경기력 변화 (사기 100이면 +2%, 20이면 -2%). 사기가 없는 팀은 보통(60)으로 본다
+  clutchBoost: 0.05, // 승부사: 4쿼터 막판 접전에서 능력 상승
 
   // 흐름과 작전 타임
   runThreshold: 4, // 연속 득점이 이만큼 쌓이면 기세가 붙는다
@@ -164,7 +166,8 @@ interface GamePlayer {
   c: Composites;
   ovr: number;
   rank: number; // 교체 판단에 쓰는 가치. 선발은 감독이 고른 선수이므로 벤치보다 낮게 보지 않는다
-  form: number; // 당일 컨디션 보정
+  form: number; // 당일 컨디션 보정 (일관성에 따른 기복 + 사기)
+  clutch: boolean; // 승부사
   energy: number; // 0~1
   injured: boolean;
   since: number; // 마지막으로 코트에 들어오거나 나간 시각
@@ -206,7 +209,8 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
     return {
       id: p.id, name: p.name, pos: p.pos, c: composites(prepared(p, prep)), ovr: overall(p),
       rank: i < 5 ? Math.max(overall(p), benchBest * 1.05) : overall(p),
-      form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)),
+      form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)) + (T.moraleForm * ((p.morale ?? 60) - 60)) / 40,
+      clutch: p.trait === 'clutch',
       energy: p.condition == null ? 1 : 0.85 + 0.15 * (p.condition / 100), // 지친 채로 경기에 나오면 체력이 덜 찬 상태
       injured: (p.injuredDays ?? 0) > 0,
       since: 0, stat: emptyLine(), starter: i < 5, home: i < 5 ? i : -1,
@@ -246,7 +250,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   };
 
   // 피로·컨디션 반영 능력치
-  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form);
+  const clutchTime = () => period >= 4 && clock <= T.crunchSeconds && Math.abs(teams[0].score - teams[1].score) <= T.crunchMargin;
+  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form + (p.clutch && clutchTime() ? T.clutchBoost : 0));
   const avg = (team: GameTeam, key: keyof Composites) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
   const avgEnergy = (team: GameTeam) => team.court.reduce((s, p) => s + p.energy, 0) / 5;
   const pick = (players: GamePlayer[], weightFn: (p: GamePlayer) => number) => players[rng.weighted(players.map(weightFn))];

@@ -51,7 +51,14 @@ export interface Player extends BasePlayer {
   progress: Partial<Ratings>; // 능력치별 소수점 성장 누적
   focus: ProgramKey | null; // 개인 훈련 메뉴
   fixed?: boolean; // 데이터 파일에 명시된 선수
+  trait?: TraitKey; // 성격 (people.ts). 없으면 처음 읽을 때 정한다
+  morale?: number; // 사기 0~100, 60이 보통. 내 학교 선수만 변한다
 }
+
+export type TraitKey = 'steady' | 'worker' | 'genius' | 'clutch' | 'moody' | 'leader' | 'lazy' | 'ironman';
+export type EventKey = 'benchTalk' | 'nightPractice' | 'quarrel' | 'exam' | 'alumni' | 'slump' | 'rookie' | 'friendly' | 'ache' | 'late';
+// 감독의 결정을 기다리는 사건. a·b = 주인공 선수 id
+export interface CareerEvent { key: EventKey; a: string; b?: string }
 
 export interface Team {
   id: string;
@@ -67,6 +74,8 @@ export interface EnginePlayer extends BasePlayer {
   hidden?: { consistency: number };
   condition?: number;
   injuredDays?: number;
+  morale?: number;
+  trait?: TraitKey;
 }
 export interface EngineTeam {
   id?: string;
@@ -345,6 +354,10 @@ export interface Career {
   trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
   prospects?: Prospect[]; // 올해 눈여겨볼 중학 유망주 (우리 학교가 영입을 시도할 수 있는 후보)
   recruitTargets?: string[]; // 영입 목표로 정한 유망주의 선수 id
+  event?: CareerEvent; // 오늘 감독이 결정해야 하는 사건 (고르기 전에는 하루를 진행할 수 없다)
+  lastEventDay?: number;
+  lastEventKey?: EventKey;
+  forcedRest?: boolean; // 사건의 결과로 오늘 훈련이 휴식으로 바뀐다
 }
 
 // 중학 유망주. level = 이 선수가 보통 진학할 학교의 수준 (우리 학교 수준이 이보다 낮을수록 데려오기 어렵다)

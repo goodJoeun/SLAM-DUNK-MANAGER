@@ -2,6 +2,7 @@
 import { overall, composites } from './engine.ts';
 import { generatePlayer } from './generate.ts';
 import { randomName } from './names.ts';
+import { injuryRisk, matchLearning, staminaCost, trainingFactor } from './people.ts';
 import type { Rng } from './rng.ts';
 import type {
   BasePlayer, BoxTeam, Career, Composites, Defense, Focus, GrowthEvent, InjuryEvent, IntensityKey,
@@ -30,7 +31,7 @@ export const PROGRAMS: Record<ProgramKey, { label: string; keys: RatingKey[] }> 
 export const INTENSITY: Record<IntensityKey, { label: string; gain: number; cost: number; injury: number }> = {
   light: { label: '가볍게', gain: 0.6, cost: 3, injury: 0.0005 },
   normal: { label: '보통', gain: 1, cost: 6, injury: 0.002 },
-  hard: { label: '강하게', gain: 1.4, cost: 10, injury: 0.006 },
+  hard: { label: '강하게', gain: 1.6, cost: 10, injury: 0.006 },
 };
 
 export const GROWTH = {
@@ -177,7 +178,7 @@ function gain(p: Player, key: RatingKey, amount: number, events?: GrowthEvent[])
 const talent = (p: Player) => (0.6 + (0.8 * p.potential) / 100) * (GROWTH.yearFactor[p.year] ?? 1);
 
 function maybeInjure(rng: Rng, p: Player, chance: number, report: { injuries: InjuryEvent[] }) {
-  if (!rng.chance(chance * (1.6 - p.condition / 100))) return;
+  if (!rng.chance(chance * (1.6 - p.condition / 100) * injuryRisk(p))) return;
   p.injuredDays = rng.int(3, 12);
   report.injuries.push({ id: p.id, name: p.name, days: p.injuredDays });
 }
@@ -199,13 +200,13 @@ export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: 
       continue;
     }
     // 지쳐 있으면 같은 훈련을 해도 덜 는다
-    const effort = talent(p) * (0.5 + 0.5 * (p.condition / 100)) * I.gain * (camp ? GROWTH.campBonus : 1) * (0.7 + 0.6 * rng.next());
+    const effort = talent(p) * trainingFactor(p) * (0.5 + 0.5 * (p.condition / 100)) * I.gain * (camp ? GROWTH.campBonus : 1) * (0.7 + 0.6 * rng.next());
     for (const k of P.keys) gain(p, k, (GROWTH.sessionPoints / P.keys.length) * effort, report.growth);
     const own = p.focus ? PROGRAMS[p.focus] : undefined;
     if (own?.keys.length) {
       for (const k of own.keys) gain(p, k, (GROWTH.sessionPoints / own.keys.length) * effort * GROWTH.individualShare, report.growth);
     }
-    p.condition = Math.max(0, p.condition - I.cost * (camp ? GROWTH.campCost : 1));
+    p.condition = Math.max(0, p.condition - I.cost * (camp ? GROWTH.campCost : 1) * staminaCost(p));
     maybeInjure(rng, p, I.injury, report);
   }
   return report;
@@ -219,7 +220,7 @@ export function applyMatch(rng: Rng, team: Team, boxTeam: BoxTeam, opponentOvera
     const p = team.players.find((x) => x.id === line.id);
     if (!p || !line.sec) continue;
     const share = line.sec / 2400;
-    const xp = GROWTH.matchPoints * share * level * talent(p);
+    const xp = GROWTH.matchPoints * share * level * talent(p) * matchLearning(p);
     for (const k of ratingKeys(p)) if (k !== 'hgt') gain(p, k, xp * 0.4, report.growth);
     // 경기에서 실제로 한 플레이가 해당 능력치를 더 올린다
     gain(p, 'oiq', xp, report.growth);
@@ -229,7 +230,7 @@ export function applyMatch(rng: Rng, team: Team, boxTeam: BoxTeam, opponentOvera
     gain(p, 'ins', xp * Math.min(1, (line.fga - line.tpa) / 10), report.growth);
     gain(p, 'reb', xp * Math.min(1, (line.orb + line.drb) / 8), report.growth);
     gain(p, 'pss', xp * Math.min(1, line.ast / 5), report.growth);
-    p.condition = Math.max(0, p.condition - GROWTH.matchCost * share);
+    p.condition = Math.max(0, p.condition - GROWTH.matchCost * share * staminaCost(p));
     maybeInjure(rng, p, GROWTH.matchInjury * share, report);
   }
   return report;
