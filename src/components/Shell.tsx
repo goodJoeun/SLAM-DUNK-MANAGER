@@ -23,6 +23,8 @@ function NextChip({ d }: { d: Today }) {
   return <div className="next-chip"><span>다음 경기</span><b>{next}</b></div>;
 }
 
+const inMatchNow = (S: ViewProps['S']) => Boolean(S.match);
+
 export default function Shell({ S, act, children }: ViewProps & { children: ReactNode }) {
   // 머리띠 높이를 재어 두면, 그 아래에 붙는 요소(경기 점수판, 메뉴)가 머리띠가 두 줄로 늘어나도 겹치지 않는다
   const appRef = useRef<HTMLDivElement>(null);
@@ -36,6 +38,27 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
     const ro = new ResizeObserver(update);
     ro.observe(header);
     return () => ro.disconnect();
+  }, []);
+
+  // 화면을 바꾸면 맨 위에서 시작한다 (이전 화면의 스크롤 위치가 남아 제목이 가려지지 않게)
+  useEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, inMatchNow(S)]);
+
+  // 스페이스: 평소에는 '계속', 경기 중에는 진행/일시정지. 입력 칸이나 버튼에 초점이 있으면 건드리지 않는다.
+  const onSpace = useRef<() => void>(() => {});
+  onSpace.current = () => {
+    if (S.match) {
+      if (!S.match.game.finished) act(S.match.playing ? 'pause' : 'play');
+    } else if (today(S.career)) act('proceed');
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if ((e.target as HTMLElement | null)?.closest?.('input, select, textarea, button, a, [role="dialog"]')) return;
+      e.preventDefault();
+      onSpace.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const c = S.career;
@@ -64,12 +87,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
           <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
         )}
         {!inMatch && d && (
-          <button className="btn continue" onClick={() => act('proceed')}>
+          <button className="btn continue" onClick={() => act('proceed')} title="단축키: 스페이스">
             <span className="c-main">{d.userMatch ? '경기 시작' : '계속'}<Icon name="next" /></span>
             <small>{d.userMatch ? d.userMatch.label : `훈련: ${plan}`}</small>
           </button>
         )}
-        <button className="btn ghost small" onClick={() => act('reset')}>새 게임</button>
+        {/* 경기 중에는 실수로 누르지 않게 숨긴다 */}
+        {!inMatch && <button className="btn ghost small" onClick={() => act('reset')}>새 게임</button>}
       </header>
 
       {!inMatch && (
