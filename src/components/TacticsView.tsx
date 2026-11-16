@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { composites, overall } from '@/game/engine';
+import { composites, energyPerSecond, overall, startEnergy, tacticLoad } from '@/game/engine';
 import { teamOverall } from '@/game/school';
 import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
@@ -35,9 +35,27 @@ function scoringLean(cs: Composites[]) {
   return avg((c) => Math.max(c.rim, c.post)) - avg((c) => Math.max(c.mid, c.three));
 }
 
-function Choice<K extends string>({ options, info, value, onChange }: {
+// 배율을 "+25%"처럼 적는다. 1에 가까우면 빈 문자열.
+const pctDelta = (x: number) => (Math.abs(x - 1) < 0.005 ? '' : `${x > 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`);
+
+// 선택지 카드에 붙는 부담 표시: 체력 소모와 파울이 기본(맨투맨·보통 템포)보다 얼마나 늘고 주는지
+type Tag = { text: string; tone: 'bad' | 'good' };
+function loadTags(defense: Defense, pace: number): Tag[] {
+  const load = tacticLoad(defense, pace);
+  const tags: Tag[] = [];
+  const add = (label: string, x: number) => { if (pctDelta(x)) tags.push({ text: `${label} ${pctDelta(x)}`, tone: x > 1 ? 'bad' : 'good' }); };
+  add('체력 소모', load.drain);
+  add('파울', load.foul);
+  add('슈팅 파울', load.shootingFoul);
+  return tags;
+}
+const DEFENSE_TAGS = Object.fromEntries((['man', 'zone', 'press', 'switch', 'drop'] as Defense[]).map((d) => [d, loadTags(d, 0)])) as Record<Defense, Tag[]>;
+const PACE_TAGS: Record<string, Tag[]> = { '-1': loadTags('man', -1), 0: [], 1: loadTags('man', 1) };
+
+function Choice<K extends string>({ options, info, tags, value, onChange }: {
   options: Record<K, string> | [K, string][];
   info: Record<K, string>;
+  tags?: Record<K, Tag[]>;
   value: string;
   onChange: (v: K) => void;
 }) {
@@ -47,6 +65,7 @@ function Choice<K extends string>({ options, info, value, onChange }: {
       {list.map(([k, label]) => (
         <button key={k} className={`opt ${value === k ? 'on' : ''}`} onClick={() => onChange(k)}>
           <b>{label}</b><span>{info[k]}</span>
+          {tags?.[k]?.length ? <span className="opt-tags">{tags[k].map((tag) => <i key={tag.text} className={`pill ${tag.tone}`}>{tag.text}</i>)}</span> : null}
         </button>
       ))}
     </div>
@@ -81,6 +100,14 @@ export default function TacticsView({ S, act }: ViewProps) {
   const focus = t.focus ?? 'balanced';
   const defense = t.defense ?? 'man';
   const pace = String(Math.round(t.pace ?? 0));
+  // 지금 고른 수비·템포의 부담: 체력 소모 배율과, 선발이 체력 저하 알림 기준까지 버티는 시간(쉬지 않고 뛸 때)
+  const load = tacticLoad(defense, Number(pace));
+  const tiredAt = S.prefs.tiredAt;
+  const lasting = starters
+    .map((p) => ({ name: p.name, min: Math.max(0, startEnergy(p.condition) - tiredAt / 100) / energyPerSecond(composites(p).endurance, load.drain) / 60 }))
+    .sort((a, b) => a.min - b.min);
+  const lastingAvg = mean(lasting.map((x) => x.min));
+  const heavy = lastingAvg < 20; // 전반(20분)을 못 버틴다
   // 선발 교체: 코트의 선발을 고른 뒤 벤치 선수(교체)나 다른 선발(자리 바꿈)을 누른다
   const [picked, setPicked] = useState<string | null>(null);
   const pickedSlot = starters.findIndex((p) => p.id === picked);
@@ -130,10 +157,25 @@ export default function TacticsView({ S, act }: ViewProps) {
             <Choice options={FOCUS} info={FOCUS_INFO} value={focus} onChange={(v) => act('tactic', 'focus', v)} />
           </Panel>
           <Panel title="수비">
-            <Choice options={DEFENSE} info={DEFENSE_INFO} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
+            <Choice options={DEFENSE} info={DEFENSE_INFO} tags={DEFENSE_TAGS} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
           </Panel>
           <Panel title="템포">
-            <Choice options={PACE} info={PACE_INFO} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
+            <Choice options={PACE} info={PACE_INFO} tags={PACE_TAGS} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
+          </Panel>
+          <Panel title="이 전술의 부담" action={<span className="hint">{DEFENSE[defense]} · {PACE.find(([k]) => k === pace)?.[1]} 템포</span>}>
+            <div className="load">
+              <div><small>체력 소모</small><b className={load.drain > 1.2 ? 'bad' : load.drain < 0.95 ? 'good' : ''}>×{load.drain.toFixed(2)}</b><span>맨투맨·보통 템포 대비 {pctDelta(load.drain) || '같음'}</span></div>
+              <div><small>파울</small><b className={load.foul > 1 ? 'bad' : load.shootingFoul < 1 ? 'good' : ''}>{pctDelta(load.foul) || pctDelta(load.shootingFoul) || '기본'}</b><span>{load.foul > 1 ? '압박하다 나오는 파울' : load.shootingFoul < 1 ? '슈팅 파울이 줄어듭니다' : '늘거나 줄지 않습니다'}</span></div>
+              <div><small>선발이 버티는 시간</small><b className={heavy ? 'bad' : ''}>약 {Math.round(lastingAvg)}분</b><span>쉬지 않고 뛰어 체력 {tiredAt}까지 · 평균</span></div>
+            </div>
+            <p className="hint">
+              가장 먼저 지치는 선수: {lasting.slice(0, 2).map((x) => `${x.name} 약 ${Math.round(x.min)}분`).join(', ')}. 지금 컨디션과 지구력으로 어림한 값이고, 경기는 40분입니다.
+            </p>
+            {heavy && (
+              <p className="notice bad" style={{ margin: '8px 0 0' }}>
+                이 전술로는 선발이 전반(20분)을 다 뛰기 어렵습니다. 벤치를 자주 돌리거나, 템포를 늦추거나, 존 수비처럼 덜 지치는 수비를 함께 고려하세요.
+              </p>
+            )}
           </Panel>
         </div>
 

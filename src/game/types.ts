@@ -385,6 +385,7 @@ export interface PrepInfo {
   days: number; // 지금까지 분석한 날 수
   bonus: number; // 그 경기에서 받는 능력치 보너스 (분석한 날 수에 비례)
   canScout: boolean; // 오늘 분석할 수 있는지
+  reachDays: number; // 경기 전까지 남은 훈련일을 모두 써도 채울 수 있는 분석 일수 (경기 간격이 짧으면 최대치보다 적다)
 }
 
 export interface UserMatchInfo {
@@ -393,6 +394,7 @@ export interface UserMatchInfo {
   opponentId: string;
   opponent: string;
   opponentOverall: number;
+  opener: boolean; // 대회 첫 경기: 대진이 당일에 정해져 미리 분석할 수 없었다
 }
 
 export interface Today {
@@ -460,13 +462,13 @@ export interface SchoolSpec {
   players: PlayerSpec[];
   benchLevel?: number;
   prefecture?: string;
+  draw?: number; // 전국 대회 대진표의 추첨 번호 (Dataset.draw 참고)
 }
 
-  draw?: number; // 전국 대회 대진표의 추첨 번호 (Dataset.draw 참고)
 export interface Dataset {
   prefecture: string;
   schools: SchoolSpec[];
   nationals: SchoolSpec[];
-}
   // 인터하이 본선의 고정 대진표. size 참가 학교 수, home 우리 현 1위·2위의 추첨 번호, byes 1회전을 쉬는 번호
   draw?: { size: number; home: [number, number]; byes: number[] };
+}

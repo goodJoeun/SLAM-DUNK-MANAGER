@@ -43,7 +43,11 @@ function OpponentBrief({ S, d }: { S: PlayingState; d: Today }) {
             {report.sections.flatMap((sec) => sec.lines).map((l) => <li key={l}><span>{l}</span></li>)}
           </ul>
         ) : (
-          <p className="muted">{m.official ? '이 경기는 상대 분석 없이 치릅니다. 공식전 전에 훈련 대신 상대 분석을 하면 상대의 전술과 강·약점을 미리 알 수 있습니다.' : '연습 경기는 상대 분석 없이 치릅니다.'}</p>
+          <p className="muted">
+            {!m.official ? '연습 경기는 상대 분석 없이 치릅니다.'
+              : m.opener ? '대회 첫 경기는 대진이 경기 당일에 정해져 미리 분석할 수 없습니다. 다음 경기부터는 경기 전 훈련일에 상대 분석을 할 수 있습니다.'
+                : '이 경기는 상대 분석 없이 치릅니다. 공식전 전 훈련일에 훈련 대신 상대 분석을 하면 상대의 전술과 강·약점을 미리 알 수 있습니다.'}
+          </p>
         )}
         <p className="hint">우리 전술: {FOCUS[mine.focus ?? 'balanced']} 공격 · {DEFENSE[mine.defense ?? 'man']} 수비</p>
       </div>

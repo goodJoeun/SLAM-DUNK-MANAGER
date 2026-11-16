@@ -55,7 +55,7 @@ export interface Message {
   body?: string[];
   days?: number; // 훈련 보고: 이 보고에 묶인 훈련 일수
   programs?: Record<string, number>; // 훈련 보고: 메뉴별 일수
-  scout?: { opponent: string; label: string; days: number; bonus: number; players: PlayerNote[]; tactics: string; hints: string[]; sections?: ScoutSection[] }; // hints: 예전 저장에 남은 코치 메모
+  scout?: { opponent: string; label: string; days: number; bonus: number; players: PlayerNote[]; tactics: string; hints: string[]; sections?: ScoutSection[]; more?: boolean }; // hints: 예전 저장에 남은 코치 메모
 }
 
 export type MessageDraft = Omit<Message, 'id' | 'unread'>;
@@ -113,13 +113,16 @@ export function buildMessages(
   if (r.scout) {
     const sc = r.scout;
     const opp = career.teams[sc.opponentId];
+    // 오늘 분석을 마친 뒤 경기 전까지 남은 훈련일 (오늘 포함 daysUntil일 중 하루를 썼다)
+    const daysLeft = Math.max(0, sc.daysUntil - 1);
+    const reach = Math.min(PREPARATION.maxDays, sc.days + daysLeft);
     // 날마다 그때까지 알아낸 내용을 모두 담은 보고서를 다시 보낸다 (가장 최근 것만 보면 된다)
     out.push({
       ...when, kind: 'scout', from: '코치진',
-      title: `상대 분석 보고서: ${sc.opponent} (${sc.days}/${PREPARATION.maxDays}일)`,
+      title: `상대 분석 보고서: ${sc.opponent} (${sc.days}/${reach}일)`,
       summary: `${sc.label} · 그 경기 능력치 +${sc.bonus.toFixed(1)}`,
       scout: {
-        opponent: sc.opponent, label: sc.label, days: sc.days, bonus: sc.bonus, hints: [],
+        opponent: sc.opponent, label: sc.label, days: sc.days, bonus: sc.bonus, hints: [], more: sc.days < reach,
         ...(opp ? scoutReport(opp, sc.days) : { players: [], tactics: '', sections: [] }),
       },
     });

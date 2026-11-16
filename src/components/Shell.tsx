@@ -66,6 +66,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   const d = today(c); // 캠페인이 끝났으면 null
   const unread = S.inbox.filter((m) => m.unread).length;
   const inMatch = Boolean(S.match);
+  const note = S.dayNote;
   const cond = Math.round(mean(team.players.filter((p) => !p.injuredDays).map((p) => p.condition)));
   const plan = S.program === 'rest' || S.program === 'scout' ? PROGRAMS[S.program].label : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
 
@@ -111,7 +112,20 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
         </nav>
       )}
 
-      <div className="content">{children}</div>
+      <div className="content">
+        {/* 방금 보낸 하루의 결과: 다음 날로 넘어가거나 닫기 전까지 어느 화면에서든 보인다 */}
+        {!inMatch && note && note.year === c.year && note.dayIndex === c.dayIndex && (
+          <div key={`${note.year}-${note.dayIndex}`} className="day-note" role="status">
+            <Icon name="training" />
+            <b>{note.title}</b>
+            {note.items.map((item) => <span key={item.text} className={`pill ${item.tone ?? ''}`}>{item.text}</span>)}
+            <span className="spacer" />
+            <button className="btn ghost small" onClick={() => act('screen', 'inbox')}>소식에서 자세히</button>
+            <button className="btn ghost small" aria-label="닫기" onClick={() => act('dismissDayNote')}>닫기</button>
+          </div>
+        )}
+        {children}
+      </div>
     </div>
   );
 }

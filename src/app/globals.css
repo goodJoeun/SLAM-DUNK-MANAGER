@@ -183,6 +183,32 @@ select {
 .opt.on { border-color: var(--club); background: color-mix(in srgb, var(--club) 16%, var(--panel-2)); box-shadow: inset 0 0 0 1px var(--club); }
 .opt b { font-size: 13px; }
 .opt span { font-size: 11.5px; color: var(--muted); }
+.opt .opt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.opt .opt-tags .pill { font-style: normal; font-size: 11px; }
+.opt .opt-tags .pill.bad { color: var(--bad); }
+.opt .opt-tags .pill.good { color: var(--good); }
+
+/* 전술의 부담: 체력 소모·파울·버티는 시간 */
+.load { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.load > div { display: grid; gap: 2px; padding: 9px 11px; border-radius: 7px; background: var(--panel-2); }
+.load small { color: var(--muted); font-size: 11.5px; }
+.load b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.load b.bad { color: var(--bad); }
+.load b.good { color: var(--good); }
+.load span { font-size: 11.5px; color: var(--muted); }
+
+/* 방금 보낸 하루의 결과 한 줄 */
+.day-note {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  max-width: 1320px; margin: 0 auto 14px; padding: 8px 12px; border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--club) 45%, transparent);
+  background: color-mix(in srgb, var(--club) 12%, var(--panel));
+  animation: day-note-in 0.25s ease-out;
+}
+.day-note > svg { width: 18px; height: 18px; color: var(--muted); }
+.day-note > b { margin-right: 4px; }
+@keyframes day-note-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .day-note { animation: none; } }
 
 /* ---------- 페이지·패널 ---------- */
 
@@ -520,6 +546,16 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .pause-banner > svg { width: 20px; height: 20px; color: var(--warn); }
 .pause-banner b { display: block; }
 .pause-banner span { font-size: 12.5px; }
+.pause-banner div > span { display: block; }
+
+/* 쿼터 사이 휴식 화면 */
+.break-panel { display: grid; gap: 10px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel); }
+.break-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.break-head h2 { margin: 2px 0 0; font-size: 18px; }
+.break-head h2 span { margin-left: 8px; font-size: 13px; font-weight: 600; }
+.break-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 24px; align-items: start; }
+.break-body .quarters { margin: 0; }
+.break-body .quarters th:first-child, .break-body .quarters td:first-child { text-align: left; }
 .notes { display: grid; margin: 0; padding: 0; list-style: none; }
 .notes li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
 .notes li:last-child { border-bottom: 0; }

@@ -13,7 +13,7 @@
 import { makeRng } from './rng.ts';
 import type { Rng } from './rng.ts';
 import type {
-  BasePlayer, Composites, EngineTeam, EventInfo, GameOptions, GameResult, GameView, LogEvent, PlayerView,
+  BasePlayer, Composites, Defense, EngineTeam, EventInfo, GameOptions, GameResult, GameView, LogEvent, PlayerView,
   RatingKey, ShotType, StatLine, StepResult, Tactics,
 } from './types.ts';
 
@@ -76,6 +76,7 @@ export const TUNING = {
 
   // 전술
   focusShotBoost: 2.0, // 중심 전술의 슛 종류 가중
+  focusThreeBoost: 1.6, // 외곽 중심의 3점 가중. 골밑보다 작게 둬야 슛의 절반이 3점인 경기가 나오지 않는다
   focusUsageBias: 1.0, // 중심 전술에 맞는 선수에게 공이 몰리는 정도
   keyPlayerUsage: 1.35, // 에이스 지정: 공격 비중 증가. 진짜 에이스에게 몰아주면 조금 이득이고, 아닌 선수를 고르면 본전이다
   // 한 선수에게 슛이 몰리는 데는 한계가 있고(상한), 몰릴수록 수비가 쏠려 그 선수는 어렵게 쏘고 동료는 편해진다
@@ -88,8 +89,8 @@ export const TUNING = {
   keyPlayerMake: 0, // 에이스 슛 성공률 보정. 수비가 몰리는 손해는 crowdMake가 이미 반영한다
   focusRead: { inside: -0.01, outside: 0 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
   focusExploit: 0.4, // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정 (능력 차 1.0당). 잘못 맞추면 손해
-  paceOffense: 4, // 템포 1단계당 공격 시간 변화(초)
-  paceDefense: 2, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
+  paceOffense: 2, // 템포 1단계당 공격 시간 변화(초). 빠르게 뛰어도 공격권은 1할쯤만 는다 (크면 100점대 경기가 흔해진다)
+  paceDefense: 1, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
   // 템포의 득실(1단계당). 빠르게: 속공으로 쉬운 슛이 늘지만 실책과 체력 소모도 는다. 느리게는 그 반대.
   // 볼 핸들링이 좋은 팀은 빨리 뛰어도 실책이 덜 늘고, 상대보다 체력이 남아 있을수록 속공이 잘 통한다.
   paceMake: 0.016, // 슛 성공률
@@ -101,7 +102,7 @@ export const TUNING = {
   deny: { usage: 0.4, make: -0.09, othersMake: 0.012 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
   zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
-  press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1.5 },
+  press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1 },
   // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
   spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56, read: -0.012 }, // read: 슛이 두 종류뿐이라 수비가 읽는다 (전체 슛 성공률 보정)
   // 스위치: 스크린에 오픈 3점을 덜 내주지만, 키 작은 수비수가 빅맨을 막는 미스매치를 상대가 노린다
@@ -122,6 +123,26 @@ export const TUNING = {
 const r = (p: BasePlayer, k: RatingKey) => p.ratings[k] / 100;
 
 // 원본 능력치 -> 엔진이 쓰는 합성 능력치 (0~1)
+// 수비 방식이 체력 소모에 주는 배율
+const defenseDrain = (d: Defense | null | undefined) => (d === 'press' ? TUNING.press.drain : d === 'zone' ? TUNING.zone.drain : 1);
+
+// 전술이 우리 팀의 체력·파울에 주는 부담 (전술 화면 안내용). 경기 중 계산(elapse, 파울 판정)과 같은 값을 쓴다.
+//   drain: 체력 소모 배율 (상대 템포는 보통으로 가정), foul: 슛과 무관한 파울 배율, shootingFoul: 슈팅 파울 배율
+export function tacticLoad(defense: Defense | null | undefined, pace: number) {
+  const T = TUNING;
+  return {
+    drain: defenseDrain(defense) * (1 + T.paceDrain * pace),
+    foul: defense === 'press' ? T.press.foul : 1,
+    shootingFoul: defense === 'zone' ? T.zone.shootingFoul : 1,
+  };
+}
+
+// 코트 위에서 1초 뛸 때 줄어드는 체력 (0~1 기준). style은 전술 배율.
+export const energyPerSecond = (endurance: number, style = 1) => TUNING.energyDrain * style * (1.3 - 0.6 * endurance);
+
+// 경기 시작 때의 체력 (0~1): 지친 채로 경기에 나오면 체력이 덜 찬 상태로 시작한다
+export const startEnergy = (condition: number | null | undefined) => (condition == null ? 1 : 0.85 + 0.15 * (condition / 100));
+
 export function composites(p: BasePlayer): Composites {
   const c: Composites = {
     ballHandling: 0.6 * r(p, 'drb') + 0.2 * r(p, 'spd') + 0.2 * r(p, 'oiq'),
@@ -211,7 +232,7 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
       rank: i < 5 ? Math.max(overall(p), benchBest * 1.05) : overall(p),
       form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)) + (T.moraleForm * ((p.morale ?? 60) - 60)) / 40,
       clutch: p.trait === 'clutch',
-      energy: p.condition == null ? 1 : 0.85 + 0.15 * (p.condition / 100), // 지친 채로 경기에 나오면 체력이 덜 찬 상태
+      energy: startEnergy(p.condition),
       injured: (p.injuredDays ?? 0) > 0,
       since: 0, stat: emptyLine(), starter: i < 5, home: i < 5 ? i : -1,
     };
@@ -270,11 +291,11 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const d = team.tactics.defense;
       const opp = teams[1 - teams.indexOf(team)];
       const tempo = 1 + T.paceDrain * team.tactics.pace + T.paceDrainOpp * opp.tactics.pace;
-      const style = (d === 'press' ? T.press.drain : d === 'zone' ? T.zone.drain : 1) * tempo;
+      const style = defenseDrain(d) * tempo;
       for (const p of team.players) {
         if (team.court.includes(p)) {
           p.stat.sec += sec;
-          p.energy = Math.max(0, p.energy - sec * T.energyDrain * style * (1.3 - 0.6 * p.c.endurance));
+          p.energy = Math.max(0, p.energy - sec * energyPerSecond(p.c.endurance, style));
         } else {
           p.energy = Math.min(1, p.energy + sec * T.energyRecover);
         }
@@ -402,7 +423,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   function chooseShot(off: GameTeam, def: GameTeam, shooter: GamePlayer, threeUrgency: number) {
     const w = { ...T.shotMixWeight };
     if (off.tactics.focus === 'inside') { w.rim *= T.focusShotBoost; w.post *= T.focusShotBoost; }
-    if (off.tactics.focus === 'outside') { w.three *= T.focusShotBoost; }
+    if (off.tactics.focus === 'outside') { w.three *= T.focusThreeBoost; }
     if (def.tactics.defense === 'zone') { w.three *= T.zone.threeMix; w.rim *= T.zone.rimMix; }
     if (def.tactics.defense === 'press') { w.rim *= T.press.rimMix; }
     if (off.tactics.focus === 'spread') { w.three *= T.spread.threeMix; w.rim *= T.spread.rimMix; w.mid *= T.spread.midMix; w.post *= T.spread.postMix; }

@@ -593,7 +593,10 @@ export function today(state: Career): Today | null {
   let userMatch: UserMatchInfo | null = null;
   if (pairing) {
     const opponentId = pairing.home === state.userTeamId ? pairing.away : pairing.home;
-    userMatch = { label: pairing.label, official: pairing.official, opponentId, opponent: state.teams[opponentId].name, opponentOverall: teamOverall(state.teams[opponentId]) };
+    userMatch = {
+      label: pairing.label, official: pairing.official, opponentId, opponent: state.teams[opponentId].name, opponentOverall: teamOverall(state.teams[opponentId]),
+      opener: pairing.official && !state.comp?.rounds.length,
+    };
   }
   return {
     year: state.year, day: state.dayIndex + 1, of: state.calendar.length,
@@ -633,6 +636,7 @@ export function upcomingOfficial(state: Career): PrepInfo | null {
     opponentId, opponent: state.teams[opponentId].name, label: pairing.label, daysUntil, days,
     bonus: prepBonus(state, opponentId),
     canScout: daysUntil >= 1 && daysUntil <= PREPARATION.window && days < PREPARATION.maxDays,
+    reachDays: Math.min(PREPARATION.maxDays, days + Math.min(daysUntil, PREPARATION.window)),
   };
 }
 

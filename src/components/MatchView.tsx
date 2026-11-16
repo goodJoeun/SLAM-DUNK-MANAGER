@@ -3,15 +3,16 @@ import type { CSSProperties } from 'react';
 import { today } from '@/game/season';
 import type { BoxTeam, LogEvent, PlayerRole, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
-import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
-import type { AlertKey, FeedMode, SpeedKey } from './live';
+import { ALERTS, FEED_MODES, FRESH_ENERGY, KEY_EVENT, SPEEDS, TIRED_LEVELS, breakLabel, periodLabel, teamTotals } from './live';
+import type { AlertKey, BreakInfo, FeedMode, SpeedKey } from './live';
 import FullCourt from './court/FullCourt';
 import { tipOffScene } from './court/choreo';
 import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
 
 const SPEED_OPTIONS = Object.entries(SPEEDS).map(([k, v]) => [k, v.label] as [string, string]);
-const NOTE_ICON = { info: 'bulb', warn: 'alert', bad: 'alert', good: 'ball' } as const;
+const TIRED_OPTIONS = TIRED_LEVELS.map((n) => [String(n), `${n} 아래`] as [string, string]);
+const NOTE_ICON ={ info: 'bulb', warn: 'alert', bad: 'alert', good: 'ball' } as const;
 
 function Side({ team: t, mine, away = false, prep = 0 }: { team: TeamView; mine: boolean; away?: boolean; prep?: number }) {
   return (
@@ -55,17 +56,59 @@ function PlayerRow({ player: p, selected = false, onClick }: { player: PlayerVie
   );
 }
 
-function totals(t: BoxTeam) {
-  const sum = (f: (p: BoxTeam['players'][number]) => number) => t.players.reduce((s, p) => s + f(p), 0);
-  return {
-    fgm: sum((p) => p.fgm), fga: sum((p) => p.fga), tpm: sum((p) => p.tpm), tpa: sum((p) => p.tpa),
-    ftm: sum((p) => p.ftm), fta: sum((p) => p.fta), reb: sum((p) => p.orb + p.drb), ast: sum((p) => p.ast),
-    stl: sum((p) => p.stl), blk: sum((p) => p.blk), tov: sum((p) => p.tov),
-  };
+// 쿼터 사이 휴식 화면: 방금 끝난 쿼터의 기록과, 다음 쿼터 전에 살펴볼 것들
+function BreakPanel({ info, mine, opp, side, tiredAt, onResume }: {
+  info: BreakInfo;
+  mine: TeamView;
+  opp: TeamView;
+  side: number;
+  tiredAt: number;
+  onResume: () => void;
+}) {
+  const me = info.quarter[side];
+  const them = info.quarter[1 - side];
+  const shots = (made: number, tried: number) => `${made}/${tried}${tried ? ` (${Math.round((100 * made) / tried)}%)` : ''}`;
+  const rows: [string, string, string][] = [
+    ['득점', `${me.pts}`, `${them.pts}`],
+    ['야투', shots(me.fgm, me.fga), shots(them.fgm, them.fga)],
+    ['3점슛', shots(me.tpm, me.tpa), shots(them.tpm, them.tpa)],
+    ['리바운드', `${me.reb}`, `${them.reb}`],
+    ['턴오버', `${me.tov}`, `${them.tov}`],
+  ];
+  const squad = [...mine.court, ...mine.bench].filter((p) => !p.out);
+  const tired = mine.court.filter((p) => !p.out && p.energy < tiredAt + 10).sort((a, b) => a.energy - b.energy);
+  const fouls = squad.filter((p) => p.pf >= 3).sort((a, b) => b.pf - a.pf);
+  const rival = [...opp.court, ...opp.bench].reduce((a, b) => (b.pts > a.pts ? b : a));
+  const diff = mine.score - opp.score;
+  const next = info.period >= 4 ? `연장 ${info.period - 3}` : `${info.period + 1}쿼터`;
+  return (
+    <div className="break-panel">
+      <div className="break-head">
+        <div>
+          <span className="eyebrow">{breakLabel(info.period)}</span>
+          <h2>{mine.name} {mine.score} : {opp.score} {opp.name} <span className={diff > 0 ? 'good' : diff < 0 ? 'bad' : 'muted'}>{diff > 0 ? `${diff}점 앞섬` : diff < 0 ? `${-diff}점 뒤짐` : '동점'}</span></h2>
+        </div>
+        <button className="btn primary" onClick={onResume}><Icon name="next" />{next} 시작</button>
+      </div>
+      <div className="break-body">
+        <table className="quarters">
+          <thead><tr><th>{periodLabel(info.period)} 기록</th><th>{mine.name}</th><th>{opp.name}</th></tr></thead>
+          <tbody>{rows.map(([label, a, b]) => <tr key={label}><td>{label}</td><td>{a}</td><td>{b}</td></tr>)}</tbody>
+        </table>
+        <ul className="lines">
+          <li><span className="muted">지친 선수</span><span>{tired.length ? tired.map((p) => `${p.name} ${p.energy}`).join(', ') : '없음'}</span></li>
+          <li><span className="muted">파울 3개 이상</span><span className={fouls.some((p) => p.pf >= 4) ? 'bad' : ''}>{fouls.length ? fouls.map((p) => `${p.name} ${p.pf}개`).join(', ') : '없음'}</span></li>
+          <li><span className="muted">상대 최다 득점</span><span>{rival.pts ? `${rival.name} ${rival.pts}점` : '없음'}</span></li>
+          <li><span className="muted">남은 작전 타임</span><span>{mine.timeoutsLeft}회</span></li>
+        </ul>
+      </div>
+      <p className="hint">쉬는 시간입니다. 코트 아래에서 전술을, 오른쪽 명단에서 교체를 손본 뒤 다음 쿼터를 시작하세요.</p>
+    </div>
+  );
 }
 
 function Compare({ box }: { box: BoxTeam[] }) {
-  const [h, a] = box.map(totals);
+  const [h, a] = box.map(teamTotals);
   const rows: [string, string, string, number, number][] = [
     ['야투', `${h.fgm}/${h.fga}`, `${a.fgm}/${a.fga}`, h.fga ? h.fgm / h.fga : 0, a.fga ? a.fgm / a.fga : 0],
     ['3점슛', `${h.tpm}/${h.tpa}`, `${a.tpm}/${a.tpa}`, h.tpa ? h.tpm / h.tpa : 0, a.tpa ? a.tpm / a.tpa : 0],
@@ -194,11 +237,20 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const [confirmSkip, setConfirmSkip] = useState(false);
 
   // 자동 정지 알림의 해결 버튼: 문제가 된 선수와, 대신 넣을 만한 벤치 선수(같은 포지션·체력·파울 여유 우선)
+  // 지친 선수가 여럿이면 한 명씩 짝을 지어 한꺼번에 바꾼다. 체력이 덜 찬 벤치 선수(방금 뺀 선수)는 권하지 않는다.
   const fix = m.pause ? m.pauseFix : null;
-  const tiredOut = fix?.kind === 'sub' ? mine.court.find((p) => p.id === fix.playerId) : undefined;
-  const fit = (p: PlayerView) => p.ovr - 6 * Math.abs(p.pos - (tiredOut?.pos ?? p.pos)) - (p.energy < 50 ? 20 : 0) - (p.pf >= 4 ? 30 : 0);
-  const suggested = tiredOut ? mine.bench.filter((p) => !p.out).sort((a, b) => fit(b) - fit(a))[0] : undefined;
-  const fixShown = Boolean(tiredOut) || fix?.kind === 'timeout';
+  const subFix = fix?.kind === 'sub' ? fix : null;
+  const outs = subFix ? mine.court.filter((p) => subFix.playerIds.includes(p.id)).sort((a, b) => a.energy - b.energy) : [];
+  const usable = (p: PlayerView) => !p.out && p.pf < 4 && (subFix?.reason !== 'tired' || p.energy >= FRESH_ENERGY);
+  const fit = (p: PlayerView, out: PlayerView) => p.ovr - 6 * Math.abs(p.pos - out.pos) + p.energy / 20;
+  const pairs: [PlayerView, PlayerView][] = [];
+  for (const out of outs) {
+    const pool = mine.bench.filter((p) => usable(p) && !pairs.some(([, used]) => used.id === p.id));
+    if (pool.length) pairs.push([out, pool.reduce((a, b) => (fit(b, out) > fit(a, out) ? b : a))]);
+  }
+  const unpaired = outs.filter((p) => !pairs.some(([out]) => out.id === p.id));
+  const pickNext = outs.find((p) => p.id !== m.selected);
+  const fixShown = outs.length > 0 || fix?.kind === 'timeout';
 
   // 마지막 공격권 연출까지 끝난 뒤에 종료 창을 띄운다
   const ended = live.finished && !m.pending;
@@ -248,25 +300,44 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         )}
       </div>
 
-      {m.pause && !v.finished && (
+      {/* 쿼터 사이 휴식만으로 멈췄으면 아래 휴식 화면이 같은 내용을 보여 주므로 띠는 생략한다 */}
+      {m.pause && !v.finished && !(m.breakInfo && !fixShown) && (
         <div className="pause-banner">
           <Icon name="alert" />
-          <div><b>경기를 멈췄습니다</b><span>{m.pause}</span></div>
+          <div>
+            <b>경기를 멈췄습니다</b>
+            <span>{m.pause}</span>
+            {pairs.length > 1 && <span className="faint">추천 교체: {pairs.map(([out, sub]) => `${out.name} → ${sub.name}`).join(' · ')}</span>}
+            {unpaired.length > 0 && (
+              <span className="faint">
+                {unpaired.map((p) => p.name).join(', ')}: 벤치에 {subFix?.reason === 'tired' ? `체력 ${FRESH_ENERGY} 이상인` : '파울 여유가 있는'} 교체 선수가 없습니다.
+                {subFix?.reason === 'tired' && ' 작전 타임이나 느린 템포로 숨을 돌리게 할 수 있습니다.'}
+              </span>
+            )}
+          </div>
           <span className="spacer" />
           {/* 멈춘 이유를 그 자리에서 해결하는 버튼 */}
-          {tiredOut && suggested && (
-            <button className="btn primary" onClick={() => act('swap', tiredOut.id, suggested.id)} title={`종합 ${suggested.ovr} · 체력 ${suggested.energy} · 파울 ${suggested.pf}`}>
-              {tiredOut.name} → {suggested.name} 교체
+          {pairs.length > 0 && (
+            <button
+              className="btn primary"
+              onClick={() => act('swap', pairs.map(([out, sub]) => [out.id, sub.id] as [string, string]))}
+              title={pairs.map(([out, sub]) => `${out.name} → ${sub.name} (종합 ${sub.ovr} · 체력 ${sub.energy} · 파울 ${sub.pf})`).join('\n')}
+            >
+              {pairs.length === 1 ? `${pairs[0][0].name} → ${pairs[0][1].name} 교체` : `${pairs.length}명 한꺼번에 교체`}
             </button>
           )}
-          {tiredOut && m.selected !== tiredOut.id && (
-            <button className="btn" onClick={() => act('pick', 'court', tiredOut.id)}>교체 선수 직접 고르기</button>
+          {pickNext && (
+            <button className="btn" onClick={() => act('pick', 'court', pickNext.id)}>{outs.length > 1 ? `${pickNext.name} 교체 직접 고르기` : '교체 선수 직접 고르기'}</button>
           )}
           {m.pauseFix?.kind === 'timeout' && (
             <button className="btn primary" disabled={!mine.timeoutsLeft} onClick={() => act('timeout')}>작전 타임 ({mine.timeoutsLeft})</button>
           )}
           <button className={`btn ${fixShown ? '' : 'primary'}`} onClick={() => act('play')}>계속 진행</button>
         </div>
+      )}
+
+      {m.pause && m.breakInfo && !v.finished && (
+        <BreakPanel info={m.breakInfo} mine={mine} opp={opp} side={m.side} tiredAt={prefs.tiredAt} onResume={() => act('play')} />
       )}
 
       <div className="match-main">
@@ -385,7 +456,11 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 </label>
               ))}
             </div>
-            <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
+            <div className="row" style={{ marginTop: 10 }}>
+              <span className="hint">체력 저하 기준</span>
+              <Seg options={TIRED_OPTIONS} value={String(prefs.tiredAt)} onChange={(k) => act('tiredAt', Number(k))} />
+            </div>
+            <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 지친 선수가 여럿이면 한 번에 묶어 알립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
           </Panel>
           <Panel title={`${opp.name} 코트`} flush>
             {opp.court.map((p) => <PlayerRow key={p.id} player={p} />)}

@@ -8,10 +8,11 @@ import { createCareer, today, playDay, prepareUserMatch, toggleRecruitTarget } f
 import { setLineup } from '@/game/school';
 import { resolveEvent } from '@/game/people';
 import type { DayDecision } from '@/game/season';
+import { INTENSITY, PROGRAMS } from '@/game/school';
 import type {
-  Career, DayReport, Defense, Focus, GrowthEvent, IntensityKey, NameStyle, PlayerRole, ProgramKey, Tactics,
+  Career, DayReport, Defense, Focus, GrowthEvent, InjuryEvent, IntensityKey, NameStyle, PlayerRole, PrepInfo, ProgramKey, Tactics,
 } from '@/game/types';
-import { BREAK_MS, DEFAULT_PREFS, SPEEDS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
+import { BREAK_MS, DEFAULT_PREFS, SPEEDS, TIRED_LEVELS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
 import { buildMessages, mergeTraining, quiet, supersedes, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
@@ -25,6 +26,14 @@ const INBOX_LIMIT = 80;
 export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'comp' | 'records';
 
 export type { ActiveMatch } from './live';
+
+// 방금 보낸 하루(또는 AI 코치에게 맡긴 며칠)의 결과 한 줄. 다음 날로 넘어가기 전까지 화면 위쪽에 보여 준다.
+export interface DayNote {
+  year: number;
+  dayIndex: number; // 이 날짜에 머무는 동안만 보여 준다
+  title: string;
+  items: { text: string; tone?: 'good' | 'bad' }[];
+}
 
 export interface GameState {
   career: Career | null;
@@ -40,6 +49,7 @@ export interface GameState {
   playerId: string | null;
   portraits: Record<string, string>;
   prefs: MatchPrefs;
+  dayNote?: DayNote | null;
   lastEvent?: { title: string; chosen: string; result: string[]; day: number }; // 방금 결정한 사건의 결과 (그날 홈 화면에 보여 준다)
 }
 
@@ -71,7 +81,9 @@ function save(S: GameState) {
 
 function loadPrefs(): MatchPrefs {
   const saved = readJson<Partial<MatchPrefs>>(PREFS_KEY, {});
-  return { ...DEFAULT_PREFS, ...saved, alerts: { ...DEFAULT_PREFS.alerts, ...saved.alerts } };
+  const prefs = { ...DEFAULT_PREFS, ...saved, alerts: { ...DEFAULT_PREFS.alerts, ...saved.alerts } };
+  if (!TIRED_LEVELS.includes(prefs.tiredAt)) prefs.tiredAt = DEFAULT_PREFS.tiredAt;
+  return prefs;
 }
 
 const initialState = (): GameState => {
@@ -129,13 +141,42 @@ function deliver(S: GameState, drafts: MessageDraft[]): Message[] {
 }
 
 // 하루를 진행하고 그날의 소식을 받는다
-function advance(S: GameState, decision: DayDecision = {}): Message[] {
+function advance(S: GameState, decision: DayDecision = {}): { fresh: Message[]; report: DayReport | null } {
   const career = careerOf(S);
   const names = teamNames(career);
   const report = playDay(career, decision);
   const fresh = report ? deliver(S, buildMessages(career, report, names)) : [];
+  S.dayNote = null;
   openYearEnd(S, fresh);
-  return fresh;
+  return { fresh, report };
+}
+
+// 뛸 수 있는 선수들의 평균 컨디션
+function teamCondition(S: GameState) {
+  const fit = userTeam(S).players.filter((p) => !p.injuredDays);
+  return fit.length ? Math.round(fit.reduce((sum, p) => sum + p.condition, 0) / fit.length) : 0;
+}
+
+// 훈련으로 보낸 날의 결과를 한 줄로 간추린다: 무엇을 했고, 누가 컸고, 컨디션이 어떻게 변했고, 누가 다쳤는지
+function noteDay(S: GameState, o: {
+  title: string; condBefore: number; growth: GrowthEvent[]; injuries: InjuryEvent[]; scout?: PrepInfo | null;
+}) {
+  const career = careerOf(S);
+  const items: DayNote['items'] = [];
+  if (o.scout) items.push({ text: `${o.scout.opponent} 분석 ${o.scout.days}일째 · 그 경기 능력치 +${o.scout.bonus.toFixed(1)}`, tone: 'good' });
+  const perPlayer = new Map<string, number>();
+  for (const g of o.growth) perPlayer.set(g.name, (perPlayer.get(g.name) ?? 0) + 1);
+  if (perPlayer.size) {
+    const ranked = [...perPlayer].sort((a, b) => b[1] - a[1]);
+    const shown = ranked.slice(0, 3).map(([name, n]) => `${name} +${n}`).join(', ');
+    items.push({ text: `능력치 상승 ${o.growth.length}건 · ${shown}${ranked.length > 3 ? ` 외 ${ranked.length - 3}명` : ''}`, tone: 'good' });
+  } else if (!o.scout) {
+    items.push({ text: '오른 능력치 없음' });
+  }
+  const condAfter = teamCondition(S);
+  items.push({ text: `팀 컨디션 ${o.condBefore} → ${condAfter}`, tone: condAfter < 60 ? 'bad' : undefined });
+  for (const inj of o.injuries) items.push({ text: `${inj.name} 부상 (${inj.days}일)`, tone: 'bad' });
+  S.dayNote = { year: career.year, dayIndex: career.dayIndex, title: o.title, items };
 }
 
 // 한 해가 끝나면 연말 평가(졸업·신입생 포함)를 바로 띄운다
@@ -224,7 +265,16 @@ function blockedByEvent(S: GameState) {
 
 function trainDay(S: GameState) {
   if (blockedByEvent(S)) return;
-  advance(S, { program: S.program, intensity: S.intensity });
+  const condBefore = teamCondition(S);
+  const { report } = advance(S, { program: S.program, intensity: S.intensity });
+  // 한 해가 끝난 날은 연말 평가가 뜨므로 따로 알리지 않는다
+  if (report && !report.yearEnd) {
+    const done = report.training;
+    const plan = !done ? '훈련'
+      : done.program === 'rest' || done.program === 'scout' ? PROGRAMS[done.program].label
+        : `${PROGRAMS[done.program].label} 훈련 · ${INTENSITY[done.intensity].label}`;
+    noteDay(S, { title: `${report.day}일째 · ${plan}`, condBefore, growth: report.growth, injuries: report.injuries, scout: report.scout });
+  }
   resumeAfterScouting(S);
   save(S);
 }
@@ -248,7 +298,7 @@ const actions = {
   namestyle({ S }: Ctx) { S.nameStyle = S.nameStyle === 'kr' ? 'jp' : 'kr'; },
   start({ S }: Ctx, index: number) {
     const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
-    Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null });
+    Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
     deliver(S, [welcomeMessage(career)]);
     save(S);
   },
@@ -257,7 +307,7 @@ const actions = {
     stopMatchTimer(S);
     removeKey(SAVE_KEY);
     removeKey(INBOX_KEY);
-    Object.assign(S, { career: null, match: null, inbox: [], messageId: null, playerId: null, screen: 'home', startSeed: randomSeed() });
+    Object.assign(S, { career: null, match: null, inbox: [], messageId: null, playerId: null, dayNote: null, screen: 'home', startSeed: randomSeed() });
   },
   screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; },
   openMessage({ S }: Ctx, id: number | null) {
@@ -280,6 +330,7 @@ const actions = {
     S.portraits = next;
     writeJson(PORTRAIT_KEY, next);
   },
+  dismissDayNote({ S }: Ctx) { S.dayNote = null; },
   readAll({ S }: Ctx) { for (const m of S.inbox) m.unread = false; save(S); },
   program({ S }: Ctx, key: ProgramKey) {
     if (key === 'scout' && S.program !== 'scout') S.resumeProgram = S.program;
@@ -298,6 +349,10 @@ const actions = {
     const career = careerOf(S);
     if (blockedByEvent(S)) return;
     const growth: GrowthEvent[] = [];
+    const injuries: InjuryEvent[] = [];
+    const condBefore = teamCondition(S);
+    S.dayNote = null;
+    let ended = false; // 한 해가 끝났다
     let last: DayReport | null = null;
     let days = 0;
     while (!career.finished && !today(career)?.userMatch) {
@@ -309,15 +364,17 @@ const actions = {
       days++;
       last = report;
       growth.push(...report.growth);
+      injuries.push(...report.injuries);
       openYearEnd(S, deliver(S, buildMessages(career, report, names, { training: false })));
-      if (report.yearEnd) break;
+      if (report.yearEnd) { ended = true; break; }
       if (career.event) { S.screen = 'home'; break; } // 감독이 결정할 일이 생기면 거기서 멈춘다
     }
     if (last) deliver(S, [trainingDigest(last, days, growth)]);
+    if (last && !ended) noteDay(S, { title: `${days}일 진행 · AI 코치가 훈련을 맡았습니다`, condBefore, growth, injuries, scout: last.scout });
     resumeAfterScouting(S);
     save(S);
   },
-  simulate({ S }: Ctx) { openMatchReport(S, advance(S)); resumeAfterScouting(S); save(S); },
+  simulate({ S }: Ctx) { openMatchReport(S, advance(S).fresh); resumeAfterScouting(S); save(S); },
   command({ S }: Ctx) { startCommand(S); },
   player({ S }: Ctx, id: string | null) { S.playerId = id || null; S.screen = 'squad'; },
   tactic({ S }: Ctx, key: 'focus' | 'defense' | 'pace', value: string) {
@@ -415,6 +472,11 @@ const actions = {
   },
   speed({ S }: Ctx, key: SpeedKey) { S.prefs.speed = key; writeJson(PREFS_KEY, S.prefs); },
   toggleAlert({ S }: Ctx, key: AlertKey) { S.prefs.alerts[key] = !S.prefs.alerts[key]; writeJson(PREFS_KEY, S.prefs); },
+  tiredAt({ S }: Ctx, level: number) {
+    if (!TIRED_LEVELS.includes(level)) return;
+    S.prefs.tiredAt = level;
+    writeJson(PREFS_KEY, S.prefs);
+  },
   feedMode({ S }: Ctx, mode: FeedMode) { S.prefs.feed = mode; writeJson(PREFS_KEY, S.prefs); },
   timeout({ S }: Ctx) {
     const m = matchOf(S);
@@ -461,17 +523,35 @@ const actions = {
     if (m.game.finished) return;
     if (where === 'court') { m.selected = m.selected === id ? null : id; return; }
     if (!m.selected) return;
-    if (m.game.substitute(m.side, m.selected, id)) pushLastLog(m);
-    if (m.pauseFix?.kind === 'sub' && m.pauseFix.playerId === m.selected) m.pauseFix = null;
+    const outId = m.selected;
+    if (m.game.substitute(m.side, outId, id)) pushLastLog(m);
+    // 알림에 걸린 선수를 직접 바꿨으면 그 선수는 해결된 것으로 본다
+    if (m.pauseFix?.kind === 'sub' && m.pauseFix.playerIds.includes(outId)) {
+      const left = m.pauseFix.playerIds.filter((x) => x !== outId);
+      if (left.length) m.pauseFix = { ...m.pauseFix, playerIds: left };
+      else {
+        m.pauseFix = null;
+        if (m.pause) m.pause = '교체를 마쳤습니다. 계속 진행하세요.';
+      }
+    }
     m.selected = null;
   },
   // 알림 띠의 추천 교체: 고르는 단계 없이 바로 바꾼다
-  swap({ S }: Ctx, outId: string, inId: string) {
+  // 지친 선수가 여럿이면 [나갈 선수, 들어갈 선수] 짝을 한꺼번에 받는다
+  swap({ S }: Ctx, pairs: [string, string][]) {
     const m = matchOf(S);
     if (m.game.finished) return;
-    if (m.game.substitute(m.side, outId, inId)) pushLastLog(m);
+    const me = m.game.view().teams[m.side];
+    const nameOf = Object.fromEntries([...me.court, ...me.bench].map((p) => [p.id, p.name]));
+    const done: string[] = [];
+    for (const [outId, inId] of pairs) {
+      if (!m.game.substitute(m.side, outId, inId)) continue;
+      pushLastLog(m);
+      done.push(`${nameOf[outId]} → ${nameOf[inId]}`);
+    }
     m.pauseFix = null;
     m.selected = null;
+    if (m.pause && done.length) m.pause = `교체 완료: ${done.join(', ')}. 계속 진행하세요.`;
   },
   matchTactic({ S }: Ctx, key: keyof Tactics, value: string) {
     const m = matchOf(S);
@@ -481,7 +561,7 @@ const actions = {
     const m = matchOf(S);
     stopMatchTimer(S);
     S.match = null;
-    openMatchReport(S, advance(S, { match: m }));
+    openMatchReport(S, advance(S, { match: m }).fresh);
     resumeAfterScouting(S);
     save(S);
   },

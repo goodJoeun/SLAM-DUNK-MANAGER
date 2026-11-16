@@ -1,5 +1,6 @@
-// 코치의 상대 분석 보고서: 상대가 어떤 팀인지 알려 줄 뿐, 어떻게 싸울지는 감독이 정한다.
-// 분석한 날이 늘수록 더 깊은 내용이 나온다 (1일: 주요 선수·전술, 2일: 팀의 강점과 약점, 3일: 선수별 성향과 벤치).
+// 코치의 상대 분석 보고서: 상대가 어떤 팀인지 알려 주고, 그 약점이 어떤 전술과 맞물리는지 실마리를 준다.
+// 실마리는 엔진이 실제로 계산하는 상성만 적는다. 무엇을 고를지는 감독이 정한다 (전술 화면의 모의 경기 조언 참고).
+// 분석한 날이 늘수록 더 깊은 내용이 나온다 (1일: 주요 선수·전술, 2일: 팀의 강점과 약점과 대응 실마리, 3일: 선수별 성향과 벤치).
 // 준비 보너스는 분석한 날 수에만 달려 있다 (season.ts).
 import { composites, overall } from './engine.ts';
 import type { Composites, Defense, Focus, Player, Team } from './types.ts';
@@ -41,6 +42,26 @@ export function scoutReport(team: Team, days: number): ScoutReport {
     if (Math.abs(inside - perimeter) > 0.02) lines.push(inside > perimeter ? '수비는 골밑이 외곽보다 단단합니다.' : '수비는 외곽이 골밑보다 단단합니다.');
     else lines.push('수비는 안팎이 고릅니다.');
     report.sections.push({ title: '선발 다섯 명의 강점과 약점', lines });
+
+    // 대응 실마리: 위의 강약점이 엔진에서 어떤 전술과 맞물리는지 (경계값은 grade의 '강함'·'약함'과 같다)
+    const STRONG = 0.57;
+    const WEAK = 0.48;
+    const three = avg((c) => c.three);
+    const handling = avg((c) => c.ballHandling);
+    const endurance = avg((c) => c.endurance);
+    const clues: string[] = [];
+    if (Math.abs(inside - perimeter) > 0.02) {
+      clues.push(inside > perimeter
+        ? '외곽 수비가 더 헐겁습니다. 우리 슈터가 좋다면 외곽 중심 공격이 잘 통합니다.'
+        : '골밑 수비가 더 헐겁습니다. 우리 빅맨이 좋다면 골밑 중심 공격이 잘 통합니다.');
+    }
+    if (three < WEAK) clues.push('외곽슛이 약해 존 수비로 골밑을 잠가도 내줄 것이 적습니다.');
+    else if (three >= STRONG) clues.push('슈터가 좋아 존 수비는 위험합니다. 외곽을 내주지 않는 수비가 낫습니다.');
+    if (handling < WEAK) clues.push('볼 핸들링이 약해 프레스에 실책이 많이 나옵니다. 대신 우리 체력과 파울 부담이 커집니다.');
+    else if (handling >= STRONG) clues.push('볼 핸들링이 좋아 프레스는 잘 뚫립니다.');
+    if (endurance < WEAK) clues.push('체력이 약한 팀입니다. 빠른 템포로 지치게 하면 후반에 우리 속공이 살아납니다.');
+    if (!clues.length) clues.push('뚜렷하게 노릴 약점이 없습니다. 우리가 잘하는 것을 그대로 하는 편이 낫습니다.');
+    report.sections.push({ title: '대응 실마리', lines: clues });
   }
 
   if (days >= 3) {
