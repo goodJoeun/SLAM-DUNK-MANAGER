@@ -17,12 +17,13 @@ const DEFENSES: Defense[] = ['man', 'zone', 'press', 'switch', 'drop'];
 
 // 공격 -> 수비 -> 템포 순으로 하나씩 정한다 (앞에서 고른 것은 그대로 두고 다음 것을 비교).
 // 같은 시드 묶음으로 비교해 선택지 간 차이가 운에 덜 흔들리게 한다. seed가 같으면 결과도 같다.
-export function adviseTactics(team: Team, opponent: Team, scoutDays = 0, seed = 1): TacticsAdvice {
+// prep: 상대 분석으로 얻은 준비 보너스. 분석한 팀은 약점 공략이 더 잘 통하므로 모의 경기에도 반영한다.
+export function adviseTactics(team: Team, opponent: Team, scoutDays = 0, seed = 1, prep = 0): TacticsAdvice {
   const games = ADVICE.baseGames + ADVICE.gamesPerScoutDay * scoutDays;
   const wins = (tactics: Partial<Tactics>) => {
     const mine = { ...team, tactics: { ...team.tactics, ...tactics } };
     let w = 0;
-    for (let i = 0; i < games; i++) if (simulateGame(mine, opponent, { seed: seed + i }).winner === 'home') w++;
+    for (let i = 0; i < games; i++) if (simulateGame(mine, opponent, { seed: seed + i, prep: [prep, 0] }).winner === 'home') w++;
     return w;
   };
   // 동률이면 앞의 선택지(기본에 가까운 쪽)를 고른다

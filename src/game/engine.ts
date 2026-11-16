@@ -87,8 +87,12 @@ export const TUNING = {
   crowdOthersMake: 0.25, // 팀에서 가장 몰리는 선수의 초과 비중 1.0당 동료의 성공률 변화
   shotEnergy: 0.004, // 슛을 만들어 쏠 때마다 드는 체력
   keyPlayerMake: 0, // 에이스 슛 성공률 보정. 수비가 몰리는 손해는 crowdMake가 이미 반영한다
-  focusRead: { inside: -0.01, outside: 0 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
-  focusExploit: 0.4, // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정 (능력 차 1.0당). 잘못 맞추면 손해
+  focusRead: { inside: -0.012, outside: -0.008 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
+  // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정. 잘못 맞추면 손해.
+  // 약한 쪽 = 상대의 외곽 수비와 골밑 수비의 차이(softPivot이 리그 평균). 상대 전력이 아니라 '어느 쪽이 더 허술한가'만 보므로 약팀도 강팀의 빈틈을 노릴 수 있다
+  focusExploit: 1.6,
+  softPivot: 0.015,
+  prepSharp: 0.25, // 상대 분석(준비 보너스 1.0당): 약점을 노리는 공격·집중 마크의 효과가 이만큼 커진다
   paceOffense: 2, // 템포 1단계당 공격 시간 변화(초). 빠르게 뛰어도 공격권은 1할쯤만 는다 (크면 100점대 경기가 흔해진다)
   paceDefense: 1, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
   // 템포의 득실(1단계당). 빠르게: 속공으로 쉬운 슛이 늘지만 실책과 체력 소모도 는다. 느리게는 그 반대.
@@ -99,16 +103,16 @@ export const TUNING = {
   paceTovSkill: 0.25, // (상대 스틸 - 우리 볼 핸들링) 1.0당 턴오버 추가분
   paceDrain: 0.18, // 우리 선수 체력 소모 배율 변화
   paceDrainOpp: 0.07, // 따라 뛰는 상대의 체력 소모 배율 변화
-  deny: { usage: 0.4, make: -0.09, othersMake: 0.012 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
+  deny: { usage: 0.35, make: -0.12, othersMake: 0.02 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
-  zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
-  press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1 },
+  zone: { shooterBurn: 0.7, insideMake: -0.055, outsideMake: 0.05, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
+  press: { tovBase: 0.02, tovSkill: 0.45, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1 },
   // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
-  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56, read: -0.012 }, // read: 슛이 두 종류뿐이라 수비가 읽는다 (전체 슛 성공률 보정)
+  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56, read: -0.018 }, // read: 슛이 두 종류뿐이라 수비가 읽는다 (전체 슛 성공률 보정)
   // 스위치: 스크린에 오픈 3점을 덜 내주지만, 키 작은 수비수가 빅맨을 막는 미스매치를 상대가 노린다
-  switchD: { outsideMake: -0.012, postMake: 0.06, postMix: 1.35 },
+  switchD: { outsideMake: -0.025, postMake: 0.11, postMix: 1.35 },
   // 드롭: 빅맨이 골밑을 지켜 림 공격은 막지만 중거리 풀업은 내준다
-  drop: { rimMake: -0.03, midMake: 0.05, midMix: 1.5, threeMake: 0.005 },
+  drop: { rimMake: -0.05, midMake: 0.065, midMix: 1.5, threeMake: 0.01 },
   // 선수별 개인 지시
   roles: {
     aggressiveUsage: 1.45, aggressiveMake: -0.01, aggressiveTov: 1.3, // 적극 공격: 많이 쏘지만 무리한 슛도 섞인다
@@ -210,6 +214,7 @@ interface GameTeam {
   subs: number;
   run: number;
   timeoutsLeft: number;
+  plan: number; // 상대 분석으로 다듬은 경기 계획의 날카로움 (1 = 분석 없음)
 }
 
 // 준비 보너스: 이 경기에서만 키를 뺀 능력치를 올린 것처럼 계산한다 (표시용 종합 능력치는 그대로)
@@ -245,6 +250,7 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
     court: players.slice(0, 5), // 슬롯 순서 = 포지션 1~5
     auto, score: 0, teamFouls: 0, possessions: 0, subs: 0, run: 0,
     timeoutsLeft: T.timeouts.firstHalf,
+    plan: 1 + T.prepSharp * prep,
   };
 }
 
@@ -552,8 +558,11 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       // 공격 중심이 상대 수비의 약한 쪽을 노리면 더 잘 들어간다 (반대로 강한 쪽을 노리면 손해)
       if (off.tactics.focus === 'inside' && inside) pMake += T.focusRead.inside;
       if (off.tactics.focus === 'outside' && !inside) pMake += T.focusRead.outside;
-      if (T.focusExploit && off.tactics.focus === 'inside' && inside) pMake += T.focusExploit * (Math.max(avg(off, 'rim'), avg(off, 'post')) - avg(def, 'defInterior'));
-      if (T.focusExploit && off.tactics.focus === 'outside' && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+      // soft > 0: 상대는 골밑 수비가 상대적으로 허술하다. soft < 0: 외곽 수비가 허술하다
+      const soft = avg(def, 'defPerimeter') - avg(def, 'defInterior') - T.softPivot;
+      const exploit = (x: number) => T.focusExploit * (x > 0 ? x * off.plan : x);
+      if (off.tactics.focus === 'inside' && inside) pMake += exploit(soft);
+      if (off.tactics.focus === 'outside' && !inside) pMake += exploit(-soft);
       if (off.tactics.pace) pMake += off.tactics.pace * (T.paceMake + T.paceEnergyEdge * (avgEnergy(off) - avgEnergy(def))); // 속공: 상대가 지쳐 있을수록 잘 통한다
       if (shooter.id === off.tactics.keyPlayerId) pMake += T.keyPlayerMake;
       pMake += T.crowdMake * Math.max(0, share - T.crowdFrom); // 공이 몰리는 선수에겐 수비도 몰린다
@@ -561,7 +570,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       if (off.tactics.focus === 'spread') {
         pMake += T.spread.read;
         if (type === 'rim') pMake += T.spread.rimSpacing * (avg(off, 'three') - T.spread.spacingPivot); // 슈터가 많으면 돌파 공간이 열리고, 없으면 막힌다
-        if (T.focusExploit && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+        if (!inside) pMake += exploit(-soft);
       }
       if (def.tactics.defense === 'switch') pMake += type === 'post' ? T.switchD.postMake : inside ? 0 : T.switchD.outsideMake;
       if (def.tactics.defense === 'drop') pMake += type === 'rim' ? T.drop.rimMake : type === 'mid' ? T.drop.midMake : type === 'three' ? T.drop.threeMake : 0;
@@ -572,7 +581,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       if (guardRole === 'tight') pMake += T.roles.tightMake;
       else if (guardRole === 'safe') pMake += T.roles.safeMake;
       if (pressing && type === 'rim') pMake += T.press.rimMake; // 프레스가 뚫리면 쉬운 득점
-      if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make : T.deny.othersMake;
+      if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make * def.plan : T.deny.othersMake;
       if (off.run >= T.runThreshold) pMake += Math.min(T.runBoostMax, off.run * T.runBoostPerPoint); // 기세
       if (tip) pMake += T.putbackMake;
       if (period >= 3 && diff >= T.coastMargin) pMake += T.coastMake; // 크게 앞서면 무리하지 않는다

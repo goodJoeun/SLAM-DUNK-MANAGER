@@ -33,7 +33,7 @@ function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: bool
       <button className={`opt ${selected ? 'on' : ''}`} disabled={!prep.canScout} onClick={onPick} style={{ opacity: prep.canScout ? 1 : 0.55 }}>
         <b>{prep.opponent} 분석·대비</b>
         <span>
-          {prep.canScout ? '영상 분석과 맞춤 연습. 1일째는 주요 선수와 전술, 2일째는 강점·약점과 대응 실마리, 3일째는 선수별 성향과 벤치를 알아냅니다. 그날은 성장 훈련을 하지 않고, 컨디션은 조금만 씁니다.' : reason}
+          {prep.canScout ? '영상 분석과 맞춤 연습. 1일째는 주요 선수와 전술, 2일째는 강점·약점과 대응 실마리, 3일째는 선수별 성향과 벤치를 알아냅니다. 분석한 만큼 그 경기에서 능력치가 오르고, 상대의 허술한 쪽을 노리는 공격과 집중 마크도 더 잘 통합니다. 그날은 성장 훈련을 하지 않고, 컨디션은 조금만 씁니다.' : reason}
           {prep.canScout && reach < max && ` 이번 경기는 남은 훈련일이 모자라 ${reach}일까지만 분석할 수 있습니다.`}
         </span>
       </button>

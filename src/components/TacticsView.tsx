@@ -11,9 +11,9 @@ import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBa
 import type { ViewProps } from './ui';
 
 const FOCUS_INFO: Record<Focus, string> = {
-  balanced: '슛 종류를 고르게 나눕니다.',
-  inside: '골밑슛과 포스트업 비중을 높이고, 안쪽에 강한 선수에게 공이 갑니다.',
-  outside: '3점슛 비중을 높이고, 슈터에게 공이 갑니다.',
+  balanced: '슛 종류를 고르게 나눕니다. 상대 수비에 허술한 쪽이 따로 없을 때 무난합니다.',
+  inside: '골밑슛과 포스트업 비중을 높이고, 안쪽에 강한 선수에게 공이 갑니다. 상대의 골밑 수비가 외곽 수비보다 허술할 때 잘 통하고, 반대면 손해입니다.',
+  outside: '3점슛 비중을 높이고, 슈터에게 공이 갑니다. 상대의 외곽 수비가 골밑 수비보다 허술할 때 잘 통하고, 반대면 손해입니다.',
   spread: '최신 5아웃 스페이싱. 다섯 명이 모두 외곽에 서서 골밑 돌파와 3점만 노리고 중거리는 버립니다. 슈터가 많을수록 돌파 공간이 넓어집니다.',
 };
 const DEFENSE_INFO: Record<Defense, string> = {
@@ -91,7 +91,7 @@ export default function TacticsView({ S, act }: ViewProps) {
   const adviceKey = `${S.career.year}-${S.career.dayIndex}-${sparring.id}-${scoutDays}-${starters.map((p) => p.id).join(',')}-${t.keyPlayerId ?? ''}-${t.denyPlayerId ?? ''}`;
   const [advice, setAdvice] = useState<{ key: string; tip: TacticsAdvice } | null>(null);
   useEffect(() => {
-    const timer = setTimeout(() => setAdvice({ key: adviceKey, tip: adviseTactics(team, sparring, scoutDays, S.career.seed + S.career.dayIndex * 1000) }), 30);
+    const timer = setTimeout(() => setAdvice({ key: adviceKey, tip: adviseTactics(team, sparring, scoutDays, S.career.seed + S.career.dayIndex * 1000, prep?.bonus ?? 0) }), 30);
     return () => clearTimeout(timer);
     // adviceKey가 팀·상대·분석 일수를 모두 담고 있다
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,7 +3,7 @@
 //   node scripts/underdog.ts quick    표본을 줄여 빠르게
 //   node scripts/underdog.ts prep     경기 전 준비(상대 분석) 효과만
 //
-// 감독이 한 경기 안에서 고를 수 있는 것: 공격 중심(3) × 수비(3) × 템포(3), 에이스 지정, 상대 에이스 집중 마크.
+// 감독이 한 경기 안에서 고를 수 있는 것: 공격 중심(4) × 수비(5) × 템포(3), 에이스 지정, 상대 에이스 집중 마크.
 //   평범한 감독: 게임의 AI 감독과 같은 규칙으로 전술을 고른다 (pickTactics)
 //   최선의 감독: 연습 경기로 가장 좋은 조합을 찾은 뒤, 새로운 경기들에서 승률을 잰다 (고른 경기와 잰 경기가 다르다)
 //   최악의 감독: 같은 방법으로 가장 나쁜 조합을 고른다
@@ -26,8 +26,8 @@ const ORIGINAL_EVAL = QUICK ? 240 : 1200; // 원작 학교 대진은 더 많이 
 const MATCHUPS = QUICK ? 6 : 12; // 전력 차이마다 무작위 대진 수
 const GAPS = [0, 3, 6, 9, 12, 15, 20]; // 생성 수준 차이 (약팀 50 고정)
 
-const FOCI: Focus[] = ['balanced', 'inside', 'outside'];
-const DEFENSES: Defense[] = ['man', 'zone', 'press'];
+const FOCI: Focus[] = ['balanced', 'inside', 'outside', 'spread'];
+const DEFENSES: Defense[] = ['man', 'zone', 'press', 'switch', 'drop'];
 const PACES = [-1, 0, 1];
 const FOCUS_LABEL: Record<Focus, string> = { balanced: '균형', inside: '골밑', outside: '외곽', spread: '5아웃' };
 const DEFENSE_LABEL: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스', switch: '스위치', drop: '드롭' };
