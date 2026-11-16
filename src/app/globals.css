@@ -285,6 +285,17 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .kv b { font-size: 18px; font-variant-numeric: tabular-nums; }
 
 .notice { padding: 10px 12px; border-radius: 7px; border-left: 3px solid var(--club); background: color-mix(in srgb, var(--club) 14%, transparent); font-weight: 600; }
+.brief { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px 20px; padding: 10px 12px; border-radius: 7px; background: var(--panel-2); font-size: 12.5px; }
+.brief h3 { margin-bottom: 2px; }
+.brief .lines li { padding: 5px 0; }
+.brief .lines li b { text-align: right; }
+@media (max-width: 700px) { .brief { grid-template-columns: minmax(0, 1fr); } }
+.match-side .feed > .feed-head { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 6px; padding: 4px 12px; border-bottom: 1px solid var(--line-soft); background: var(--panel); font-size: 11px; color: var(--faint); }
+.quarters { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.quarters th, .quarters td { padding: 4px 6px; text-align: center; border-bottom: 1px solid var(--line-soft); }
+.quarters th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+.quarters td:first-child, .quarters th:first-child { text-align: left; }
+.quarters td:last-child { font-weight: 800; }
 .notice.good { border-color: var(--good); background: color-mix(in srgb, var(--good) 13%, transparent); }
 .notice.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }
 

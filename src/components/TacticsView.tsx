@@ -4,6 +4,7 @@ import { teamOverall } from '@/game/school';
 import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
 import { today } from '@/game/season';
+import { scoutReport } from '@/game/scouting';
 import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, userTeam } from './ui';
 import type { ViewProps } from './ui';
 
@@ -57,6 +58,8 @@ function Choice<K extends string>({ options, info, value, onChange }: {
 
 export default function TacticsView({ S, act }: ViewProps) {
   const prep = today(S.career)?.prep; // 다음 공식전 상대 분석으로 세운 코치의 계획
+  const oppTeam = prep && prep.days > 0 ? S.career.teams[prep.opponentId] : undefined;
+  const oppTactics = oppTeam ? scoutReport(oppTeam, prep!.days).tactics : '';
   const team = userTeam(S.career);
   const t = team.tactics;
   const starters = team.players.slice(0, 5);
@@ -86,20 +89,11 @@ export default function TacticsView({ S, act }: ViewProps) {
       <PageTitle title="전술" sub="경기 시작 때 적용됩니다. 직접 지휘하는 경기에서는 도중에 바꿀 수 있습니다." />
       {prep && prep.days > 0 && (
         <div className="notice">
-          다음 공식전 <b>{prep.opponent}</b> · 상대 분석 {prep.days}일 · 그 경기 능력치 +{prep.bonus.toFixed(1)}. 코치의 분석 보고서는 받은 소식에 있습니다. 어떤 전술로 맞설지는 감독이 정합니다.
+          다음 공식전 <b>{prep.opponent}</b> · 상대 분석 {prep.days}일 · 그 경기 능력치 +{prep.bonus.toFixed(1)}.{oppTactics && <> 상대가 즐겨 쓰는 전술: <b>{oppTactics}</b>.</>} 코치의 분석 보고서는 받은 소식에 있습니다. 어떤 전술로 맞설지는 감독이 정합니다.
         </div>
       )}
       <div className="split">
         <div className="stack">
-          <Panel title="공격 중심">
-            <Choice options={FOCUS} info={FOCUS_INFO} value={focus} onChange={(v) => act('tactic', 'focus', v)} />
-          </Panel>
-          <Panel title="수비">
-            <Choice options={DEFENSE} info={DEFENSE_INFO} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
-          </Panel>
-          <Panel title="템포">
-            <Choice options={PACE} info={PACE_INFO} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
-          </Panel>
           <Panel title="코치 조언">
             <div className="advice">
               <Icon name="bulb" />
@@ -115,6 +109,15 @@ export default function TacticsView({ S, act }: ViewProps) {
                 )}
               </div>
             </div>
+          </Panel>
+          <Panel title="공격 중심">
+            <Choice options={FOCUS} info={FOCUS_INFO} value={focus} onChange={(v) => act('tactic', 'focus', v)} />
+          </Panel>
+          <Panel title="수비">
+            <Choice options={DEFENSE} info={DEFENSE_INFO} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
+          </Panel>
+          <Panel title="템포">
+            <Choice options={PACE} info={PACE_INFO} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
           </Panel>
         </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { today } from '@/game/season';
-import type { BoxTeam, PlayerRole, PlayerView, TeamView } from '@/game/types';
+import type { BoxTeam, LogEvent, PlayerRole, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
 import { ALERTS, FEED_MODES, KEY_EVENT, SPEEDS, periodLabel } from './live';
 import type { AlertKey, FeedMode, SpeedKey } from './live';
@@ -96,9 +96,10 @@ function Compare({ box }: { box: BoxTeam[] }) {
 const MADE = /성공|블록|스틸/;
 
 // 경기 종료 창: 승패, 최종 점수, 양 팀 최다 득점자
-function EndModal({ view, box, side, label, onFinish, onClose }: {
+function EndModal({ view, box, log, side, label, onFinish, onClose }: {
   view: { teams: TeamView[]; period: number };
   box: BoxTeam[];
+  log: LogEvent[];
   side: number;
   label: string;
   onFinish: () => void;
@@ -112,6 +113,14 @@ function EndModal({ view, box, side, label, onFinish, onClose }: {
   const [h, a] = view.teams;
   const won = view.teams[side].score > view.teams[1 - side].score;
   const top = (t: BoxTeam) => t.players.reduce((x, y) => (y.pts > x.pts ? y : x));
+  // 쿼터별 득점: 중계 기록에서 각 쿼터의 마지막 점수를 찾아 앞 쿼터와의 차이를 구한다
+  const ends: [number, number][] = [];
+  for (const e of log) {
+    const [x, y] = e.score.split('-').map(Number);
+    if (Number.isFinite(x) && Number.isFinite(y)) ends[e.period - 1] = [x, y];
+  }
+  if (ends.length) ends[ends.length - 1] = [h.score, a.score];
+  const quarters = ends.map((q, i) => { const prev = ends[i - 1] ?? [0, 0]; return [q[0] - prev[0], q[1] - prev[1]]; });
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="end-title" onClick={(e) => e.stopPropagation()}>
@@ -122,6 +131,16 @@ function EndModal({ view, box, side, label, onFinish, onClose }: {
           <span className="num">{h.score} : {a.score}</span>
           <div><Crest name={a.name} size={40} /><b>{a.name}</b></div>
         </div>
+        {quarters.length > 1 && (
+          <table className="quarters">
+            <thead><tr><th />{quarters.map((_, i) => <th key={i}>{i < 4 ? `${i + 1}Q` : `연장${i - 3}`}</th>)}<th>합계</th></tr></thead>
+            <tbody>
+              {[h, a].map((t, s) => (
+                <tr key={t.name}><td>{t.name}</td>{quarters.map((q, i) => <td key={i}>{q[s]}</td>)}<td>{t.score}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         <ul className="lines">
           {box.map((t) => {
             const p = top(t);
@@ -187,7 +206,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   return (
     <div className="page" style={colors}>
       {ended && !m.endSeen && (
-        <EndModal view={live} box={m.game.result().box} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
+        <EndModal view={live} box={m.game.result().box} log={m.game.result().log} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
       )}
       <div className="scorebar">
         <Side team={v.teams[0]} mine={m.side === 0} prep={m.side === 0 ? prepBonus : 0} />
@@ -315,6 +334,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>
               ) : (
                 <div className="feed">
+                  {feed.length > 0 && <div className="feed-head"><span>시간</span><span>점수는 {v.teams[0].name} - {v.teams[1].name} 순 · 색칠된 줄이 우리 팀</span></div>}
                   {feed.length
                     ? feed.map((e, i) => (
                       <div key={`${feed.length - i}-${e.clock}`} className={e.team === mine.name ? 'mine' : ''}>

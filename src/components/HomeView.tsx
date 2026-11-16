@@ -4,8 +4,9 @@ import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
 import { StandingsTable } from './CompView';
 import {
-  Attr, CalendarStrip, CondBar, Crest, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, clubColor, mean, teamName, userTeam,
+  Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, clubColor, mean, teamName, userTeam,
 } from './ui';
+import { scoutReport } from '@/game/scouting';
 import type { ViewProps } from './ui';
 
 const STAGE_SHORT: Record<string, string> = { group: '조별 리그', finalLeague: '결승 리그', playoff: '플레이오프', knockout: '토너먼트', national: '전국 대회', done: '종료' };
@@ -15,6 +16,38 @@ function nextFixture(c: Career) {
     if (c.calendar[i].type !== 'training') return { inDays: i - c.dayIndex, day: c.calendar[i] };
   }
   return null;
+}
+
+// 경기 당일의 상대 정보. 주요 선수는 누구나 아는 정보이고, 전술과 강·약점은 상대 분석을 한 만큼만 보인다.
+function OpponentBrief({ S, d }: { S: PlayingState; d: Today }) {
+  const m = d.userMatch;
+  const opp = m && S.career.teams[m.opponentId];
+  if (!m || !opp) return null;
+  const days = m.official && d.prep?.daysUntil === 0 && d.prep.opponentId === m.opponentId ? d.prep.days : 0;
+  const report = scoutReport(opp, days);
+  const mine = userTeam(S.career).tactics;
+  return (
+    <div className="brief">
+      <div>
+        <h3 className="hint">{m.opponent} 주요 선수</h3>
+        <ul className="lines">
+          {report.players.map((p) => <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={p.ovr} /></li>)}
+        </ul>
+      </div>
+      <div>
+        <h3 className="hint">상대 분석 {days ? `${days}일` : '없음'}</h3>
+        {days ? (
+          <ul className="lines">
+            <li><span>즐겨 쓰는 전술</span><b>{report.tactics}</b></li>
+            {report.sections.flatMap((sec) => sec.lines).map((l) => <li key={l}><span>{l}</span></li>)}
+          </ul>
+        ) : (
+          <p className="muted">{m.official ? '이 경기는 상대 분석 없이 치릅니다. 공식전 전에 훈련 대신 상대 분석을 하면 상대의 전술과 강·약점을 미리 알 수 있습니다.' : '연습 경기는 상대 분석 없이 치릅니다.'}</p>
+        )}
+        <p className="hint">우리 전술: {FOCUS[mine.focus ?? 'balanced']} 공격 · {DEFENSE[mine.defense ?? 'man']} 수비</p>
+      </div>
+    </div>
+  );
 }
 
 function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Today; team: Team }) {
@@ -41,7 +74,9 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
             ? <span className="pill good">상대 분석 {d.prep.days}일 · 능력치 +{d.prep.bonus.toFixed(1)}</span>
             : null}</p>
         )}
+        <OpponentBrief S={S} d={d} />
         <div className="row" style={{ justifyContent: 'center' }}>
+          <button className="btn" onClick={() => act('screen', 'tactics')}><Icon name="tactics" />전술·선발 확인</button>
           <button className="btn primary" onClick={() => act('command')}>벤치에서 직접 지휘</button>
           <button className="btn" onClick={() => act('simulate')}>결과만 보기</button>
         </div>
@@ -71,7 +106,7 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
             다음 공식전 <b>{prep.opponent}</b> ({prep.daysUntil}일 후) · 상대 분석 {prep.days}/{PREPARATION.maxDays}일
             {prep.days > 0 && <> · 그 경기 능력치 +{prep.bonus.toFixed(1)}</>}
           </span>
-          {prep.canScout && S.program !== 'scout' && <button className="btn small primary" onClick={() => act('program', 'scout')}>오늘 상대 분석하기</button>}
+          {prep.canScout && S.program !== 'scout' && <button className="btn small primary" onClick={() => act('program', 'scout')} title="오늘의 훈련 메뉴를 상대 분석으로 바꿉니다. 날짜는 '계속'을 눌러야 넘어갑니다.">오늘 훈련을 상대 분석으로</button>}
           {S.program === 'scout' && <span className="pill club">오늘 분석 예정</span>}
         </div>
       )}

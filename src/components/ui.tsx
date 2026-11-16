@@ -252,15 +252,20 @@ export function BoxTable({ team }: { team: BoxTeam }) {
 
 export function GrowthList({ growth }: { growth: GrowthEvent[] }) {
   if (!growth.length) return <p className="muted">눈에 띄게 오른 능력치가 없습니다.</p>;
-  const by: Record<string, Record<string, number>> = {};
-  for (const g of growth) (by[g.name] ??= {})[g.label] = g.to;
+  // 능력치는 한 번에 1씩 오르므로, 같은 항목의 가장 낮은 기록과 가장 높은 기록으로 상승폭을 구한다
+  const by: Record<string, Record<string, { lo: number; to: number }>> = {};
+  for (const g of growth) {
+    const ups = (by[g.name] ??= {});
+    const u = ups[g.label];
+    ups[g.label] = u ? { lo: Math.min(u.lo, g.to), to: Math.max(u.to, g.to) } : { lo: g.to, to: g.to };
+  }
   return (
     <ul className="lines">
       {Object.entries(by).map(([name, ups]) => (
         <li key={name}>
           <b>{name}</b>
           <span className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-            {Object.entries(ups).map(([label, to]) => <span key={label} className="pill good">{label} {to}</span>)}
+            {Object.entries(ups).map(([label, u]) => <span key={label} className="pill good" title={`${u.lo - 1} → ${u.to}`}>{label} {u.to} <b>+{u.to - u.lo + 1}</b></span>)}
           </span>
         </li>
       ))}
