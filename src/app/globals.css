@@ -82,7 +82,7 @@ p { margin: 0; }
   grid-column: 1 / -1;
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 16px;
-  min-height: var(--header-h); padding: 10px 18px;
+  min-height: 62px; padding: 10px 18px; /* --header-h는 이 머리띠를 잰 값이라 여기에 쓰면 한번 커진 높이가 줄지 않는다 */
   background: linear-gradient(90deg, var(--club) 0, color-mix(in srgb, var(--club) 30%, var(--panel)) 260px, var(--panel) 560px);
   border-bottom: 1px solid var(--line);
 }
@@ -422,11 +422,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .sb-mid .clock { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .sb-mid .q { font-size: 12px; font-weight: 700; color: var(--muted); }
 .controls-bar { display: flex; flex-wrap: wrap; gap: 8px; }
-.match-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.95fr); gap: 14px; align-items: start; }
-@media (max-width: 1150px) {
-  .match-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .match-grid > :last-child { grid-column: 1 / -1; }
-}
+.match-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 @media (max-width: 760px) {
   .match-grid { grid-template-columns: minmax(0, 1fr); }
   .scorebar { gap: 8px; padding: 12px; }
@@ -544,10 +540,24 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
   .fullcourt .nm { fill: #1d232b; stroke: rgb(255 255 255 / 0.7); }
   .fullcourt .nm.mine { fill: #000; }
 }
-.match-main { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-@media (max-width: 1050px) { .match-main { grid-template-columns: minmax(0, 1fr); } }
-.court-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--muted); }
-.court-legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+/* 코트 옆에 코트 위 다섯 명과 중계를 붙인다. 옆 칸은 코트 높이에 맞춰 늘어나고 중계만 안에서 스크롤한다 */
+.match-main { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.match-main > .panel > .panel-b { flex: 1 1 auto; align-content: space-between; }
+.match-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.match-side .bench-row:first-child { border-top: 0; }
+.match-side .side-live { flex: 1 1 0; min-height: 240px; }
+.match-side .side-live > .panel-b { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.match-side .side-live .seg button { padding: 4px 9px; font-size: 12px; }
+.match-side .feed { max-height: none; overflow: visible; }
+.match-side .feed > div { grid-template-columns: 50px 40px minmax(0, 1fr); gap: 6px; padding: 5px 12px; }
+.match-side .empty { padding: 24px 12px; }
+.court-tactics { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+.court-tactics > .controls { flex: 2 1 200px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.court-tactics > .controls:first-child { flex: 3 1 300px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  .match-main { grid-template-columns: minmax(0, 1fr); }
+  .match-side .side-live { flex: none; height: 320px; }
+}
 .fullcourt .caption { fill: var(--text); font-size: 0.72px; font-weight: 800; text-anchor: middle; letter-spacing: 0.02em; }
 @media (max-width: 700px) {
   .fullcourt .body { r: 0.62px; }

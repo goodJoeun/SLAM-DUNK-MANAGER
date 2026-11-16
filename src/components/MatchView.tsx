@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { today } from '@/game/season';
 import type { BoxTeam, PlayerRole, PlayerView, TeamView } from '@/game/types';
@@ -163,6 +163,16 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const feed = (prefs.feed === 'key' ? m.feed.filter((e) => KEY_EVENT.test(e.text)) : m.feed).slice(0, 150);
   const colors = { '--home': clubColor(v.teams[0].name), '--away': clubColor(v.teams[1].name) } as CSSProperties;
 
+  // 코트 옆 패널: 중계(주요 장면·전체)와 코치 알림을 한 자리에서 바꿔 본다
+  const [sideTab, setSideTab] = useState<'feed' | 'notes'>('feed');
+  const sideTabs = { ...FEED_MODES, notes: m.notes.length ? `코치 알림 ${m.notes.length}` : '코치 알림' };
+  const pickSideTab = (k: string) => {
+    if (k === 'notes') { setSideTab('notes'); return; }
+    setSideTab('feed');
+    act('feedMode', k as FeedMode);
+  };
+  const outgoing = v.finished ? undefined : mine.court.find((p) => p.id === m.selected);
+
   // 마지막 공격권 연출까지 끝난 뒤에 종료 창을 띄운다
   const ended = live.finished && !m.pending;
 
@@ -220,15 +230,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             selected={m.selected}
             onPick={v.finished ? undefined : (id) => act('pick', 'court', id)}
           />
-          <div className="court-legend">
-            <span><i style={{ background: courtColors[0] }} />{v.teams[0].name}</span>
-            <span><i style={{ background: courtColors[1] }} />{v.teams[1].name}</span>
-            <span>숫자는 포지션(1 PG ~ 5 C) · 노란 고리는 공을 가진 선수 · 우리 선수를 누르면 교체할 선수로 고릅니다</span>
-          </div>
-        </Panel>
-        {/* 코트를 보면서 바로 지시할 수 있게 전술을 코트 옆에 둔다 */}
-        <div className="stack match-side">
-          <Panel title="전술" action={<span className="hint">경기 중에도 바로 적용</span>}>
+          {/* 코트를 보면서 바로 지시할 수 있게 전술을 코트 바로 아래에 한 줄로 둔다 */}
+          <div className="court-tactics" title="경기 중에도 바로 적용됩니다">
             <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
             <div className="controls">
               <label className="hint">에이스 지정
@@ -238,27 +241,69 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
               </label>
             </div>
+          </div>
+        </Panel>
+
+        {/* 코트 옆: 코트 위 다섯 명(체력·득점·파울)과 중계. 교체할 선수를 고르면 중계 자리에 벤치가 뜬다 */}
+        <div className="match-side">
+          <Panel title="코트 위 5명" flush action={<span className="hint">누르면 교체 · 막대는 체력</span>}>
+            {mine.court.map((p) => (
+              <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={v.finished ? undefined : () => act('pick', 'court', p.id)} />
+            ))}
           </Panel>
-          <Panel title="코치 알림" flush>
-            {m.notes.length ? (
-              <ul className="notes">
-                {m.notes.slice(0, 5).map((n) => (
-                  <li key={n.id} className={`tone-${n.tone}`}>
-                    <Icon name={NOTE_ICON[n.tone]} />
-                    <span>{n.text}{n.paused && <span className="pill" style={{ marginLeft: 6 }}>자동 정지</span>}</span>
-                    <span className="t">{n.period > 4 ? '연장' : `${n.period}Q`} {n.clock}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>}
-          </Panel>
+
+          {outgoing ? (
+            <Panel
+              title={`${outgoing.name} 대신 들어갈 선수`}
+              flush
+              className="side-live"
+              action={<button className="btn ghost small" onClick={() => act('pick', 'court', outgoing.id)}>취소</button>}
+            >
+              {mine.bench.map((p) => (
+                <PlayerRow key={p.id} player={p} onClick={() => act('pick', 'bench', p.id)} />
+              ))}
+            </Panel>
+          ) : (
+            <Panel
+              title="중계"
+              flush
+              className="side-live"
+              action={<Seg options={sideTabs} value={sideTab === 'notes' ? 'notes' : prefs.feed} onChange={pickSideTab} />}
+            >
+              {sideTab === 'notes' ? (
+                m.notes.length ? (
+                  <ul className="notes">
+                    {m.notes.map((n) => (
+                      <li key={n.id} className={`tone-${n.tone}`}>
+                        <Icon name={NOTE_ICON[n.tone]} />
+                        <span>{n.text}{n.paused && <span className="pill" style={{ marginLeft: 6 }}>자동 정지</span>}</span>
+                        <span className="t">{n.period > 4 ? '연장' : `${n.period}Q`} {n.clock}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="empty">개입이 필요한 순간이 오면 코치가 알려 드립니다.</p>
+              ) : (
+                <div className="feed">
+                  {feed.length
+                    ? feed.map((e, i) => (
+                      <div key={`${feed.length - i}-${e.clock}`} className={e.team === mine.name ? 'mine' : ''}>
+                        <span className="t">{e.period > 4 ? '연장' : `${e.period}Q`} {e.clock}</span>
+                        <span className="t">{e.score}</span>
+                        <span className={MADE.test(e.text) ? 'made' : ''}>{e.text}</span>
+                      </div>
+                    ))
+                    : <p className="empty">{started ? '아직 주요 장면이 없습니다.' : '경기 시작을 누르면 중계가 여기에 나옵니다.'}</p>}
+                </div>
+              )}
+            </Panel>
+          )}
         </div>
       </div>
 
       <div className="match-grid">
-        <Panel title={`${mine.name} 선수`} flush>
+        <Panel title="벤치 · 개인 지시" flush>
           <div className="sub-hint">
-            {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트의 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 막대는 체력입니다. 선수마다 공격·수비 지시를 줄 수 있습니다.'}
+            {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 코트 위 선수에게는 공격·수비 지시를 줄 수 있습니다.'}
           </div>
           {mine.court.map((p) => (
             <div key={p.id}>
@@ -269,28 +314,11 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
           <div className="sub-hint">벤치</div>
           {mine.bench.map((p) => (
             <div key={p.id}>
-              <PlayerRow player={p} selected={m.selected === p.id} onClick={() => act('pick', 'bench', p.id)} />
-              <RoleRow role={t.roles?.[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
+              <PlayerRow player={p} onClick={() => act('pick', 'bench', p.id)} />
+              {/* 벤치 선수의 지시는 미리 정해 둔 것만 보여 줘 목록을 짧게 유지한다 */}
+              {t.roles?.[p.id] && <RoleRow role={t.roles[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />}
             </div>
           ))}
-        </Panel>
-
-        <Panel
-          title="중계"
-          flush
-          action={<Seg options={FEED_MODES} value={prefs.feed} onChange={(k) => act('feedMode', k as FeedMode)} />}
-        >
-          <div className="feed">
-            {feed.length
-              ? feed.map((e, i) => (
-                <div key={`${feed.length - i}-${e.clock}`} className={e.team === mine.name ? 'mine' : ''}>
-                  <span className="t">{e.period > 4 ? '연장' : `${e.period}Q`} {e.clock}</span>
-                  <span className="t">{e.score}</span>
-                  <span className={MADE.test(e.text) ? 'made' : ''}>{e.text}</span>
-                </div>
-              ))
-              : <p className="empty">{started ? '아직 주요 장면이 없습니다.' : '경기 시작을 누르면 중계가 여기에 나옵니다.'}</p>}
-          </div>
         </Panel>
 
         <div className="stack">
