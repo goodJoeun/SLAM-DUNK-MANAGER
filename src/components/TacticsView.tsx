@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { composites, overall } from '@/game/engine';
 import { teamOverall } from '@/game/school';
 import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
 import { today } from '@/game/season';
 import { scoutReport } from '@/game/scouting';
+import { adviseTactics } from '@/game/advice';
+import type { TacticsAdvice } from '@/game/advice';
 import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, userTeam } from './ui';
 import type { ViewProps } from './ui';
 
@@ -27,15 +29,10 @@ const PACE_INFO: Record<string, string> = {
   1: '속공으로 쉬운 득점을 노립니다. 실책과 체력 소모가 늘어, 볼 핸들링과 체력·벤치가 좋은 팀에 맞습니다. 공격권이 많아져 전력이 앞설 때 유리합니다.',
 };
 
-// AI 감독과 같은 기준으로 선발 다섯 명에 맞는 전술을 권한다
-function advise(cs: Composites[]) {
+// 선발 다섯 명의 득점 성향 (+면 안쪽, -면 외곽)
+function scoringLean(cs: Composites[]) {
   const avg = (f: (c: Composites) => number) => mean(cs.map(f));
-  const lean = avg((c) => Math.max(c.rim, c.post)) - avg((c) => Math.max(c.mid, c.three));
-  const focus: Focus = lean > 0.03 ? 'inside' : lean < -0.03 ? 'outside' : 'balanced';
-  let defense: Defense = 'man';
-  if (avg((c) => c.defInterior) - avg((c) => c.defPerimeter) > 0.02) defense = 'zone';
-  else if (avg((c) => c.stealing) + avg((c) => c.endurance) > 1.1) defense = 'press';
-  return { focus, defense, lean };
+  return avg((c) => Math.max(c.rim, c.post)) - avg((c) => Math.max(c.mid, c.three));
 }
 
 function Choice<K extends string>({ options, info, value, onChange }: {
@@ -64,7 +61,23 @@ export default function TacticsView({ S, act }: ViewProps) {
   const t = team.tactics;
   const starters = team.players.slice(0, 5);
   const bench = team.players.slice(5);
-  const tip = advise(starters.map(composites));
+  const lean = scoringLean(starters.map(composites));
+  // 코치 조언: 다음 상대(정해지지 않았으면 현 내 중간 수준의 학교)와 모의 경기를 돌려 본 결과.
+  // 수백 경기를 돌리므로 화면을 먼저 그린 뒤 계산한다. 같은 날·같은 선발·같은 상대면 다시 계산하지 않는다.
+  const day = today(S.career);
+  const rivals = S.career.regionIds.filter((id) => id !== team.id).map((id) => S.career.teams[id]).sort((a, b) => a.prestige - b.prestige);
+  const nextId = day?.userMatch?.opponentId ?? prep?.opponentId;
+  const sparring = (nextId ? S.career.teams[nextId] : undefined) ?? rivals[Math.floor(rivals.length / 2)];
+  const scoutDays = prep && prep.opponentId === sparring.id ? prep.days : 0;
+  const adviceKey = `${S.career.year}-${S.career.dayIndex}-${sparring.id}-${scoutDays}-${starters.map((p) => p.id).join(',')}-${t.keyPlayerId ?? ''}-${t.denyPlayerId ?? ''}`;
+  const [advice, setAdvice] = useState<{ key: string; tip: TacticsAdvice } | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setAdvice({ key: adviceKey, tip: adviseTactics(team, sparring, scoutDays, S.career.seed + S.career.dayIndex * 1000) }), 30);
+    return () => clearTimeout(timer);
+    // adviceKey가 팀·상대·분석 일수를 모두 담고 있다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adviceKey]);
+  const tip = advice?.key === adviceKey ? advice.tip : null;
   const focus = t.focus ?? 'balanced';
   const defense = t.defense ?? 'man';
   const pace = String(Math.round(t.pace ?? 0));
@@ -99,12 +112,15 @@ export default function TacticsView({ S, act }: ViewProps) {
               <Icon name="bulb" />
               <div className="stack" style={{ gap: 4 }}>
                 <span>
-                  선발 다섯 명은 {tip.lean > 0.03 ? '안쪽 득점' : tip.lean < -0.03 ? '외곽슛' : '안팎 고른 득점'}에 강합니다.
-                  공격은 <b>{FOCUS[tip.focus]}</b>, 수비는 <b>{DEFENSE[tip.defense]}</b>를 권합니다.
+                  선발 다섯 명은 {lean > 0.03 ? '안쪽 득점' : lean < -0.03 ? '외곽슛' : '안팎 고른 득점'}에 강합니다.{' '}
+                  {tip
+                    ? <>{nextId ? <><b>{sparring.name}</b>전을</> : <>현 내 중간 수준의 상대를</>} 가정해 모의 경기를 돌려 보니 공격은 <b>{FOCUS[tip.focus]}</b>, 수비는 <b>{DEFENSE[tip.defense]}</b>, 템포는 <b>{PACE.find(([k]) => k === String(tip.pace))?.[1]}</b>{tip.pace === 0 ? '이' : '가'} 가장 잘 통했습니다.</>
+                    : <>코치가 모의 경기를 돌려 보는 중입니다…</>}
                 </span>
-                {(focus !== tip.focus || defense !== tip.defense) && (
+                {tip && <span className="hint">선택지마다 {tip.games}경기씩 돌려 본 결과라 빗나갈 수 있습니다. 공식전 상대를 분석한 날이 늘수록 더 많이 돌려 봅니다.</span>}
+                {tip && (focus !== tip.focus || defense !== tip.defense || pace !== String(tip.pace)) && (
                   <span>
-                    <button className="btn small" onClick={() => { act('tactic', 'focus', tip.focus); act('tactic', 'defense', tip.defense); }}>조언대로 바꾸기</button>
+                    <button className="btn small" onClick={() => { act('tactic', 'focus', tip.focus); act('tactic', 'defense', tip.defense); act('tactic', 'pace', String(tip.pace)); }}>조언대로 바꾸기</button>
                   </span>
                 )}
               </div>

@@ -106,7 +106,8 @@ export const SEASON = {
 // 경기 전 준비: 다음 공식전이 window일 안으로 다가오면 훈련 대신 상대를 분석할 수 있다.
 // 하루마다 그 상대와의 경기에서만 능력치(키 제외) +perDay, 최대 maxDays일까지 쌓인다. AI 학교는 준비하지 않는다.
 // 분석하면 코치가 상대 보고서를 준다 (scouting.ts). 보고서는 정보일 뿐이고, 어떻게 싸울지는 감독이 정한다.
-export const PREPARATION = { perDay: 1.4, maxDays: 3, window: 3 };
+// perDay가 크면 '공식전 전에는 무조건 분석'이 정답이 된다. 3일을 다 써도 전술 선택과 비슷한 크기가 되게 둔다.
+export const PREPARATION = { perDay: 0.8, maxDays: 3, window: 3 };
 
 const DAY_TYPE: Record<string, DayType> = { T: 'training', P: 'practice', M: 'official' };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));

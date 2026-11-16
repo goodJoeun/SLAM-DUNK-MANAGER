@@ -75,7 +75,7 @@ export const TUNING = {
   // 전술
   focusShotBoost: 2.0, // 중심 전술의 슛 종류 가중
   focusUsageBias: 1.0, // 중심 전술에 맞는 선수에게 공이 몰리는 정도
-  keyPlayerUsage: 1.6, // 에이스 지정: 공격 비중 증가
+  keyPlayerUsage: 1.35, // 에이스 지정: 공격 비중 증가. 진짜 에이스에게 몰아주면 조금 이득이고, 아닌 선수를 고르면 본전이다
   // 한 선수에게 슛이 몰리는 데는 한계가 있고(상한), 몰릴수록 수비가 쏠려 그 선수는 어렵게 쏘고 동료는 편해진다
   usageCap: 0.40, // 한 선수가 가져갈 수 있는 팀 슛 비중의 상한
   usageCapKey: 0.50, // 에이스로 지정하면 더 몰아줄 수 있다
@@ -83,8 +83,8 @@ export const TUNING = {
   crowdMake: -0.3, // 넘는 비중 1.0당 그 선수의 성공률 변화
   crowdOthersMake: 0.25, // 팀에서 가장 몰리는 선수의 초과 비중 1.0당 동료의 성공률 변화
   shotEnergy: 0.004, // 슛을 만들어 쏠 때마다 드는 체력
-  keyPlayerMake: -0.02, // 에이스에게 공이 몰리면 수비도 그쪽으로 몰린다 (에이스 슛 성공률 보정)
-  focusRead: { inside: -0.02, outside: 0.012 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
+  keyPlayerMake: 0, // 에이스 슛 성공률 보정. 수비가 몰리는 손해는 crowdMake가 이미 반영한다
+  focusRead: { inside: -0.01, outside: 0 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
   focusExploit: 0.4, // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정 (능력 차 1.0당). 잘못 맞추면 손해
   paceOffense: 4, // 템포 1단계당 공격 시간 변화(초)
   paceDefense: 2, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
@@ -101,7 +101,7 @@ export const TUNING = {
   zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
   press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1.5 },
   // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
-  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56 },
+  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56, read: -0.012 }, // read: 슛이 두 종류뿐이라 수비가 읽는다 (전체 슛 성공률 보정)
   // 스위치: 스크린에 오픈 3점을 덜 내주지만, 키 작은 수비수가 빅맨을 막는 미스매치를 상대가 노린다
   switchD: { outsideMake: -0.012, postMake: 0.06, postMix: 1.35 },
   // 드롭: 빅맨이 골밑을 지켜 림 공격은 막지만 중거리 풀업은 내준다
@@ -533,6 +533,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       pMake += T.crowdMake * Math.max(0, share - T.crowdFrom); // 공이 몰리는 선수에겐 수비도 몰린다
       if (!isTop) pMake += T.crowdOthersMake * Math.max(0, topShare - T.crowdFrom); // 그만큼 동료는 편해진다
       if (off.tactics.focus === 'spread') {
+        pMake += T.spread.read;
         if (type === 'rim') pMake += T.spread.rimSpacing * (avg(off, 'three') - T.spread.spacingPivot); // 슈터가 많으면 돌파 공간이 열리고, 없으면 막힌다
         if (T.focusExploit && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
       }
