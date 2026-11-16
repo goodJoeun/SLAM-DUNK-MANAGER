@@ -66,7 +66,7 @@ export function reviewMatch(mine: BoxTeam, opp: BoxTeam, tactics: Partial<Tactic
   const topShare = pct(top.fga, a.fga);
   lines.push(`${top.name} ${top.pts}점 (야투 ${top.fgm}/${top.fga})${topShare >= 35 ? ` — 팀 슛의 ${topShare}%를 혼자 던졌습니다. 의존도가 높습니다.` : '.'}`);
   const cold = mine.players.filter((p) => p !== top && p.fga >= 8 && pct(p.fgm, p.fga) < 30).sort((x, y) => y.fga - x.fga)[0];
-  if (cold) lines.push(`${cold.name}은(는) 야투 ${cold.fgm}/${cold.fga}로 부진했습니다.`);
+  if (cold) lines.push(`${cold.name}${(cold.name.charCodeAt(cold.name.length - 1) - 0xac00) % 28 > 0 ? '은' : '는'} 야투 ${cold.fgm}/${cold.fga}로 부진했습니다.`);
   const fouledOut = mine.players.filter((p) => p.pf >= 5).map((p) => p.name);
   if (fouledOut.length) lines.push(`${fouledOut.join(', ')} 5반칙 퇴장. 파울 관리가 필요합니다.`);
   const oppTop = opp.players.reduce((x, y) => (y.pts > x.pts ? y : x));
