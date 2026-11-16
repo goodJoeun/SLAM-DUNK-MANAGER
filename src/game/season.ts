@@ -24,7 +24,6 @@ import {
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName } from './competition.ts';
 import { DATASETS, buildSchool } from './dataset.ts';
-import { followed, makePlan } from './scouting.ts';
 import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
@@ -106,8 +105,8 @@ export const SEASON = {
 
 // 경기 전 준비: 다음 공식전이 window일 안으로 다가오면 훈련 대신 상대를 분석할 수 있다.
 // 하루마다 그 상대와의 경기에서만 능력치(키 제외) +perDay, 최대 maxDays일까지 쌓인다. AI 학교는 준비하지 않는다.
-// 보너스는 코치의 대응 계획(공격 중심·수비·집중 마크)을 경기 시작 때 따른 만큼 커진다. 하나도 안 따르면 baseShare만 받는다.
-export const PREPARATION = { perDay: 1.4, maxDays: 3, window: 3, baseShare: 0.4 };
+// 분석하면 코치가 상대 보고서를 준다 (scouting.ts). 보고서는 정보일 뿐이고, 어떻게 싸울지는 감독이 정한다.
+export const PREPARATION = { perDay: 1.4, maxDays: 3, window: 3 };
 
 const DAY_TYPE: Record<string, DayType> = { T: 'training', P: 'practice', M: 'official' };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
@@ -190,7 +189,6 @@ function startCompetition(state: Career, key: CompetitionKey, rng: Rng) {
   };
   state.comp = c;
   state.prep = {}; // 새 대회: 지난 대회를 위해 한 분석은 버린다
-  state.prepPlans = {};
   // 학교 수준(지난 성적 반영) 순으로 시드를 준다
   const seeded = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige);
   if (c.stage === 'knockout') {
@@ -227,13 +225,9 @@ function prepFor(state: Career, home: string, away: string, official: boolean): 
   return home === me ? [bonus, 0] : [0, bonus];
 }
 
-// 분석 일수 × 하루 보너스 × (계획을 따른 정도)
+// 분석 일수 × 하루 보너스
 function prepBonus(state: Career, opponentId: string) {
-  const days = Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0);
-  if (!days) return 0;
-  const plan = state.prepPlans?.[opponentId];
-  const share = plan ? followed(state.teams[state.userTeamId].tactics, plan) / 3 : 0;
-  return days * PREPARATION.perDay * (PREPARATION.baseShare + (1 - PREPARATION.baseShare) * share);
+  return Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0) * PREPARATION.perDay;
 }
 
 function playMatch(state: Career, ctx: DayContext, home: string, away: string, official: boolean): Match {
@@ -243,10 +237,9 @@ function playMatch(state: Career, ctx: DayContext, home: string, away: string, o
     ? (pre.finished ? pre.result() : pre.playToEnd())
     : simulateGame(state.teams[home], state.teams[away], { seed: ctx.rng.int(0, 2 ** 31), prep });
   if (home === state.userTeamId || away === state.userTeamId) {
-    // 준비와 계획은 그 경기로 끝난다. 그 상대를 위해 건 집중 마크도 푼다 (다른 학교 선수를 계속 마크하지 않게).
+    // 준비는 그 경기로 끝난다. 그 상대를 위해 건 집중 마크도 푼다 (다른 학교 선수를 계속 마크하지 않게).
     const opp = home === state.userTeamId ? away : home;
     delete state.prep?.[opp];
-    delete state.prepPlans?.[opp];
     delete state.teams[state.userTeamId].tactics.denyPlayerId;
   }
   if (official) recordStats(state, g.box);
@@ -498,13 +491,9 @@ export function upcomingOfficial(state: Career): PrepInfo | null {
   const opponentId = pairing.home === state.userTeamId ? pairing.away : pairing.home;
   const days = Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0);
   const daysUntil = next - state.dayIndex;
-  const plan = state.prepPlans?.[opponentId] ?? null;
   return {
     opponentId, opponent: state.teams[opponentId].name, label: pairing.label, daysUntil, days,
     bonus: prepBonus(state, opponentId),
-    maxBonus: days * PREPARATION.perDay,
-    plan,
-    followed: plan ? followed(state.teams[state.userTeamId].tactics, plan) : 0,
     canScout: daysUntil >= 1 && daysUntil <= PREPARATION.window && days < PREPARATION.maxDays,
   };
 }
@@ -542,10 +531,6 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
       if (choice.program === 'scout' && upcoming?.canScout) {
         const days = upcoming.days + 1;
         state.prep = { ...state.prep, [upcoming.opponentId]: days };
-        // 첫날 코치가 대응 계획을 세운다
-        if (!state.prepPlans?.[upcoming.opponentId]) {
-          state.prepPlans = { ...state.prepPlans, [upcoming.opponentId]: makePlan(team, state.teams[upcoming.opponentId]) };
-        }
         report.scout = upcomingOfficial(state);
       }
       report.training = choice;

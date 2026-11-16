@@ -67,13 +67,17 @@ function MessageBody({ m, career }: { m: Message; career: Career }) {
       if (!sc) return null;
       return (
         <>
-          <div className="notice good">{sc.label} · 분석 {sc.days}일 · 계획대로 하면 그 경기 능력치 +{sc.bonus.toFixed(1)}</div>
+          <div className="notice good">{sc.label} · 분석 {sc.days}일 · 그 경기 능력치 +{sc.bonus.toFixed(1)}</div>
           {sc.players.length > 0 && <><h3>주요 선수</h3>
             <ul className="lines">{sc.players.map((p) => <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={p.ovr} /></li>)}</ul></>}
           {sc.tactics && <><h3>즐겨 쓰는 전술</h3><p>{sc.tactics}</p></>}
-          {sc.hints.length > 0 && <><h3>코치의 대응 계획</h3><ul className="lines">{sc.hints.map((h) => <li key={h}><span>{h}</span></li>)}</ul></>}
-          {sc.hints.length > 0 && <p className="hint">경기 시작 때 팀 전술이 이 계획(공격 중심·수비·집중 마크)을 따를수록 준비 보너스가 커집니다. 하나도 따르지 않으면 {Math.round(PREPARATION.baseShare * 100)}%만 받습니다. 훈련·전술 화면에서 한 번에 적용할 수 있습니다.</p>}
-          {!sc.players.length && <p className="muted">분석을 하루 더 하면 그 경기에서 받는 보너스가 커집니다 (최대 {Math.round(sc.bonus / sc.days * 3 * 10) / 10}).</p>}
+          {(sc.sections ?? []).map((sec) => (
+            <div key={sec.title}><h3>{sec.title}</h3><ul className="lines">{sec.lines.map((l) => <li key={l}><span>{l}</span></li>)}</ul></div>
+          ))}
+          {sc.hints.length > 0 && <><h3>코치 메모</h3><ul className="lines">{sc.hints.map((h) => <li key={h}><span>{h}</span></li>)}</ul></>}
+          {sc.days < PREPARATION.maxDays
+            ? <p className="hint">하루 더 분석하면 {sc.days === 1 ? '선발 다섯 명의 강점과 약점' : '선수별 성향과 벤치 전력'}까지 알아내고, 그 경기 보너스도 커집니다.</p>
+            : <p className="hint">분석을 모두 마쳤습니다. 이 정보를 바탕으로 어떤 전술과 선발로 맞설지는 감독이 정합니다.</p>}
         </>
       );
     }

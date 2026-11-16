@@ -4,7 +4,7 @@ import { teamOverall } from '@/game/school';
 import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
 import { today } from '@/game/season';
-import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, planSummary, userTeam } from './ui';
+import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, userTeam } from './ui';
 import type { ViewProps } from './ui';
 
 const FOCUS_INFO: Record<Focus, string> = {
@@ -84,12 +84,9 @@ export default function TacticsView({ S, act }: ViewProps) {
   return (
     <div className="page">
       <PageTitle title="전술" sub="경기 시작 때 적용됩니다. 직접 지휘하는 경기에서는 도중에 바꿀 수 있습니다." />
-      {prep?.plan && (
-        <div className="notice" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ flex: 1, minWidth: 220 }}>
-            <b>{prep.opponent}전 대응 계획</b> · {planSummary(prep.plan)} · 지금 전술이 {prep.followed}/3 따름 · 그 경기 보너스 +{prep.bonus.toFixed(1)} (최대 +{prep.maxBonus.toFixed(1)})
-          </span>
-          {prep.followed < 3 && <button className="btn small primary" onClick={() => act('applyPlan')}>계획대로 적용</button>}
+      {prep && prep.days > 0 && (
+        <div className="notice">
+          다음 공식전 <b>{prep.opponent}</b> · 상대 분석 {prep.days}일 · 그 경기 능력치 +{prep.bonus.toFixed(1)}. 코치의 분석 보고서는 받은 소식에 있습니다. 어떤 전술로 맞설지는 감독이 정합니다.
         </div>
       )}
       <div className="split">

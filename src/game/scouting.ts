@@ -1,65 +1,66 @@
-// 코치의 상대 분석: 다음 상대를 가정한 짧은 모의 경기로 공격 중심·수비·집중 마크 대상을 고른다.
-// 모의 경기는 커리어 난수를 쓰지 않는 고정 시드로 돌리므로, 분석해도 실제 경기 결과의 흐름은 바뀌지 않는다.
-// 준비 보너스는 이 계획을 경기 시작 때 얼마나 따랐는지에 따라 달라진다 (season.ts).
-import { simulateGame, composites } from './engine.ts';
-import type { Composites, Defense, Focus, PrepPlan, Tactics, Team } from './types.ts';
+// 코치의 상대 분석 보고서: 상대가 어떤 팀인지 알려 줄 뿐, 어떻게 싸울지는 감독이 정한다.
+// 분석한 날이 늘수록 더 깊은 내용이 나온다 (1일: 주요 선수·전술, 2일: 팀의 강점과 약점, 3일: 선수별 성향과 벤치).
+// 준비 보너스는 분석한 날 수에만 달려 있다 (season.ts).
+import { composites, overall } from './engine.ts';
+import type { Composites, Defense, Focus, Player, Team } from './types.ts';
 
-const SIM_GAMES = 200; // 계획 하나를 비교할 때 쓰는 모의 경기 수 (계획 하나에 약 1.5초)
-const FOCI: Focus[] = ['balanced', 'inside', 'outside', 'spread'];
-const DEFENSES: Defense[] = ['man', 'zone', 'press', 'switch', 'drop'];
-
-function hash(text: string) {
-  let h = 2166136261;
-  for (const ch of text) h = Math.imul(h ^ (ch.codePointAt(0) ?? 0), 16777619) >>> 0;
-  return h;
+export interface ScoutSection { title: string; lines: string[] }
+export interface ScoutReport {
+  players: { name: string; pos: number; ovr: number }[];
+  tactics: string;
+  sections: ScoutSection[];
 }
 
-// 같은 시드 묶음으로 비교해 운의 차이를 줄인다
-function winRate(me: Team, opp: Team, tactics: Partial<Tactics>, seed0: number) {
-  const mine = { ...me, tactics };
-  let wins = 0;
-  for (let i = 0; i < SIM_GAMES; i++) {
-    const home = i % 2 === 0;
-    const g = home ? simulateGame(mine, opp, { seed: seed0 + i }) : simulateGame(opp, mine, { seed: seed0 + i });
-    if ((g.winner === 'home') === home) wins++;
+const FOCUS_NAME: Record<Focus, string> = { balanced: '균형', inside: '골밑 중심', outside: '외곽 중심', spread: '5아웃' };
+const DEFENSE_NAME: Record<Defense, string> = { man: '맨투맨', zone: '존', press: '프레스', switch: '스위치', drop: '드롭' };
+const SHOT_NAME = { rim: '돌파와 골밑 마무리', post: '포스트업', mid: '미들슛', three: '3점슛' } as const;
+
+// 합성 능력치(0~1)를 현 내 고교 기준의 말로 옮긴다
+const grade = (x: number) => (x >= 0.66 ? '매우 강함' : x >= 0.57 ? '강함' : x >= 0.48 ? '보통' : x >= 0.4 ? '약함' : '매우 약함');
+
+export function scoutReport(team: Team, days: number): ScoutReport {
+  const starters = team.players.slice(0, 5);
+  const cs = starters.map(composites);
+  const avg = (f: (c: Composites) => number) => cs.reduce((s, c) => s + f(c), 0) / cs.length;
+  const t = team.tactics;
+  const pace = (t.pace ?? 0) > 0.25 ? '빠른 템포' : (t.pace ?? 0) < -0.25 ? '느린 템포' : '보통 템포';
+  const report: ScoutReport = {
+    players: [...team.players].sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p) })),
+    tactics: `${FOCUS_NAME[t.focus ?? 'balanced']} 공격 · ${DEFENSE_NAME[t.defense ?? 'man']} 수비 · ${pace}`,
+    sections: [],
+  };
+
+  if (days >= 2) {
+    const inside = avg((c) => c.defInterior);
+    const perimeter = avg((c) => c.defPerimeter);
+    const lines = [
+      `골밑 공격 ${grade(avg((c) => Math.max(c.rim, c.post)))} · 외곽슛 ${grade(avg((c) => c.three))}`,
+      `골밑 수비 ${grade(inside)} · 외곽 수비 ${grade(perimeter)}`,
+      `볼 핸들링 ${grade(avg((c) => c.ballHandling))} · 리바운드 ${grade(avg((c) => c.rebounding))} · 체력 ${grade(avg((c) => c.endurance))}`,
+    ];
+    if (Math.abs(inside - perimeter) > 0.02) lines.push(inside > perimeter ? '수비는 골밑이 외곽보다 단단합니다.' : '수비는 외곽이 골밑보다 단단합니다.');
+    else lines.push('수비는 안팎이 고릅니다.');
+    report.sections.push({ title: '선발 다섯 명의 강점과 약점', lines });
   }
-  return wins / SIM_GAMES;
-}
 
-const avg = (team: Team, f: (c: Composites) => number) => team.players.slice(0, 5).map(composites).reduce((s, c) => s + f(c), 0) / 5;
-
-export function makePlan(me: Team, opp: Team): PrepPlan {
-  const seed0 = hash(`${me.id}:${opp.id}:${opp.players.map((p) => p.id).join(',')}`);
-  const base: Partial<Tactics> = { ...me.tactics, keyPlayerId: null, denyPlayerId: null };
-  const best = <T>(options: T[], make: (x: T) => Partial<Tactics>) =>
-    options.map((x) => ({ x, r: winRate(me, opp, make(x), seed0) })).sort((a, b) => b.r - a.r)[0].x;
-
-  const focus = best(FOCI, (f) => ({ ...base, focus: f, defense: base.defense ?? 'man' }));
-  const defense = best(DEFENSES, (d) => ({ ...base, focus, defense: d }));
-  const stars = [...opp.players.slice(0, 5)].sort((a, b) => composites(b).usage - composites(a).usage).slice(0, 2);
-  const deny = best<string | null>([null, ...stars.map((p) => p.id)], (id) => ({ ...base, focus, defense, denyPlayerId: id }));
-  const denyName = deny ? opp.players.find((p) => p.id === deny)?.name ?? null : null;
-
-  const notes: string[] = [];
-  if (focus === 'inside') notes.push('공격은 골밑 중심으로. 상대 골밑 수비를 상대로 우리 안쪽 공격이 가장 잘 통했습니다.');
-  else if (focus === 'outside') notes.push('공격은 외곽 중심으로. 우리 외곽슛이 상대 외곽 수비를 이겨 냅니다.');
-  else if (focus === 'spread') notes.push('공격은 5아웃으로. 다섯 명이 모두 벌려 서서 돌파와 3점만 노리세요. 중거리는 버립니다.');
-  else notes.push('공격은 균형 있게. 한쪽으로 몰면 상대가 쉽게 대응합니다.');
-  const theirThree = avg(opp, (c) => c.three);
-  if (defense === 'zone') notes.push('수비는 존으로. 상대 슈터가 약해 골밑을 지키는 편이 유리합니다.');
-  else if (defense === 'press') notes.push('수비는 프레스로. 상대 볼 핸들링이 흔들려 실책을 끌어낼 수 있습니다.');
-  else if (defense === 'switch') notes.push('수비는 스위치로. 스크린마다 바꿔 막아 상대 슈터에게 오픈 찬스를 주지 마세요.');
-  else if (defense === 'drop') notes.push('수비는 드롭으로. 빅맨은 골밑을 지키고, 중거리 풀업은 내줘도 됩니다.');
-  else notes.push(theirThree > 0.6 ? '수비는 맨투맨으로. 상대 외곽슛이 좋아 존은 위험합니다.' : '수비는 맨투맨으로. 가장 안정적으로 막았습니다.');
-  notes.push(denyName ? `${denyName}을(를) 집중 마크하세요. 상대 공격의 열쇠입니다.` : '특정 선수를 묶기보다 팀 수비로 막는 편이 나았습니다.');
-  return { focus, defense, denyId: deny, denyName, notes };
-}
-
-// 경기 시작 때 전술이 계획을 몇 가지 따랐는지 (0~3)
-export function followed(tactics: Partial<Tactics>, plan: PrepPlan) {
-  return (
-    Number((tactics.focus ?? 'balanced') === plan.focus) +
-    Number((tactics.defense ?? 'man') === plan.defense) +
-    Number((tactics.denyPlayerId ?? null) === plan.denyId)
-  );
+  if (days >= 3) {
+    const usage = (p: Player) => composites(p).usage;
+    const ace = starters.reduce((a, b) => (usage(b) > usage(a) ? b : a));
+    const c = composites(ace);
+    const shots = (['rim', 'post', 'mid', 'three'] as const).slice().sort((a, b) => c[b] - c[a]);
+    const share = usage(ace) ** 3 / starters.reduce((s, p) => s + usage(p) ** 3, 0);
+    const startersOvr = starters.reduce((s, p) => s + overall(p), 0) / starters.length;
+    const bench = team.players.slice(5, 9);
+    const benchOvr = bench.length ? bench.reduce((s, p) => s + overall(p), 0) / bench.length : 0;
+    const weakest = starters.reduce((a, b) => (overall(b) < overall(a) ? b : a));
+    report.sections.push({
+      title: '선수별 성향과 벤치',
+      lines: [
+        `공격은 ${ace.name}(종합 ${overall(ace)})에게 가장 많이 갑니다 — 팀 슛의 약 ${Math.round(share * 100)}%. 주로 ${SHOT_NAME[shots[0]]}, 그다음 ${SHOT_NAME[shots[1]]}으로 득점합니다.`,
+        `선발 중 가장 약한 자리는 ${weakest.name}(종합 ${overall(weakest)})입니다.`,
+        `선발 평균 종합 ${Math.round(startersOvr)} · 벤치 평균 ${Math.round(benchOvr)}${startersOvr - benchOvr >= 10 ? ' — 주전 의존도가 높아 주전이 지치거나 파울에 걸리면 전력이 크게 떨어집니다.' : ' — 벤치가 두터워 교체해도 전력이 덜 떨어집니다.'}`,
+      ],
+    });
+  }
+  return report;
 }

@@ -1,6 +1,6 @@
 // 여러 화면이 함께 쓰는 작은 부품과 표기 규칙.
 import type { CSSProperties, ReactNode } from 'react';
-import type { BoxTeam, Career, Defense, Focus, GrowthEvent, Match, NameStyle, PrepPlan, RatingKey, Tactics } from '@/game/types';
+import type { BoxTeam, Career, Defense, Focus, GrowthEvent, Match, NameStyle, RatingKey, Tactics } from '@/game/types';
 import type { MatchLine } from './inbox';
 import type { Act, PlayingState } from './useGame';
 
@@ -38,9 +38,6 @@ export const ATTR_GROUPS: { title: string; keys: RatingKey[] }[] = [
 ];
 
 
-// 코치 계획을 한 줄로: "균형 공격 · 맨투맨 · 신준섭 집중 마크"
-export const planSummary = (plan: PrepPlan) =>
-  `${FOCUS[plan.focus]} 공격 · ${DEFENSE[plan.defense]} · ${plan.denyName ? `${plan.denyName} 집중 마크` : '집중 마크 없음'}`;
 
 export const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 export const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);

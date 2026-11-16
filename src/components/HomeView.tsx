@@ -38,8 +38,8 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
         <p className="muted" style={{ textAlign: 'center' }}>{m.label}</p>
         {m.official && d.prep && d.prep.daysUntil === 0 && (
           <p style={{ textAlign: 'center' }}>{d.prep.days
-            ? <span className="pill good">상대 분석 {d.prep.days}일 · 계획 {d.prep.followed}/3 따름 · 능력치 +{d.prep.bonus.toFixed(1)}</span>
-            : <span className="pill">상대 분석 없이 치르는 경기</span>}</p>
+            ? <span className="pill good">상대 분석 {d.prep.days}일 · 능력치 +{d.prep.bonus.toFixed(1)}</span>
+            : null}</p>
         )}
         <div className="row" style={{ justifyContent: 'center' }}>
           <button className="btn primary" onClick={() => act('command')}>벤치에서 직접 지휘</button>
@@ -69,11 +69,10 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
         <div className="notice" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ flex: 1, minWidth: 200 }}>
             다음 공식전 <b>{prep.opponent}</b> ({prep.daysUntil}일 후) · 상대 분석 {prep.days}/{PREPARATION.maxDays}일
-            {prep.plan && <> · 계획 {prep.followed}/3 따름 · 그 경기 능력치 +{prep.bonus.toFixed(1)} (최대 +{prep.maxBonus.toFixed(1)})</>}
+            {prep.days > 0 && <> · 그 경기 능력치 +{prep.bonus.toFixed(1)}</>}
           </span>
           {prep.canScout && S.program !== 'scout' && <button className="btn small primary" onClick={() => act('program', 'scout')}>오늘 상대 분석하기</button>}
           {S.program === 'scout' && <span className="pill club">오늘 분석 예정</span>}
-          {prep.plan && prep.followed < 3 && <button className="btn small" onClick={() => act('applyPlan')}>계획대로 전술 적용</button>}
         </div>
       )}
       <div className="row">

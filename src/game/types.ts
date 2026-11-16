@@ -340,16 +340,6 @@ export interface Career {
   calendar: CalendarDay[];
   dayIndex: number;
   prep?: Record<string, number>; // 다음 공식전 상대별 분석 일수 (대회가 바뀌면 비운다)
-  prepPlans?: Record<string, PrepPlan>; // 상대별 코치의 대응 계획
-}
-
-// 코치가 상대 분석으로 세운 대응 계획
-export interface PrepPlan {
-  focus: Focus;
-  defense: Defense;
-  denyId: string | null; // 집중 마크할 상대 선수 (없으면 팀 수비)
-  denyName: string | null;
-  notes: string[]; // 코치의 설명
 }
 
 // 다음 공식전 상대와 준비 상황
@@ -359,10 +349,7 @@ export interface PrepInfo {
   label: string; // 어떤 경기인지 (예: 인터하이 현 예선 A조 2차전)
   daysUntil: number; // 0이면 오늘
   days: number; // 지금까지 분석한 날 수
-  bonus: number; // 지금 전술로 경기에 나가면 받는 능력치 보너스
-  maxBonus: number; // 코치의 계획을 모두 따르면 받는 보너스
-  plan: PrepPlan | null; // 코치의 대응 계획 (분석을 시작해야 생긴다)
-  followed: number; // 지금 팀 전술이 계획을 따르는 가짓수 (0~3)
+  bonus: number; // 그 경기에서 받는 능력치 보너스 (분석한 날 수에 비례)
   canScout: boolean; // 오늘 분석할 수 있는지
 }
 

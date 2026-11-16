@@ -324,17 +324,6 @@ const actions = {
     m.timer = setTimeout(() => tick(S, rerender), 0);
   },
   // 일시정지: 연출 중인 공격권은 끝까지 보여 준 뒤 멈춘다
-  // 코치의 대응 계획대로 팀 전술을 바꾼다 (공격 중심·수비·집중 마크)
-  applyPlan({ S }: Ctx) {
-    const plan = today(careerOf(S))?.prep?.plan;
-    if (!plan) return;
-    const tactics = userTeam(S).tactics;
-    tactics.focus = plan.focus;
-    tactics.defense = plan.defense;
-    if (plan.denyId) tactics.denyPlayerId = plan.denyId;
-    else delete tactics.denyPlayerId;
-    save(S);
-  },
   dismissEnd({ S }: Ctx) { matchOf(S).endSeen = true; },
   // 경기 시작 전에는 경기 화면을 나갈 수 있다 (경기일은 그대로라 다시 들어오면 된다)
   leaveMatch({ S }: Ctx) {
