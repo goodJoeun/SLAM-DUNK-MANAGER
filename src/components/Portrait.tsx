@@ -74,7 +74,8 @@ export default function Portrait({ name, team, src, size = 48, round = false }: 
   return (
     <span className={`portrait ${round ? 'round' : ''}`} style={{ width: size, height: size }}>
       {show
-        ? <img src={show} alt={`${name} 이미지`} onError={() => setFailed(show)} />
+        // 연결된 원작 이미지는 세로로 긴 상반신이라, 작은 크기에서는 얼굴 쪽으로 당겨 보여 준다
+        ? <img className={size <= 40 && show.startsWith('/portraits/') ? 'face' : undefined} src={show} alt={`${name} 이미지`} onError={() => setFailed(show)} />
         : <Avatar name={name} team={team} face={size <= 40} />}
     </span>
   );
