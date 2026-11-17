@@ -89,7 +89,7 @@ export default function TitleView({ S, act }: { S: GameState; act: Act }) {
           )}
         </nav>
 
-        <footer className="cover-foot">Tab으로 고르고 Enter로 결정 · 게임은 이 브라우저에 자동으로 저장됩니다</footer>
+        <footer className="cover-foot"><span className="hide-phone">Tab으로 고르고 Enter로 결정 · </span>게임은 이 브라우저에 자동으로 저장됩니다</footer>
       </div>
     </div>
   );

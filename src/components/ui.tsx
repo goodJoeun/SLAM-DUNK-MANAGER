@@ -254,7 +254,7 @@ export function BoxTable({ team }: { team: BoxTeam }) {
   return (
     <div className="table-wrap"><table className="data">
       <thead><tr>
-        <th className="l">선수</th><th title="득점·슛 효율·리바운드·어시스트·수비·실책을 합친 점수입니다. 6.0이 보통입니다.">평점</th><th>분</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th>
+        <th className="l name">선수</th><th title="득점·슛 효율·리바운드·어시스트·수비·실책을 합친 점수입니다. 6.0이 보통입니다.">평점</th><th>분</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th>
         <th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>파울</th>
       </tr></thead>
       <tbody>

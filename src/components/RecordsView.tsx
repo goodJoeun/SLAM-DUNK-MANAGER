@@ -37,7 +37,7 @@ export default function RecordsView({ S, act }: ViewProps) {
       <Panel title="우리 학교 선수 기록" flush action={mine.length > 0 && <span className="hint">선수를 누르면 상세</span>}>
         {mine.length ? (
           <div className="table-wrap"><table className="data">
-            <thead><tr><th className="l">선수</th><th>경기</th><th>분</th><th>득점</th><th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>야투</th><th>3점</th></tr></thead>
+            <thead><tr><th className="l name">선수</th><th>경기</th><th>분</th><th>득점</th><th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>야투</th><th>3점</th></tr></thead>
             <tbody>
               {mine.map((s) => (
                 <tr key={s.id} className={roster.has(s.id) ? 'click' : ''} onClick={roster.has(s.id) ? () => act('player', s.id) : undefined}>

@@ -130,7 +130,7 @@ export default function TrainingView({ S, act }: ViewProps) {
             ) : <span className="hint">선수를 체크하면 여러 명의 개인 훈련을 한꺼번에 정할 수 있습니다.</span>}
           </div>
           <div className="table-wrap"><table className="data">
-            <thead><tr><th className="check"><input type="checkbox" aria-label="모든 선수 선택" checked={allPicked} onChange={() => setChecked(allPicked ? new Set() : new Set(team.players.map((p) => p.id)))} /></th><th className="l">포지션</th><th className="l">이름</th><th>컨디션</th><th className="l">개인 훈련</th></tr></thead>
+            <thead><tr><th className="check"><input type="checkbox" aria-label="모든 선수 선택" checked={allPicked} onChange={() => setChecked(allPicked ? new Set() : new Set(team.players.map((p) => p.id)))} /></th><th className="l">포지션</th><th className="l name">이름</th><th>컨디션</th><th className="l">개인 훈련</th></tr></thead>
             <tbody>
               {team.players.map((p) => (
                 <tr key={p.id} className={`${p.injuredDays ? 'dim' : ''} ${checked.has(p.id) ? 'picked' : ''}`}>

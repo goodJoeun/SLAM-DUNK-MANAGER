@@ -34,7 +34,7 @@ function RecruitPanel({ c, act }: { c: Career; act: Act }) {
       <Panel title="신입생 스카우트" flush action={<span className="hint">영입 목표 {targets.length}/{RECRUITING.maxTargets}명</span>}>
         <div className="table-wrap"><table className="data">
           <thead><tr>
-            <th className="l">포지션</th><th className="l">이름</th><th className="c">잠재력</th><th>종합</th><th>영입 가능성</th><th className="c">영입 목표</th>
+            <th className="l">포지션</th><th className="l name">이름</th><th className="c">잠재력</th><th>종합</th><th>영입 가능성</th><th className="c">영입 목표</th>
           </tr></thead>
           <tbody>
             {prospects.map((x) => {
@@ -317,7 +317,7 @@ export default function SquadView({ S, act }: ViewProps) {
           <thead>
             <tr>
               {th('pos', '포지션', 'l')}
-              {th('name', '이름', 'l')}
+              {th('name', '이름', 'l name')}
               {view === 'overview' ? (
                 <>
                   {th('year', '학년')}

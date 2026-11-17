@@ -936,3 +936,66 @@ table.data tr.picked { background: color-mix(in srgb, var(--club) 10%, transpare
   .match-dock .pause-banner .spacer, .match-dock .pb-resume { display: none; }
   .match-dock .pause-banner .btn { flex: 1 1 auto; min-height: 44px; justify-content: center; }
 }
+
+/* ---------- 터치 화면 공통 ---------- */
+
+/* 눌렀다는 표시 (터치 화면에는 마우스를 올린 표시가 없다) */
+button, select, summary, label, [role="tab"], tr.click, li.click, .bench-row, .msg-list li { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.btn:active:not(:disabled), .cover-item:active { transform: scale(0.97); filter: brightness(0.94); }
+.cover-item:active { transform: skewX(-8deg) scale(0.98); }
+.nav-item:active, .seg button:active, .opt:active, .school-card:active, .slot.empty:active, .first-steps li > button:active,
+.bench-row:not(.static):not(.off):active, .msg-list li:active, .lines li.click:active, .data tr.click:active td, .data th.sortable:active { background: var(--panel-3); }
+
+/* 경기 종료 창: 화면보다 길면 창 안에서 스크롤한다 */
+.modal-backdrop { place-items: start center; overflow-y: auto; overscroll-behavior: contain; }
+.modal { margin-block: auto; }
+
+/* 표지와 전체 틀: 휴대폰 주소창이 접히고 펴질 때 높이가 맞게 */
+.app, .cover { min-height: 100dvh; }
+
+/* 설명(title)을 눌러서 보는 풍선 */
+.touch-tip {
+  position: fixed; left: 12px; right: 12px; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+  max-width: 520px; margin: 0 auto; padding: 10px 14px; border-radius: 10px;
+  background: var(--text); color: var(--bg); font-size: 13.5px; font-weight: 600; line-height: 1.5; white-space: pre-line;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35); animation: day-note-in 0.18s ease-out;
+}
+.app.in-match ~ .touch-tip { bottom: calc(240px + env(safe-area-inset-bottom, 0px)); }
+
+@media (max-width: 860px) {
+  /* 글자: 본문을 키우고, 11~12.5px로 고정돼 있던 보조 글자를 한 단계씩 올린다 */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { font-size: 15px; }
+  table.data { font-size: 14px; }
+  .hint, .page-title p, .panel-h h2, .advice, .brief, .feed, .bench-row, .notes li, .toggle, .msg-sum, .sc-body span, .slot-body span,
+  .opt-detail, .sub-hint, .first-steps span, .cover-item span, .quarters, .bulk-bar, .cmp-row, .skip-confirm, .pause-banner span,
+  .sc-ace, .sc-goal, .sc-stats, .msg-head .meta, .club span, .hdr-date span, .side-foot { font-size: 13.5px; }
+  .data th, .kv small, .load small, .load span, .opt span, .pill, .opt .opt-tags .pill, .msg-top, .slot-body small, .sc-stats small,
+  .sc-ace small, .sc-goal small, .legend, .attr-col h3, .moments h3, .cmp-row .lbl, .feed-head, .notes .t, .stepper span,
+  .cover-foot, .sb-team .meta, .quarters th, .msg-view h3, .attr-vs small, .compare-pick, .sc-ovr i { font-size: 12.5px; }
+  .match .feed > .feed-head { font-size: 12px; }
+
+  /* 손가락 크기: 누르는 것은 높이 44px 안팎 */
+  .btn { min-height: 44px; padding: 9px 14px; }
+  .btn.small { min-height: 40px; padding: 7px 12px; font-size: 13px; }
+  .seg button { min-height: 40px; padding: 8px 12px; }
+  select { min-height: 44px; padding: 8px 10px; }
+  select, input, textarea { font-size: 16px; } /* 16px 미만이면 아이폰이 누를 때 화면을 확대한다 */
+  .role-row select, .compare-pick select, .focus-cell select { font-size: 16px; }
+  .toggle { min-height: 44px; }
+  .toggle input, table.data .check input { width: 22px; height: 22px; }
+  table.data .check { width: 46px; }
+  .data th, .data td { padding: 11px 10px; }
+  .focus-cell { min-width: 124px; }
+  .compare-pick select { max-width: 180px; }
+  .lines li.click { min-height: 44px; }
+  .name-link { padding-block: 10px; }
+  .pill .name-link { padding-block: 0; }
+  .nav-item { min-height: 44px; }
+  .modal .row .btn { flex: 1; justify-content: center; }
+
+  /* 가로로 미는 표: 이름 열은 왼쪽에 붙여 둔다 */
+  .data th.name, .data td.name { position: sticky; left: 0; z-index: 1; box-shadow: 1px 0 0 var(--line-soft); }
+  .data td.name { background: var(--panel); }
+  .data tr.me td.name, .data tr.picked td.name { background: color-mix(in srgb, var(--club) 14%, var(--panel)); }
+}

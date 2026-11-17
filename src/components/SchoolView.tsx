@@ -66,7 +66,7 @@ export default function SchoolView({ S, act, team }: ViewProps & { team: Team })
         <div className="stack">
           <Panel title="선수 명단" flush action={<span className="hint">능력치는 주요 선수 3명만 알려져 있습니다</span>}>
             <div className="table-wrap"><table className="data">
-              <thead><tr><th className="l">포지션</th><th className="l">이름</th><th>학년</th><th>종합</th></tr></thead>
+              <thead><tr><th className="l">포지션</th><th className="l name">이름</th><th>학년</th><th>종합</th></tr></thead>
               <tbody>
                 {roster.map((p) => (
                   <tr key={p.id}>
@@ -118,7 +118,7 @@ export default function SchoolView({ S, act, team }: ViewProps & { team: Team })
           <Panel title={`${c.year}년차 공식전 기록`} flush>
             {stats.length ? (
               <div className="table-wrap"><table className="data">
-                <thead><tr><th className="l">선수</th><th>경기</th><th>득점</th><th>리바</th><th>어시</th></tr></thead>
+                <thead><tr><th className="l name">선수</th><th>경기</th><th>득점</th><th>리바</th><th>어시</th></tr></thead>
                 <tbody>
                   {stats.map((s) => (
                     <tr key={s.id}>
