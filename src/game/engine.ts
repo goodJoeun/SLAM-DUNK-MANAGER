@@ -45,6 +45,7 @@ export const TUNING = {
   foulTroubleMax: 2, // 파울 관리로 동시에 벤치에 앉히는 선수 수의 상한 (셋 이상 앉히면 코트가 무너진다)
   makeSkill: 0.27, // (공격 능력 - 수비 능력) 1.0 차이당 성공률 변화. 크면 전력 차가 곧바로 큰 점수 차가 된다
   offReboundWeight: 0.38,
+  conditionPlay: 0.12, // 컨디션 0인 선수의 경기력 감소 폭 (컨디션 60이면 약 5%)
   energyDrain: 0.00045,
   energyRecover: 0.0012,
 
@@ -145,7 +146,9 @@ export function tacticLoad(defense: Defense | null | undefined, pace: number) {
 export const energyPerSecond = (endurance: number, style = 1) => TUNING.energyDrain * style * (1.3 - 0.6 * endurance);
 
 // 경기 시작 때의 체력 (0~1): 지친 채로 경기에 나오면 체력이 덜 찬 상태로 시작한다
-export const startEnergy = (condition: number | null | undefined) => (condition == null ? 1 : 0.85 + 0.15 * (condition / 100));
+export const startEnergy = (condition: number | null | undefined) => (condition == null ? 1 : 0.7 + 0.3 * (condition / 100));
+// 컨디션이 나쁘면 경기 내내 몸이 무겁다: 컨디션 100에서 1, 0에서 1 - conditionPlay (벤치에서 쉬어도 돌아오지 않는다)
+export const conditionPlay = (condition: number | null | undefined) => (condition == null ? 1 : 1 - TUNING.conditionPlay * (1 - condition / 100));
 
 export function composites(p: BasePlayer): Composites {
   const c: Composites = {
@@ -194,6 +197,7 @@ interface GamePlayer {
   form: number; // 당일 컨디션 보정 (일관성에 따른 기복 + 사기)
   clutch: boolean; // 승부사
   energy: number; // 0~1
+  fit: number; // 그날 컨디션에 따른 경기력 배율 (경기 중에는 변하지 않는다)
   injured: boolean;
   since: number; // 마지막으로 코트에 들어오거나 나간 시각
   stat: StatLine;
@@ -237,7 +241,7 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
       rank: i < 5 ? Math.max(overall(p), benchBest * 1.05) : overall(p),
       form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)) + (T.moraleForm * ((p.morale ?? 60) - 60)) / 40,
       clutch: p.trait === 'clutch',
-      energy: startEnergy(p.condition),
+      energy: startEnergy(p.condition), fit: conditionPlay(p.condition),
       injured: (p.injuredDays ?? 0) > 0,
       since: 0, stat: emptyLine(), starter: i < 5, home: i < 5 ? i : -1,
     };
@@ -278,7 +282,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
 
   // 피로·컨디션 반영 능력치
   const clutchTime = () => period >= 4 && clock <= T.crunchSeconds && Math.abs(teams[0].score - teams[1].score) <= T.crunchMargin;
-  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form + (p.clutch && clutchTime() ? T.clutchBoost : 0));
+  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * p.fit * (1 + p.form + (p.clutch && clutchTime() ? T.clutchBoost : 0));
   const avg = (team: GameTeam, key: keyof Composites) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
   const avgEnergy = (team: GameTeam) => team.court.reduce((s, p) => s + p.energy, 0) / 5;
   const pick = (players: GamePlayer[], weightFn: (p: GamePlayer) => number) => players[rng.weighted(players.map(weightFn))];

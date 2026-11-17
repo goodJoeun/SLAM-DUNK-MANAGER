@@ -29,7 +29,7 @@ export const PROGRAMS: Record<ProgramKey, { label: string; keys: RatingKey[] }> 
 
 // 강도: 성장 배율, 컨디션 소모, 부상 확률
 export const INTENSITY: Record<IntensityKey, { label: string; gain: number; cost: number; injury: number }> = {
-  light: { label: '가볍게', gain: 0.6, cost: 3, injury: 0.0005 },
+  light: { label: '가볍게', gain: 0.5, cost: 3, injury: 0.0005 },
   normal: { label: '보통', gain: 1, cost: 6, injury: 0.002 },
   hard: { label: '강하게', gain: 1.6, cost: 10, injury: 0.006 },
 };

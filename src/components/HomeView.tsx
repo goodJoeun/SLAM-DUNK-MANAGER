@@ -239,7 +239,7 @@ export default function HomeView({ S, act }: ViewProps) {
         <Panel title="팀 상태" className="span-4">
           <div className="kv">
             <div><small>팀 전력</small><b><Attr v={teamOverall(team)} /></b></div>
-            <div><small>컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
+            <div title="컨디션이 낮으면 경기 내내 능력이 떨어지고(60이면 약 5%) 더 빨리 지칩니다. 훈련 효율과 부상 위험에도 영향을 줍니다."><small>컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
             <div title="60이 보통입니다. 승패·출전 시간·훈련 강도·감독의 결정에 따라 오르내리고, 경기력과 훈련 효율에 영향을 줍니다."><small>팀 사기</small><b>{moraleLabel(morale)}</b><span className="muted">{Math.round(morale)} / 100</span></div>
           </div>
           <div className="notice" style={{ marginTop: 8 }}>
