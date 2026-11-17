@@ -707,3 +707,16 @@ table.data tr.picked { background: color-mix(in srgb, var(--club) 10%, transpare
 .name-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; text-align: left; }
 .name-link:hover, .name-link:focus-visible { color: var(--club); text-decoration: underline; }
 .pill .name-link { font-weight: inherit; }
+
+/* 학교 선택 카드: 에이스, 올해 목표, 3학년 수 */
+.sc-ace { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
+.sc-ace small, .sc-goal small { color: var(--muted); font-size: 11px; }
+.sc-ace b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-ace .attr { margin-left: auto; }
+.sc-goal { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.sc-goal > span { display: flex; gap: 6px; align-items: baseline; }
+.diff.d0 { color: var(--good); }
+.diff.d2 { color: var(--gold); }
+.diff.d3 { color: var(--bad); }
+.sc-ovr { display: flex; align-items: baseline; gap: 5px; }
+.sc-ovr i { font-style: normal; font-size: 11px; color: var(--muted); }

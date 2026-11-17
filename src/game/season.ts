@@ -163,9 +163,10 @@ const GOAL_EFFECT: Record<number, { verdict: string; prestige: number; trust: nu
   [-2]: { verdict: '목표에 크게 못 미쳤습니다. 농구부 지원이 줄어듭니다.', prestige: -2, trust: -20 },
 };
 
-function goalTierFor(state: Career) {
-  const rank = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige).indexOf(state.userTeamId) + 1;
-  if (rank === 1 && state.teams[state.userTeamId].prestige >= 64) return 4; // 현 내 최강의 명문은 전국에서의 성적을 요구받는다
+// id를 주면 그 학교를 맡았을 때의 목표를 미리 알려 준다 (학교 선택 화면)
+export function goalTierFor(state: Career, id: string = state.userTeamId) {
+  const rank = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige).indexOf(id) + 1;
+  if (rank === 1 && state.teams[id].prestige >= 64) return 4; // 현 내 최강의 명문은 전국에서의 성적을 요구받는다
   return rank <= 2 ? 3 : rank <= 5 ? 2 : 1;
 }
 
