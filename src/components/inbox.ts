@@ -17,6 +17,8 @@ export interface MatchLine {
   awayScore: number;
   overtime: boolean;
   mine: boolean;
+  homeId?: string; // 화면에서 바로 만든 줄에만 있다 (받은 소식에 저장된 줄에는 없다)
+  awayId?: string;
 }
 
 export interface PlayerNote {

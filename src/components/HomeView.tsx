@@ -4,7 +4,7 @@ import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
 import { StandingsTable } from './CompView';
 import {
-  Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, clubColor, mean, teamName, userTeam,
+  Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, SchoolName, clubColor, mean, teamName, userTeam,
 } from './ui';
 import { scoutReport } from '@/game/scouting';
 import { describeEvent, moraleLabel, teamMorale } from '@/game/people';
@@ -96,7 +96,7 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
         <div className="versus">
           <div className="side"><Crest name={team.name} size={48} /><b>{team.name}</b><span className="muted">팀 전력 <Attr v={mine} /></span></div>
           <div className="vs">VS</div>
-          <div className="side"><Crest name={m.opponent} size={48} /><b>{m.opponent}</b><span className="muted">팀 전력 <Attr v={m.opponentOverall} /></span></div>
+          <div className="side"><Crest name={m.opponent} size={48} /><b><SchoolName id={m.opponentId} name={m.opponent} onPick={(id) => act('school', id)} /></b><span className="muted">팀 전력 <Attr v={m.opponentOverall} /></span></div>
         </div>
         <div className="strength" style={{ ['--club' as string]: clubColor(team.name) }}>
           <span>{mine}</span>
@@ -138,7 +138,7 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
       {prep && (
         <div className="notice" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ flex: 1, minWidth: 200 }}>
-            다음 공식전 <b>{prep.opponent}</b> ({prep.daysUntil}일 후) · 상대 분석 {prep.days}/{PREPARATION.maxDays}일
+            다음 공식전 <b><SchoolName id={prep.opponentId} name={prep.opponent} onPick={(id) => act('school', id)} /></b> ({prep.daysUntil}일 후) · 상대 분석 {prep.days}/{PREPARATION.maxDays}일
             {prep.days > 0 && <> · 그 경기 능력치 +{prep.bonus.toFixed(1)}</>}
           </span>
           {prep.canScout && S.program !== 'scout' && <button className="btn small primary" onClick={() => act('program', 'scout')} title="오늘의 훈련 메뉴를 상대 분석으로 바꿉니다. 날짜는 '계속'을 눌러야 넘어갑니다.">오늘 훈련을 상대 분석으로</button>}
@@ -153,7 +153,7 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
   );
 }
 
-function CompetitionPanel({ c }: { c: Career }) {
+function CompetitionPanel({ c, act }: { c: Career; act: Act }) {
   const comp = c.comp;
   if (!comp) {
     const i = c.calendar.findIndex((day, idx) => idx >= c.dayIndex && day.start);
@@ -172,8 +172,8 @@ function CompetitionPanel({ c }: { c: Career }) {
   return (
     <Panel title={comp.name} className="span-4" action={<span className="pill club">{STAGE_SHORT[comp.stage]}</span>}>
       {comp.finish[me] && <div className="notice">우리 학교: {comp.finish[me]}</div>}
-      {showGroup && <StandingsTable career={c} title={group.name} ids={group.ids} matches={group.matches} />}
-      {showLeague && <StandingsTable career={c} title="결승 리그" ids={comp.league!.ids} matches={comp.league!.matches} />}
+      {showGroup && <StandingsTable career={c} title={group.name} ids={group.ids} matches={group.matches} onPick={(id) => act('school', id)} />}
+      {showLeague && <StandingsTable career={c} title="결승 리그" ids={comp.league!.ids} matches={comp.league!.matches} onPick={(id) => act('school', id)} />}
       {!showGroup && !showLeague && comp.bracket.length > 1 && (
         <p>남은 학교 <b>{comp.bracket.filter(Boolean).length}</b>곳 · {comp.bracket.includes(me) ? <span className="good">{userHasBye(c) ? '우리 학교 부전승 (이번 라운드는 쉽니다)' : '우리 학교 생존'}</span> : <span className="muted">우리 학교 탈락</span>}</p>
       )}
@@ -272,7 +272,7 @@ export default function HomeView({ S, act }: ViewProps) {
           ) : <p className="muted">아직 치른 경기가 없습니다.</p>}
         </Panel>
 
-        <CompetitionPanel c={c} />
+        <CompetitionPanel c={c} act={act} />
 
         <Panel title="다가오는 일정" className="span-4">
           <ul className="lines">

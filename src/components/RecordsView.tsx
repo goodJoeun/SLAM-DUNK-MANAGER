@@ -1,6 +1,6 @@
 import { leaders } from '@/game/season';
 import type { Career, LeaderKey } from '@/game/types';
-import { PageTitle, Panel, isUser, pct } from './ui';
+import { PageTitle, Panel, SchoolName, isUser, pct } from './ui';
 import type { ViewProps } from './ui';
 import type { Act } from './useGame';
 
@@ -16,7 +16,7 @@ function Board({ career, title, statKey, act }: { career: Career; title: string;
             ? rows.map((s, i) => (
               // 우리 선수는 누르면 선수 상세로 간다
               <tr key={s.id} className={isUser(career, s.teamId) ? 'me click' : ''} onClick={isUser(career, s.teamId) ? () => act('player', s.id) : undefined}>
-                <td className="l"><span className="faint num">{i + 1}</span> <b>{s.name}</b> <span className="muted">{s.team}</span></td>
+                <td className="l"><span className="faint num">{i + 1}</span> <b>{s.name}</b> <span className="muted"><SchoolName id={s.teamId} name={s.team} onPick={(id) => act('school', id)} /></span></td>
                 <td><b>{s.avg.toFixed(1)}</b></td>
               </tr>
             ))

@@ -41,7 +41,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   }, []);
 
   // 화면을 바꾸면 맨 위에서 시작한다 (이전 화면의 스크롤 위치가 남아 제목이 가려지지 않게)
-  useEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, inMatchNow(S)]);
+  useEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, S.schoolId, inMatchNow(S)]);
 
   // 스페이스: 평소에는 '계속', 경기 중에는 진행/일시정지. 입력 칸이나 버튼에 초점이 있으면 건드리지 않는다.
   const onSpace = useRef<() => void>(() => {});
@@ -100,7 +100,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
       {!inMatch && (
         <nav className="sidebar" aria-label="메뉴">
           {NAV.map((n) => (
-            <button key={n.key} className={`nav-item ${S.screen === n.key ? 'on' : ''}`} onClick={() => act('screen', n.key)}>
+            <button key={n.key} className={`nav-item ${S.screen === n.key && !S.schoolId ? 'on' : ''}`} onClick={() => act('screen', n.key)}>
               <Icon name={n.icon} />{n.label}
               {n.key === 'inbox' && unread > 0 && <span className="badge">{unread}</span>}
             </button>

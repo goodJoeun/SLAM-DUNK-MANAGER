@@ -696,3 +696,4 @@ p.pad { padding: 12px 14px; }
 /* 표 안의 선수 이름: 누르면 선수 상세로 */
 .name-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; text-align: left; }
 .name-link:hover, .name-link:focus-visible { color: var(--club); text-decoration: underline; }
+.pill .name-link { font-weight: inherit; }

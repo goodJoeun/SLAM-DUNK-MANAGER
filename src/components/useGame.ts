@@ -47,6 +47,7 @@ export interface GameState {
   messageId: number | null;
   match: ActiveMatch | null;
   playerId: string | null;
+  schoolId?: string | null; // 열어 본 다른 학교의 정보 화면 (저장하지 않는다)
   portraits: Record<string, string>;
   prefs: MatchPrefs;
   dayNote?: DayNote | null;
@@ -309,7 +310,12 @@ const actions = {
     removeKey(INBOX_KEY);
     Object.assign(S, { career: null, match: null, inbox: [], messageId: null, playerId: null, dayNote: null, screen: 'home', startSeed: randomSeed() });
   },
-  screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; },
+  screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; S.schoolId = null; },
+  // 학교 이름을 누르면 그 학교의 정보 화면을 연다. 우리 학교면 선수단으로 간다.
+  school({ S }: Ctx, id: string | null) {
+    if (id && id === S.career?.userTeamId) { S.schoolId = null; S.playerId = null; S.screen = 'squad'; return; }
+    S.schoolId = id && S.career?.teams[id] ? id : null;
+  },
   openMessage({ S }: Ctx, id: number | null) {
     S.screen = 'inbox';
     S.messageId = id;
@@ -376,7 +382,7 @@ const actions = {
   },
   simulate({ S }: Ctx) { openMatchReport(S, advance(S).fresh); resumeAfterScouting(S); save(S); },
   command({ S }: Ctx) { startCommand(S); },
-  player({ S }: Ctx, id: string | null) { S.playerId = id || null; S.screen = 'squad'; },
+  player({ S }: Ctx, id: string | null) { S.playerId = id || null; S.screen = 'squad'; S.schoolId = null; },
   tactic({ S }: Ctx, key: 'focus' | 'defense' | 'pace', value: string) {
     const tactics = userTeam(S).tactics;
     if (key === 'pace') tactics.pace = Number(value);

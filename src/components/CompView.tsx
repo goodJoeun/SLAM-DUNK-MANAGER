@@ -1,14 +1,14 @@
 import { standings } from '@/game/competition';
 import { SEASON } from '@/game/season';
 import type { Career, Competition, Match, Stage } from '@/game/types';
-import { CalendarStrip, PageTitle, Panel, ResultList, isUser, linesOf, teamName } from './ui';
+import { CalendarStrip, PageTitle, Panel, ResultList, SchoolName, isUser, linesOf, teamName } from './ui';
 import type { ViewProps } from './ui';
 
 const STAGE: Record<Stage, string> = {
   group: '조별 리그', finalLeague: '결승 리그', playoff: '플레이오프', knockout: '토너먼트', national: '전국 대회', done: '종료',
 };
 
-export function StandingsTable({ career, title, ids, matches }: { career: Career; title: string; ids: string[]; matches: Match[] }) {
+export function StandingsTable({ career, title, ids, matches, onPick }: { career: Career; title: string; ids: string[]; matches: Match[]; onPick?: (id: string) => void }) {
   return (
     <div className="table-wrap">
       <table className="data">
@@ -16,7 +16,7 @@ export function StandingsTable({ career, title, ids, matches }: { career: Career
         <tbody>
           {standings(ids, matches).map((r, i) => (
             <tr key={r.id} className={isUser(career, r.id) ? 'me' : ''}>
-              <td className="l"><span className="faint num">{i + 1}</span> {teamName(career, r.id)}</td>
+              <td className="l"><span className="faint num">{i + 1}</span> <SchoolName id={r.id} name={teamName(career, r.id)} onPick={onPick} /></td>
               <td>{r.w}</td><td>{r.l}</td><td>{r.pf}</td><td>{r.pa}</td>
               <td className={r.pf - r.pa > 0 ? 'good' : r.pf - r.pa < 0 ? 'bad' : ''}>{r.pf - r.pa > 0 ? '+' : ''}{r.pf - r.pa}</td>
             </tr>
@@ -38,7 +38,8 @@ function Stepper({ career, c }: { career: Career; c: Competition }) {
   );
 }
 
-export default function CompView({ S }: ViewProps) {
+export default function CompView({ S, act }: ViewProps) {
+  const pick = (id: string) => act('school', id);
   const career = S.career;
   const c = career.comp;
   if (!c) {
@@ -63,18 +64,18 @@ export default function CompView({ S }: ViewProps) {
   const rounds = [...c.rounds].reverse();
   return (
     <div className="page">
-      <PageTitle title={c.name} sub={`${career.year}년차 · 현 대표 ${c.qualifiers}곳이 전국 대회에 나갑니다`} />
+      <PageTitle title={c.name} sub={`${career.year}년차 · 현 대표 ${c.qualifiers}곳이 전국 대회에 나갑니다 · 학교 이름을 누르면 학교 정보`} />
       <Panel title="진행 단계"><Stepper career={career} c={c} />{mine && <div className="notice">우리 학교: {mine}</div>}</Panel>
       <div className="split">
         <div className="stack">
           {c.league && (
-            <Panel title="결승 리그" flush><StandingsTable career={career} title="학교" ids={c.league.ids} matches={c.league.matches} /></Panel>
+            <Panel title="결승 리그" flush><StandingsTable career={career} title="학교" ids={c.league.ids} matches={c.league.matches} onPick={pick} /></Panel>
           )}
           {c.groups && (
             <Panel title="조별 리그" flush>
               <div className="groups">
                 {c.groups.map((g) => (
-                  <div key={g.name}><StandingsTable career={career} title={g.name} ids={g.ids} matches={g.matches} /></div>
+                  <div key={g.name}><StandingsTable career={career} title={g.name} ids={g.ids} matches={g.matches} onPick={pick} /></div>
                 ))}
               </div>
             </Panel>
@@ -82,14 +83,14 @@ export default function CompView({ S }: ViewProps) {
           {(c.stage === 'knockout' || c.stage === 'playoff' || c.stage === 'national') && c.bracket.length > 1 && (
             <Panel title={`남은 학교 ${c.bracket.filter(Boolean).length}곳`}>
               <div className="row">
-                {c.bracket.filter(Boolean).map((id) => <span key={id} className={`pill ${id === me ? 'club' : ''}`}>{teamName(career, id)}</span>)}
+                {c.bracket.filter(Boolean).map((id) => <span key={id} className={`pill ${id === me ? 'club' : ''}`}><SchoolName id={id} name={teamName(career, id)} onPick={pick} /></span>)}
               </div>
             </Panel>
           )}
         </div>
         <Panel title="경기 결과">
           {rounds.length
-            ? rounds.map((r, i) => <div key={rounds.length - i} className="stack" style={{ gap: 6 }}><h3 className="hint">{r.name}</h3><ResultList lines={linesOf(career, r.matches)} /></div>)
+            ? rounds.map((r, i) => <div key={rounds.length - i} className="stack" style={{ gap: 6 }}><h3 className="hint">{r.name}</h3><ResultList lines={linesOf(career, r.matches)} onPick={pick} /></div>)
             : <p className="muted">아직 치른 경기가 없습니다.</p>}
         </Panel>
       </div>

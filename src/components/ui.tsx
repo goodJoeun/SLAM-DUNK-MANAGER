@@ -197,20 +197,25 @@ export function TacticSelects({ tactics, onChange }: {
 // ---------- 경기 결과 ----------
 
 export const linesOf = (career: Career, matches: Match[]): MatchLine[] => matches.map((m) => ({
-  home: teamName(career, m.home), away: teamName(career, m.away), homeScore: m.homeScore, awayScore: m.awayScore,
+  home: teamName(career, m.home), away: teamName(career, m.away), homeId: m.home, awayId: m.away, homeScore: m.homeScore, awayScore: m.awayScore,
   overtime: m.overtime, mine: isUser(career, m.home) || isUser(career, m.away),
 }));
 
-export function ResultList({ lines }: { lines: MatchLine[] }) {
+// 학교 이름: 누르면 학교 정보 화면으로 (onPick이 없거나 id를 모르면 그냥 글자)
+export function SchoolName({ id, name, onPick }: { id?: string; name: string; onPick?: (id: string) => void }) {
+  return id && onPick ? <button className="name-link" title="학교 정보 보기" onClick={(e) => { e.stopPropagation(); onPick(id); }}>{name}</button> : <>{name}</>;
+}
+
+export function ResultList({ lines, onPick }: { lines: MatchLine[]; onPick?: (id: string) => void }) {
   return (
     <ul className="lines results">
       {lines.map((m, i) => {
         const homeWon = m.homeScore > m.awayScore;
         return (
           <li key={i} className={m.mine ? 'me' : ''}>
-            <span className={homeWon ? 'win' : ''}>{m.home}</span>
+            <span className={homeWon ? 'win' : ''}><SchoolName id={m.homeId} name={m.home} onPick={onPick} /></span>
             <span className="score">{m.homeScore} - {m.awayScore}{m.overtime ? ' (연)' : ''}</span>
-            <span className={`r ${homeWon ? '' : 'win'}`}>{m.away}</span>
+            <span className={`r ${homeWon ? '' : 'win'}`}><SchoolName id={m.awayId} name={m.away} onPick={onPick} /></span>
           </li>
         );
       })}
