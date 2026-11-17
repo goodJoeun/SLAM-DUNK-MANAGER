@@ -127,6 +127,9 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
               <g className="face">
                 <image href={face} clipPath="url(#fc-face)" preserveAspectRatio="xMidYMin slice" {...(tall ? { x: -0.75, y: -0.44, width: 1.5, height: 1.875 } : { x: -0.44, y: -0.44, width: 0.88, height: 0.88 })} />
                 <circle className="ring" r="0.44" stroke={colors[p.side]} />
+                {/* 사진 오른쪽 아래에 팀 색 번호 배지 */}
+                <circle className="badge" cx="0.36" cy="0.34" r="0.21" fill={colors[p.side]} />
+                <text className="badge-no" x="0.36" y="0.45">{p.slot + 1}</text>
               </g>
             ) : <text className="no" y="0.15">{p.slot + 1}</text>}
             {/* 이름표가 겹치지 않게 상대는 공을 가진 선수만 이름을 보여 준다 (나머지는 마우스를 올리면 보인다) */}

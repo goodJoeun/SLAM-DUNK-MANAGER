@@ -589,6 +589,8 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .fullcourt .dot.sel .body { stroke: var(--gold); stroke-width: 0.16; }
 .fullcourt .face { pointer-events: none; }
 .fullcourt .ring { fill: none; stroke-width: 0.1; }
+.fullcourt .badge { stroke: #fff; stroke-width: 0.05; }
+.fullcourt .badge-no { fill: #fff; font-size: 0.3px; font-weight: 800; text-anchor: middle; }
 .fullcourt .dot.sel .ring { stroke: var(--gold); stroke-width: 0.14; }
 .fullcourt .ball { fill: #e8792b; stroke: #7a3410; stroke-width: 0.04; }
 .fullcourt .ball-shadow { fill: #000; }
