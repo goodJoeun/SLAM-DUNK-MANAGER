@@ -322,6 +322,19 @@ export interface SeasonStat {
   gp: number; sec: number; pts: number; reb: number; ast: number; stl: number; blk: number;
   fgm: number; fga: number; tpm: number; tpa: number;
 }
+// 우리 선수의 한 경기 기록 (연습 경기 포함). 선수 상세의 최근 경기 표에 쓴다
+export interface GameLine {
+  year: number; day: number;
+  opponent: string;
+  official: boolean;
+  won: boolean;
+  score: string; // "우리 - 상대"
+  sec: number; pts: number; reb: number; ast: number; stl: number; blk: number;
+  fgm: number; fga: number; tpm: number; tpa: number;
+}
+// 종합 능력치가 바뀐 시점 (성장 추이)
+export interface TrendPoint { year: number; day: number; ovr: number }
+
 export type LeaderKey = 'pts' | 'reb' | 'ast' | 'stl' | 'blk';
 export interface Leader extends SeasonStat {
   team: string;
@@ -357,6 +370,8 @@ export interface Career {
   event?: CareerEvent; // 오늘 감독이 결정해야 하는 사건 (고르기 전에는 하루를 진행할 수 없다)
   lastEventDay?: number;
   lastEventKey?: EventKey;
+  gameLog?: Record<string, GameLine[]>; // 우리 선수별 경기 기록 (재학 중인 선수만 남긴다)
+  trend?: Record<string, TrendPoint[]>; // 우리 선수별 종합 능력치 변화
   forcedRest?: boolean; // 사건의 결과로 오늘 훈련이 휴식으로 바뀐다
 }
 

@@ -17,7 +17,7 @@
 //   인자를 생략하면 AI가 대신 결정한다: playDay(state)
 
 import { makeRng } from './rng.ts';
-import { createGame, simulateGame } from './engine.ts';
+import { createGame, overall, simulateGame } from './engine.ts';
 import {
   createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL,
   trainTeam, applyMatch, overnight, aiTraining,
@@ -311,6 +311,37 @@ function recordStats(state: Career, box: BoxTeam[]) {
   }
 }
 
+// 우리 선수의 경기별 기록을 남긴다 (연습 경기 포함)
+function logUserGame(state: Career, mine: BoxTeam, opp: BoxTeam, official: boolean) {
+  const log = (state.gameLog ??= {});
+  for (const p of mine.players) {
+    if (!p.sec) continue;
+    (log[p.id] ??= []).push({
+      year: state.year, day: state.dayIndex + 1, opponent: opp.name, official, won: mine.score > opp.score, score: `${mine.score} - ${opp.score}`,
+      sec: Math.round(p.sec), pts: p.pts, reb: p.orb + p.drb, ast: p.ast, stl: p.stl, blk: p.blk, fgm: p.fgm, fga: p.fga, tpm: p.tpm, tpa: p.tpa,
+    });
+  }
+}
+
+// 우리 선수의 종합 능력치가 바뀌었으면 그 시점을 남긴다. day = 그날 일과가 끝난 뒤 (0이면 시즌 시작 전)
+function recordTrend(state: Career, day: number) {
+  const trend = (state.trend ??= {});
+  for (const p of state.teams[state.userTeamId].players) {
+    const list = (trend[p.id] ??= []);
+    const ovr = overall(p);
+    if (list[list.length - 1]?.ovr !== ovr) list.push({ year: state.year, day, ovr });
+  }
+}
+
+// 졸업한 선수의 기록은 지운다
+function pruneHistory(state: Career) {
+  const ids = new Set(state.teams[state.userTeamId].players.map((p) => p.id));
+  for (const store of [state.gameLog, state.trend]) {
+    if (!store) continue;
+    for (const id of Object.keys(store)) if (!ids.has(id)) delete store[id];
+  }
+}
+
 // 공식전에서 내 팀이 받는 준비 보너스 [홈, 원정]
 function prepFor(state: Career, home: string, away: string, official: boolean): [number, number] {
   const me = state.userTeamId;
@@ -349,6 +380,7 @@ function playMatch(state: Career, ctx: DayContext, home: string, away: string, o
       const minutes = Object.fromEntries(g.box[side].players.map((p) => [p.id, p.sec]));
       moraleAfterMatch(state.teams[id], minutes, match.winner === id, official, strength[1 - side] - strength[side]);
       ctx.report.userBox = g.box;
+      logUserGame(state, g.box[side], g.box[1 - side], official);
       ctx.report.growth.push(...result.growth);
       ctx.report.injuries.push(...result.injuries);
     }
@@ -650,6 +682,7 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
     competitionEnd: null, yearEnd: null, scout: null,
   };
   const ctx: DayContext = { rng: rngFor(state), pre: decision.match ?? null, played: new Set(), report };
+  recordTrend(state, state.dayIndex); // 처음 보는 선수는 오늘 일과 전의 값이 기준점이 된다
 
   if (day.type === 'official') {
     const before = state.results.length;
@@ -690,6 +723,7 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
   moraleOvernight(state.teams[state.userTeamId]);
   delete state.forcedRest;
   delete state.event; // 고르지 않고 넘어간 사건은 사라진다
+  recordTrend(state, state.dayIndex + 1);
   state.dayIndex++;
   if (state.dayIndex >= state.calendar.length) report.yearEnd = endYear(state, ctx.rng);
   else if (state.calendar[state.dayIndex].start) startCompetition(state, state.calendar[state.dayIndex].start!, ctx.rng);
@@ -735,6 +769,7 @@ function endYear(state: Career, rng: Rng): YearSummary {
   }
   for (const id of state.guestIds) delete state.teams[id];
   state.guestIds = [];
+  pruneHistory(state);
   state.year++;
   startSeason(state);
   return summary;

@@ -4,7 +4,7 @@ import { RECRUITING, SEASON, prospectsOf, recruitChance } from '@/game/season';
 import { overall } from '@/game/engine';
 import { RATING_KEYS } from '@/game/generate';
 import { TRAITS, moraleLabel, moraleOf, traitOf } from '@/game/people';
-import type { Career, Player, RatingKey } from '@/game/types';
+import type { Career, Player, RatingKey, TrendPoint } from '@/game/types';
 import type { Act } from './useGame';
 import Portrait, { PortraitEditor, licensedPortrait } from './Portrait';
 import {
@@ -98,6 +98,42 @@ function status(p: Player, index: number) {
   return <span className="pill">벤치</span>;
 }
 
+// 종합 능력치 변화를 계단 모양 선으로 그린다. 가로축은 기록을 시작한 뒤로 지난 날 수
+function TrendChart({ points, yearLength, now }: { points: TrendPoint[]; yearLength: number; now: number }) {
+  const at = (p: { year: number; day: number }) => (p.year - 1) * yearLength + p.day;
+  const x0 = at(points[0]);
+  const span = Math.max(1, now - x0);
+  const values = points.map((p) => p.ovr);
+  const lo = Math.min(...values) - 1;
+  const hi = Math.max(...values) + 1;
+  const W = 320, H = 96, L = 26, R = 30, T = 8, B = 18;
+  const x = (d: number) => L + ((d - x0) / span) * (W - L - R);
+  const y = (v: number) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  let path = `M${x(x0).toFixed(1)} ${y(points[0].ovr).toFixed(1)}`;
+  for (const p of points.slice(1)) path += `H${x(at(p)).toFixed(1)}V${y(p.ovr).toFixed(1)}`;
+  path += `H${x(now).toFixed(1)}`;
+  const first = points[0];
+  const last = points[points.length - 1];
+  // 해가 바뀐 지점에 세로 눈금을 둔다
+  const yearMarks: number[] = [];
+  for (let yr = first.year + 1; (yr - 1) * yearLength < now; yr++) yearMarks.push(yr);
+  return (
+    <svg className="trend" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`종합 능력치 ${first.ovr}에서 ${last.ovr}까지의 변화`}>
+      <line className="axis" x1={L} y1={H - B} x2={W - R} y2={H - B} />
+      {yearMarks.map((yr) => (
+        <g key={yr}>
+          <line className="mark" x1={x((yr - 1) * yearLength)} y1={T} x2={x((yr - 1) * yearLength)} y2={H - B} />
+          <text className="lbl" x={x((yr - 1) * yearLength)} y={H - 5} textAnchor="middle">{yr}년차</text>
+        </g>
+      ))}
+      <path className="line" d={path} />
+      <circle className="pt" cx={x(now)} cy={y(last.ovr)} r="3" />
+      <text className="val" x={L - 5} y={y(first.ovr) + 4} textAnchor="end">{first.ovr}</text>
+      <text className="val now" x={x(now) + 6} y={y(last.ovr) + 4}>{last.ovr}</text>
+    </svg>
+  );
+}
+
 function PlayerProfile({ c, player: p, index, act, portraits }: {
   c: Career;
   player: Player;
@@ -111,6 +147,12 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
   const next = list[(index + 1) % list.length];
   const s = c.stats[p.id];
   const ovr = overall(p);
+  const [compareId, setCompareId] = useState('');
+  const other = list.find((x) => x.id === compareId && x.id !== p.id);
+  const trend = c.trend?.[p.id] ?? [];
+  const games = [...(c.gameLog?.[p.id] ?? [])].reverse();
+  const recent = games.slice(0, 8);
+  const now = (c.year - 1) * c.calendar.length + c.dayIndex;
   return (
     <div className="page">
       <div className="row between">
@@ -152,23 +194,79 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
       </div>
 
       <div className="split">
-        <Panel title="능력치">
-          <div className="attr-cols">
-            {ATTR_GROUPS.map((g) => (
-              <div key={g.title} className="attr-col">
-                <h3>{g.title}</h3>
-                {g.keys.map((k) => <div key={k} className="attr-row"><span>{RATING_SHORT[k]}</span><Attr v={p.ratings[k]} /></div>)}
-              </div>
-            ))}
-          </div>
-          <p className="hint">색이 푸를수록 뛰어납니다. 능력치는 훈련과 경기 경험으로 오르고, 높을수록 올리기 어렵습니다.</p>
-        </Panel>
+        <div className="stack">
+          <Panel
+            title="능력치"
+            action={(
+              <label className="compare-pick">비교
+                <select value={other ? compareId : ''} onChange={(e) => setCompareId(e.target.value)}>
+                  <option value="">선택 안 함</option>
+                  {list.filter((x) => x.id !== p.id).map((x) => <option key={x.id} value={x.id}>{x.name} ({POS_NAME[x.pos]})</option>)}
+                </select>
+              </label>
+            )}
+          >
+            <div className="attr-cols">
+              {ATTR_GROUPS.map((g) => (
+                <div key={g.title} className="attr-col">
+                  <h3>{g.title}</h3>
+                  {g.keys.map((k) => {
+                    const diff = other ? p.ratings[k] - other.ratings[k] : 0;
+                    return (
+                      <div key={k} className="attr-row">
+                        <span>{RATING_SHORT[k]}</span>
+                        <span className="attr-vs">
+                          <Attr v={p.ratings[k]} />
+                          {other && <small className={diff > 0 ? 'good' : diff < 0 ? 'bad' : 'faint'} title={`${other.name} ${other.ratings[k]}`}>{diff > 0 ? `+${diff}` : diff === 0 ? '=' : diff}</small>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            <p className="hint">
+              {other
+                ? `옆의 숫자는 ${other.name}(종합 ${overall(other)})보다 얼마나 높고 낮은지입니다.`
+                : '색이 푸를수록 뛰어납니다. 능력치는 훈련과 경기 경험으로 오르고, 높을수록 올리기 어렵습니다.'}
+            </p>
+          </Panel>
+          <Panel title="최근 경기" flush action={games.length > 0 && <span className="hint">{games.length}경기 중 최근 {recent.length}경기</span>}>
+            {recent.length ? (
+              <div className="table-wrap"><table className="data">
+                <thead><tr>
+                  <th className="l">날짜</th><th className="l">상대</th><th className="c">결과</th><th>출전</th><th>득점</th><th>리바운드</th><th>어시스트</th><th>야투</th><th>3점</th>
+                </tr></thead>
+                <tbody>
+                  {recent.map((g) => (
+                    <tr key={`${g.year}-${g.day}`}>
+                      <td className="l muted">{g.year}년차 {g.day}일</td>
+                      <td className="l">{g.opponent}{!g.official && <span className="faint"> · 연습</span>}</td>
+                      <td className="c"><span className={g.won ? 'good' : 'bad'}>{g.won ? '승' : '패'}</span> <span className="muted">{g.score}</span></td>
+                      <td>{Math.round(g.sec / 60)}분</td>
+                      <td><b>{g.pts}</b></td>
+                      <td>{g.reb}</td>
+                      <td>{g.ast}</td>
+                      <td>{g.fgm}/{g.fga}</td>
+                      <td>{g.tpm}/{g.tpa}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            ) : <p className="muted pad">아직 출전한 경기가 없습니다. 경기를 치르면 여기에 경기별 기록이 쌓입니다.</p>}
+          </Panel>
+        </div>
         <div className="stack">
           <Panel title="개인 훈련">
             <Select options={FOCUS_PROGRAMS} value={p.focus} onChange={(v) => act('playerFocus', p.id, v)}>
               <option value="">지정 안 함</option>
             </Select>
             <p className="hint">팀 훈련 때마다 이 메뉴의 능력치가 추가로 오릅니다.{p.focus ? ` 대상: ${PROGRAMS[p.focus].keys.map((k) => RATING_SHORT[k]).join(', ')}` : ''}</p>
+          </Panel>
+          <Panel title="성장 추이" action={trend.length > 0 && <span className="hint">종합 {trend[0].ovr} → {ovr} ({ovr - trend[0].ovr >= 0 ? '+' : ''}{ovr - trend[0].ovr})</span>}>
+            {trend.length > 1 ? (
+              <TrendChart points={trend} yearLength={c.calendar.length} now={Math.max(now, 1)} />
+            ) : <p className="muted">{trend.length ? `기록을 시작한 뒤로 종합 ${trend[0].ovr}에서 변화가 없습니다.` : '날이 지나면 종합 능력치의 변화가 여기에 그려집니다.'}</p>}
           </Panel>
           <Panel title={`${c.year}년차 공식전 기록`}>
             {s?.gp ? (

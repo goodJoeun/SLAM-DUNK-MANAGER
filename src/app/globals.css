@@ -660,3 +660,18 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .role-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 14px 7px 54px; }
 .role-row select { padding: 3px 6px; font-size: 12px; color: var(--muted); }
 .role-row.set select { color: var(--text); border-color: color-mix(in srgb, var(--club) 50%, var(--line)); }
+
+/* 선수 상세: 성장 추이 그래프, 능력치 비교 */
+.trend { display: block; width: 100%; height: auto; max-height: 150px; }
+.trend .axis { stroke: var(--line); stroke-width: 1; }
+.trend .mark { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.trend .line { fill: none; stroke: var(--club); stroke-width: 2; stroke-linejoin: round; }
+.trend .pt { fill: var(--club); }
+.trend .lbl { fill: var(--muted); font-size: 9px; }
+.trend .val { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.trend .val.now { fill: var(--text); font-weight: 700; }
+.compare-pick { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.compare-pick select { max-width: 150px; padding: 3px 6px; font-size: 12px; }
+.attr-vs { display: inline-flex; align-items: center; gap: 6px; }
+.attr-vs small { min-width: 24px; text-align: right; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+p.pad { padding: 12px 14px; }
