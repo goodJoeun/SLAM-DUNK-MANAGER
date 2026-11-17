@@ -1,30 +1,9 @@
 // 표지: 게임을 켜면 가장 먼저 보이는 화면. 이어하기, 새로 시작, 불러오기를 고른다.
-// 그림은 전부 CSS와 SVG로 그린다 (만화의 집중선·망점·먹선 느낌).
+// 배경은 public/cover.webp 한 장이다. 제목이 그림 안에 들어 있어서 글자 제목은 화면에 보이지 않게 둔다.
 import { useEffect, useRef, useState } from 'react';
 import { SLOTS } from './useGame';
 import type { Act, GameState } from './useGame';
 import { Crest, clubVars } from './ui';
-
-function Ball() {
-  return (
-    <svg className="cover-ball" viewBox="0 0 200 200" aria-hidden="true">
-      <defs>
-        <radialGradient id="cover-ball-fill" cx="36%" cy="30%" r="80%">
-          <stop offset="0" stopColor="#ffb057" />
-          <stop offset="0.55" stopColor="#e8651a" />
-          <stop offset="1" stopColor="#8f2f08" />
-        </radialGradient>
-      </defs>
-      <circle cx="100" cy="100" r="94" fill="url(#cover-ball-fill)" stroke="#111" strokeWidth="6" />
-      <g fill="none" stroke="#111" strokeWidth="5" strokeLinecap="round">
-        <path d="M100 6v188" />
-        <path d="M6 100h188" />
-        <path d="M34 33c38 30 38 104 0 134" />
-        <path d="M166 33c-38 30-38 104 0 134" />
-      </g>
-    </svg>
-  );
-}
 
 export default function TitleView({ S, act }: { S: GameState; act: Act }) {
   const last = S.lastSlot ? S.slots[S.lastSlot - 1] : null;
@@ -36,20 +15,10 @@ export default function TitleView({ S, act }: { S: GameState; act: Act }) {
 
   return (
     <div className="cover">
-      <div className="cover-art" aria-hidden="true">
-        <div className="cover-slab" />
-        <div className="cover-lines" />
-        <div className="cover-court" />
-        <Ball />
-        <span className="cover-sfx">덩크!!</span>
-      </div>
+      <div className="cover-art" aria-hidden="true" />
 
       <div className="cover-inner">
-        <header className="cover-head">
-          <span className="cover-eyebrow">HIGH SCHOOL BASKETBALL MANAGER</span>
-          <h1 className="cover-title"><span>고교 농구</span><span className="hot">매니저</span></h1>
-          <p className="cover-tag">전국 제패까지, 단 3년.<br />벤치에서 팀의 운명을 지휘하라.</p>
-        </header>
+        <h1 className="cover-title">슬램덩크 농구 매니저</h1>
 
         <nav className="cover-menu" aria-label="시작 메뉴">
           {last && (

@@ -116,14 +116,15 @@ export interface ActiveMatch extends UserMatch {
   possessions: number;
   logMark: number; // 엔진 중계 기록에서 화면이 이미 연출에 반영한 위치
   endSeen: boolean; // 경기 종료 창을 닫았는지
+  counter: number; // 이 경기를 만들기 직전의 career.counter. 이어 할 때 같은 값에서 다시 만들어야 같은 경기가 된다
 }
 
-export const newMatch = (m: UserMatch): ActiveMatch => ({
+export const newMatch = (m: UserMatch, counter: number): ActiveMatch => ({
   ...m, feed: [], selected: null, timer: null, playing: false, pause: null, pauseFix: null, interlude: null, breakInfo: null, periodMark: null, notes: [], flags: {},
-  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0, endSeen: false,
+  scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0, endSeen: false, counter,
 });
 
-const FEED_LIMIT = 400;
+export const FEED_LIMIT = 400;
 const NOTE_LIMIT = 40;
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 

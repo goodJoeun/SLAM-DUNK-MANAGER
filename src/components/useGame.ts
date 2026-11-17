@@ -12,7 +12,9 @@ import { INTENSITY, PROGRAMS } from '@/game/school';
 import type {
   Career, DayReport, Defense, Focus, GrowthEvent, InjuryEvent, IntensityKey, NameStyle, PlayerRole, PrepInfo, ProgramKey, Tactics,
 } from '@/game/types';
-import { BREAK_MS, DEFAULT_PREFS, SPEEDS, TIRED_LEVELS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
+import { callsOf, recording, replay } from '@/game/replay';
+import type { Call } from '@/game/replay';
+import { BREAK_MS, DEFAULT_PREFS, FEED_LIMIT, SPEEDS, TIRED_LEVELS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
 import { recruitMessage, buildMessages, mergeTraining, quiet, supersedes, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
@@ -22,12 +24,14 @@ const INBOX_KEY = 'hoops-manager-inbox-v1';
 const PORTRAIT_KEY = 'hoops-manager-portraits-v1'; // 선수 이름 -> 사용자가 올린 이미지 (게임을 새로 시작해도 남는다)
 const PREFS_KEY = 'hoops-manager-match-prefs-v1'; // 경기 속도·자동 정지·중계 보기 설정
 const SLOT_KEY = 'hoops-manager-slot-v1'; // 마지막으로 하던 세이브 칸
+const MATCH_KEY = 'hoops-manager-match-v1'; // 직접 지휘하던 경기 (끝나기 전에 창이 닫혀도 이어 할 수 있게)
 const INBOX_LIMIT = 80;
 
 // 세이브 칸: 1번 칸은 칸이 생기기 전의 저장 위치를 그대로 쓴다 (예전 세이브가 1번 칸에 보인다)
 export const SLOTS = [1, 2, 3];
 const saveKey = (slot: number) => (slot === 1 ? SAVE_KEY : `${SAVE_KEY}-s${slot}`);
 const inboxKey = (slot: number) => (slot === 1 ? INBOX_KEY : `${INBOX_KEY}-s${slot}`);
+const matchKey = (slot: number) => (slot === 1 ? MATCH_KEY : `${MATCH_KEY}-s${slot}`);
 // 세이브 칸 목록에 보여 줄 요약 (빈 칸은 null)
 export interface SlotInfo { slot: number; team: string; when: string; done: boolean }
 
@@ -94,11 +98,73 @@ function save(S: GameState) {
   writeJson(inboxKey(S.slot), S.inbox);
 }
 
+// 직접 지휘하던 경기의 저장. 엔진의 경기는 그대로 저장할 수 없어, 엔진에 넣은 조작(calls)을 적어 두고
+// 불러올 때 같은 시드로 경기를 다시 만들어 재생한다 (src/game/replay.ts). 화면 쪽 상태(알림 등)는 그대로 담는다.
+interface MatchSave {
+  v: 1;
+  year: number;
+  dayIndex: number;
+  home: string;
+  away: string;
+  counter: number;
+  calls: Call[];
+  score: [number, number]; // 재생한 결과가 저장할 때와 같은지 확인한다
+  ui: Pick<ActiveMatch, 'notes' | 'flags' | 'periodMark' | 'breakInfo' | 'pause' | 'pauseFix' | 'endSeen' | 'scene' | 'lastEnd'>;
+}
+
+// 경기가 한 공격권 진행되거나 감독이 손을 쓸 때마다 부른다. 경기가 없으면 저장해 둔 것을 지운다.
+function saveMatch(S: GameState) {
+  const m = S.match;
+  if (!S.career || !S.slot) return;
+  if (!m) { removeKey(matchKey(S.slot)); return; }
+  if (m.pending) return; // 연출 중에는 화면이 엔진보다 한 공격권 뒤에 있다. 결과를 드러낸 뒤에 저장한다
+  const calls = callsOf(m.game);
+  if (!calls?.length) { removeKey(matchKey(S.slot)); return; } // 아직 아무것도 하지 않은 경기
+  const { score } = m.game.result();
+  const data: MatchSave = {
+    v: 1, year: S.career.year, dayIndex: S.career.dayIndex, home: m.home, away: m.away, counter: m.counter, calls, score: [score.home, score.away],
+    ui: {
+      notes: m.notes, flags: m.flags, periodMark: m.periodMark, breakInfo: m.breakInfo, pause: m.pause, pauseFix: m.pauseFix,
+      endSeen: m.endSeen, scene: m.scene, lastEnd: m.lastEnd,
+    },
+  };
+  writeJson(matchKey(S.slot), data);
+}
+
+const savedMatchFor = (slot: number, c: Career) => {
+  const s = readJson<MatchSave | null>(matchKey(slot), null);
+  return s?.v === 1 && s.year === c.year && s.dayIndex === c.dayIndex && Array.isArray(s.calls) ? s : null;
+};
+
+// 저장해 둔 경기를 되살린다. 오늘 경기가 아니거나 재생 결과가 저장할 때와 다르면(게임이 바뀐 경우) null.
+function restoreMatch(career: Career, s: MatchSave): ActiveMatch | null {
+  if (!today(career)?.userMatch) return null;
+  const counter = career.counter;
+  try {
+    career.counter = s.counter;
+    const base = prepareUserMatch(career);
+    if (!base || base.home !== s.home || base.away !== s.away || !replay(base.game, s.calls)) throw new Error('다른 경기');
+    const r = base.game.result();
+    if (r.score.home !== s.score[0] || r.score.away !== s.score[1]) throw new Error('다른 결과');
+    const m = newMatch({ ...base, game: recording(base.game, [...s.calls]) }, s.counter);
+    Object.assign(m, s.ui);
+    m.feed = r.log.slice(-FEED_LIMIT).reverse().map((e) => ({ ...e }));
+    m.logMark = r.log.length;
+    m.possessions = s.calls.filter((c) => c === 's').length;
+    if (!r.finished && !m.pause) m.pause = '저장해 둔 경기를 이어서 합니다. 준비되면 계속 진행하세요.';
+    return m;
+  } catch {
+    career.counter = counter;
+    return null;
+  }
+}
+
 function slotInfo(slot: number): SlotInfo | null {
   const c = readJson<Career | null>(saveKey(slot), null);
   if (!c?.teams?.[c.userTeamId]) return null;
   const d = today(c);
-  return { slot, team: c.teams[c.userTeamId].name, when: d ? `${d.year}년차 ${d.day}일째 · ${d.phase}` : '3년 캠페인 종료', done: !d };
+  const inMatch = d && savedMatchFor(slot, c) ? ' · 경기 진행 중' : '';
+  return { slot, team: c.teams[c.userTeamId].name, when: d ? `${d.year}년차 ${d.day}일째 · ${d.phase}${inMatch}` : '3년 캠페인 종료', done: !d };
 }
 const readSlots = () => SLOTS.map(slotInfo);
 const firstEmpty = (slots: (SlotInfo | null)[]) => SLOTS.find((n, i) => !slots[i]) ?? 0;
@@ -260,6 +326,10 @@ function tick(S: GameState, rerender: () => void, keepGoing = true) {
     } else if (r.stop) {
       m.pause = r.stop;
       stopMatchTimer(S);
+    }
+    saveMatch(S); // 공격권마다 저장해 두면 창이 닫혀도 여기서부터 이어 할 수 있다
+    if (r.finished || r.stop) {
+      // 멈췄다
     } else if (!keepGoing || !m.playing) {
       // 공격권 하나만 보여 주거나, 연출 중에 일시정지를 눌렀다
     } else if (r.periodEnded) {
@@ -317,8 +387,10 @@ function resumeAfterScouting(S: GameState) {
 }
 
 function startCommand(S: GameState) {
-  const match = prepareUserMatch(careerOf(S));
-  if (match) S.match = newMatch(match);
+  const career = careerOf(S);
+  const counter = career.counter;
+  const match = prepareUserMatch(career);
+  if (match) S.match = newMatch({ ...match, game: recording(match.game) }, counter);
 }
 
 interface Ctx {
@@ -335,6 +407,7 @@ const actions = {
     const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
     Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
     deliver(S, [welcomeMessage(career), recruitMessage(career)]);
+    removeKey(matchKey(S.slot));
     save(S);
     writeJson(SLOT_KEY, S.slot);
   },
@@ -359,6 +432,9 @@ const actions = {
       career, slot, inbox: readJson<Message[]>(inboxKey(slot), []), screen: 'home', messageId: null, playerId: null, dayNote: null,
       program: 'shooting', intensity: 'normal', resumeProgram: 'shooting',
     });
+    // 직접 지휘하던 경기가 남아 있으면 그 자리에서 이어 한다
+    const saved = savedMatchFor(slot, career);
+    S.match = saved ? restoreMatch(career, saved) : null;
     writeJson(SLOT_KEY, slot);
   },
   // 새 게임이 들어갈 빈 칸을 고른다
@@ -369,6 +445,7 @@ const actions = {
     if (!window.confirm(`${slot}번 칸의 게임(${info.team} · ${info.when})을 지울까요? 되돌릴 수 없습니다.`)) return;
     removeKey(saveKey(slot));
     removeKey(inboxKey(slot));
+    removeKey(matchKey(slot));
     S.slots = readSlots();
     if (!S.slot || slotInfo(S.slot)) S.slot = firstEmpty(S.slots);
     S.lastSlot = lastOf(S.slots, S.lastSlot);
@@ -656,6 +733,7 @@ export function useGame(): { S: GameState; act: Act } {
 
   const act: Act = (name, ...args) => {
     (actions[name] as (ctx: Ctx, ...rest: unknown[]) => void)({ S, rerender }, ...args);
+    saveMatch(S);
     rerender();
   };
 
