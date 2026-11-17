@@ -18,6 +18,8 @@ const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
   { key: 'records', label: '기록', icon: 'chart' },
 ];
 
+const REST_ADVICE = { low: 60, beforeMatch: 75 }; // 이 컨디션 아래에서 훈련을 이어 가려 하면 휴식을 권한다
+
 function NextChip({ d }: { d: Today }) {
   const next = d.userMatch ? `오늘 · ${d.userMatch.opponent}` : d.daysToNextMatch == null ? '올해 남은 경기 없음' : `${d.daysToNextMatch}일 후`;
   return <div className="next-chip"><span>다음 경기</span><b>{next}</b></div>;
@@ -69,6 +71,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   const note = S.dayNote;
   const cond = Math.round(mean(team.players.filter((p) => !p.injuredDays).map((p) => p.condition)));
   const plan = S.program === 'rest' || S.program === 'scout' ? PROGRAMS[S.program].label : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
+  // 계속 버튼이 지금 무엇을 하는지, 누르기 전에 알아야 할 것을 버튼에 적는다
+  const decision = Boolean(c.event) && !d?.userMatch; // 감독의 결정을 기다리는 사건: 고르기 전에는 하루가 넘어가지 않는다
+  const training = S.program !== 'rest' && S.program !== 'scout';
+  // 지친 채로 훈련을 이어 가려 할 때의 휴식 권고 (경기 전날은 기준을 높인다)
+  const restAdvice = !d || d.userMatch || decision || !training ? null
+    : cond < REST_ADVICE.low ? `컨디션 ${cond} · 휴식 권장`
+      : d.daysToNextMatch === 1 && cond < REST_ADVICE.beforeMatch ? `내일 경기 · 컨디션 ${cond} · 휴식 권장` : null;
 
   return (
     <div ref={appRef} className={`app ${inMatch ? 'in-match' : ''}`} style={clubVars(team.name)}>
@@ -88,9 +97,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
           <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
         )}
         {!inMatch && d && (
-          <button className="btn continue" onClick={() => act('proceed')} title="단축키: 스페이스">
-            <span className="c-main">{d.userMatch ? '경기 시작' : '계속'}<Icon name="next" /></span>
-            <small>{d.userMatch ? d.userMatch.label : `훈련: ${plan}`}</small>
+          <button
+            className={`btn continue ${decision || restAdvice ? 'alert' : ''}`}
+            onClick={() => act('proceed')}
+            title={decision ? '홈의 "오늘의 결정"을 먼저 골라야 하루가 넘어갑니다' : restAdvice ? '컨디션이 낮으면 훈련 효율이 떨어지고 다치기 쉬우며, 경기력도 떨어집니다. 훈련 화면에서 휴식을 고를 수 있습니다. (단축키: 스페이스)' : '단축키: 스페이스'}
+          >
+            <span className="c-main">{d.userMatch ? '경기 시작' : decision ? '결정 필요' : '계속'}<Icon name="next" /></span>
+            <small>{d.userMatch ? d.userMatch.label : decision ? '오늘의 결정을 먼저 고르세요' : restAdvice ?? `훈련: ${plan}`}</small>
           </button>
         )}
         {/* 경기 중에는 실수로 누르지 않게 숨긴다 */}

@@ -162,6 +162,8 @@ p { margin: 0; }
 .btn.continue:hover:not(:disabled) { background: var(--club); filter: brightness(1.12); }
 .btn.continue .c-main { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 800; }
 .btn.continue small { font-size: 11px; opacity: 0.85; font-weight: 600; }
+.btn.continue.alert { box-shadow: 0 0 0 2px var(--warn); }
+.btn.continue.alert small { opacity: 1; }
 
 select {
   width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
