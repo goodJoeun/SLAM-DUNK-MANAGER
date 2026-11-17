@@ -233,6 +233,17 @@ export default function HomeView({ S, act }: ViewProps) {
     <div className="page">
       <PageTitle title="홈" sub={`${d.year}년차 ${d.day}일째 · ${d.phase}`} />
       <div className="dash">
+        {c.year === 1 && c.dayIndex === 0 && (
+          <Panel title="부임 첫날 · 먼저 할 일" className="span-12" action={<span className="hint">첫날에만 보입니다. 건너뛰고 바로 "계속"을 눌러도 됩니다.</span>}>
+            <ol className="first-steps">
+              <li><button onClick={() => act('screen', 'squad')}><b>선수단 살펴보기</b><span>누가 주전인지, 능력치와 컨디션을 확인합니다.</span></button></li>
+              <li><button onClick={() => act('screen', 'tactics')}><b>선발과 전술 정하기</b><span>선발 다섯 명과 공격·수비 방식을 고릅니다.</span></button></li>
+              <li><button onClick={() => act('screen', 'training')}><b>훈련 정하기</b><span>팀 훈련 메뉴와 강도, 선수별 개인 훈련을 정합니다.</span></button></li>
+              <li><button onClick={() => act('recruit')}><b>신입생 영입 목표 정하기</b><span>내년에 데려올 중학 유망주를 고릅니다.</span></button></li>
+              <li><div><b>"계속"으로 하루 보내기</b><span>오른쪽 위의 계속 버튼(스페이스)을 누르면 훈련하고 다음 날로 넘어갑니다.</span></div></li>
+            </ol>
+          </Panel>
+        )}
         <EventPanel S={S} act={act} />
         <NextMatchPanel S={S} act={act} d={d} team={team} />
 

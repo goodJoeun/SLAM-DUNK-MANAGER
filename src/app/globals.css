@@ -735,3 +735,14 @@ table.data tr.picked { background: color-mix(in srgb, var(--club) 10%, transpare
   .start-confirm p { font-size: 12.5px; }
   .start-confirm .btn { flex: 1; }
 }
+
+/* 부임 첫날의 할 일 안내, 메뉴 끝의 새 게임 버튼 */
+.first-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.first-steps li { counter-increment: step; display: grid; }
+.first-steps li > * { display: grid; gap: 3px; align-content: start; padding: 10px 12px 10px 38px; position: relative; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: inherit; font: inherit; text-align: left; }
+.first-steps li > *::before { content: counter(step); position: absolute; left: 10px; top: 10px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--club); color: #fff; font-size: 11px; font-weight: 700; }
+.first-steps li > button { cursor: pointer; }
+.first-steps li > button:hover, .first-steps li > button:focus-visible { border-color: var(--club); }
+.first-steps span { font-size: 12px; color: var(--muted); }
+.nav-reset { margin-top: 8px; font-size: 12px; font-weight: 500; }
+@media (max-width: 860px) { .nav-reset { margin-top: 0; } }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GOAL_LABEL, createCareer, goalTierFor } from '@/game/season';
 import { teamOverall } from '@/game/school';
 import { overall } from '@/game/engine';
@@ -42,6 +42,9 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
   const chosen = picked == null ? null : p.teams[p.regionIds[picked]];
   const info = useMemo(() => Object.fromEntries(p.regionIds.map((id) => [id, schoolInfo(p, id)])), [p]);
   const ci = chosen ? info[chosen.id] : null;
+  // 학교를 고르면 확인 창의 시작 버튼으로 초점을 옮긴다 (키보드로 이어서 누를 수 있게)
+  const startRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (picked != null) startRef.current?.focus({ preventScroll: true }); }, [picked]);
   // 보여 주는 순서만 바꾼다. 고른 학교는 원래 순번(picked)으로 기억한다.
   const [sort, setSort] = useState<Sort>('base');
   const order = useMemo(() => {
@@ -66,7 +69,9 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
       </div>
       <div className="page-title">
         <div><h1>학교 선택</h1><p>난이도는 지금 전력이 올해 목표에 얼마나 못 미치는지로 정해집니다. 학교 수준(별)은 매년 성적에 따라 오르내리고, 목표와 신입생의 질을 좌우합니다.</p></div>
-        <div className="row"><span className="muted">정렬</span><Seg options={SORTS} value={sort} onChange={(v) => setSort(v as Sort)} /></div>
+        <div className="row"><span className="muted">정렬</span><Seg options={SORTS} value={sort} onChange={(v) => setSort(v as Sort)} />
+          <button className="btn small" title="원작에 나오지 않는 학교와 선수들을 새로 만듭니다. 원작 선수는 그대로입니다." onClick={() => { setPicked(null); act('reroll'); }}>선수 구성 다시 뽑기</button>
+        </div>
       </div>
       {chosen && ci && picked != null && (
         <div className="notice start-confirm" style={clubVars(chosen.name)}>
@@ -81,7 +86,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
             </p>
           </div>
           <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
-          <button className="btn primary" onClick={() => act('start', picked)}>이 학교로 시작</button>
+          <button ref={startRef} className="btn primary" onClick={() => act('start', picked)}>이 학교로 시작</button>
         </div>
       )}
       <div className="school-grid">

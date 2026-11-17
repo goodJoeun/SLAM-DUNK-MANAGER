@@ -298,6 +298,8 @@ interface Ctx {
 
 const actions = {
   namestyle({ S }: Ctx) { S.nameStyle = S.nameStyle === 'kr' ? 'jp' : 'kr'; },
+  // 학교 선택 화면: 무명 학교의 선수 구성을 새로 뽑는다
+  reroll({ S }: Ctx) { if (!S.career) S.startSeed = randomSeed(); },
   start({ S }: Ctx, index: number) {
     const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
     Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
