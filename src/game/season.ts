@@ -19,7 +19,7 @@
 import { makeRng } from './rng.ts';
 import { createGame, overall, simulateGame } from './engine.ts';
 import {
-  createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL, starRecruitChance,
+  createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL, starRecruitChance, recruitLevel,
   trainTeam, applyMatch, overnight, aiTraining,
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName, BYE } from './competition.ts';
@@ -203,7 +203,8 @@ function makeProspects(state: Career, rng: Rng): Prospect[] {
   const positions = shuffle(rng, [1, 2, 3, 4, 5, rng.int(1, 5), rng.int(1, 5), rng.int(1, 5)]);
   return shuffle(rng, [...PROSPECT_OFFSETS]).slice(0, RECRUITING.prospects).map((offset, i) => {
     const level = Math.min(80, prestige + offset);
-    return { player: newPlayer(rng, state, positions[i % positions.length], level), level };
+    // 능력치는 우리 학교에 들어오는 보통 신입생의 수준을 기준으로, 눈높이만큼 오르내린다
+    return { player: newPlayer(rng, state, positions[i % positions.length], recruitLevel(prestige) + offset), level };
   });
 }
 

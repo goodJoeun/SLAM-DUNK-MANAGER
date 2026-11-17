@@ -70,11 +70,12 @@ function ageOneYear(rng: Rng, p: Player) {
   }
 }
 
-export function newPlayer(rng: Rng, state: Career, pos: number, prestige: number, year = 1): Player {
+// spread: 같은 수준 안에서 선수마다 흩어지는 폭
+export function newPlayer(rng: Rng, state: Career, pos: number, prestige: number, year = 1, spread = 4): Player {
   const id = `p${state.nextId++}`;
   // 가끔 대형 신인이 들어온다
   const p: Player = {
-    ...generatePlayer(rng, id, randomName(rng, state.nameStyle, id.slice(1)), pos, prestige - SCHOOL.freshmanGap + rng.gauss(0, 4)),
+    ...generatePlayer(rng, id, randomName(rng, state.nameStyle, id.slice(1)), pos, prestige - SCHOOL.freshmanGap + rng.gauss(0, spread)),
     year: 1,
     potential: Math.round(clamp(rng.gauss(50, 15), 10, 95)),
     hidden: { consistency: Math.round(clamp(rng.gauss(50, 15), 10, 95)) },
@@ -93,14 +94,53 @@ export function newPlayer(rng: Rng, state: Career, pos: number, prestige: number
 export const STAR_RECRUIT = { base: 0.04, perPoint: 0.035, min: 0.02, max: 0.35, bonus: 10, bonusSd: 2 };
 export const starRecruitChance = (points: number) => clamp(STAR_RECRUIT.base + STAR_RECRUIT.perPoint * points, STAR_RECRUIT.min, STAR_RECRUIT.max);
 
+// 신입생 능력치 규칙 (모두 종합 능력치 기준의 평균값이고, 실제 값은 그 주변으로 흩어진다).
+//   'tiered'  : 강팀은 신입생 전원이 strong 안팎으로 고르게 높다. 약팀은 weakRest 안팎이고, 해마다 aceChance의 확률로
+//               그중 한 명이 weakAce 안팎의 에이스다. 그 사이 학교는 두 규칙을 학교 수준에 따라 이어 붙인다.
+//               여기에 전년도 성적에 따른 특급 확률(STAR_RECRUIT)이 에이스가 아닌 신입생에게 따로 붙는다.
+//   'prestige': 예전 규칙. 학교 수준에 비례하고 성적에 따른 특급 확률만 있다.
+// 수치는 scripts/recruits.ts의 여러 해 시뮬레이션으로 맞췄다 (약팀 에이스가 해마다 오면 몇 년 안에 전력이 평준화된다).
+export const RECRUIT_MODEL = {
+  mode: 'tiered' as 'prestige' | 'tiered',
+  strongAt: 62, weakAt: 48, // 이 학교 수준 이상이면 강팀, 이하면 약팀
+  strong: 62.5, weakAce: 72, weakRest: 47,
+  aceChance: 0.3, // 그해 신입생 중 한 명이 에이스일 확률
+  ovrOffset: 4.6, // generatePlayer의 quality와 종합 능력치의 차이 (스크립트로 잰 값)
+  spread: 4, // 같은 기준 안에서 선수마다 흩어지는 폭
+  starScale: 1, // 성적에 따른 특급 확률을 얼마나 반영할지 (0이면 끔)
+};
+
+const recruitStrength = (prestige: number) => clamp((prestige - RECRUIT_MODEL.weakAt) / (RECRUIT_MODEL.strongAt - RECRUIT_MODEL.weakAt), 0, 1);
+// 종합 능력치 목표를 newPlayer에 넘길 수준 값으로 바꾼다
+const levelFor = (ovr: number) => ovr - RECRUIT_MODEL.ovrOffset + SCHOOL.freshmanGap;
+// 이 학교에 들어오는 보통 신입생의 수준 (newPlayer에 넘기는 값). 유망주 명단도 이 값을 기준으로 만든다.
+export function recruitLevel(prestige: number) {
+  const M = RECRUIT_MODEL;
+  return M.mode === 'tiered' ? levelFor(M.weakRest + (M.strong - M.weakRest) * recruitStrength(prestige)) : prestige;
+}
+
 // starChance: 신입생 한 명이 특급일 확률. stars에 특급 신입생의 id를 담아 준다.
 export function recruitClass(rng: Rng, state: Career, team: Team, size = SCHOOL.classSize, starChance = 0, stars?: string[]) {
   const recruits: Player[] = [];
   for (let i = 0; i < size; i++) {
     const count = [1, 2, 3, 4, 5].map((pos) => team.players.filter((p) => p.pos === pos).length + rng.next() * 0.5);
     const pos = count.indexOf(Math.min(...count)) + 1;
-    const star = starChance > 0 && rng.chance(starChance);
-    const p = newPlayer(rng, state, pos, team.prestige + (star ? clamp(rng.gauss(STAR_RECRUIT.bonus, STAR_RECRUIT.bonusSd), 6, 14) : 0));
+    const M = RECRUIT_MODEL;
+    let p: Player;
+    let star = false;
+    if (M.mode === 'tiered') {
+      // 강팀(s=1)은 모두 고르게 높고, 약팀(s=0)은 에이스 한 명만 높다. 그 사이는 이어 붙인다.
+      const s = recruitStrength(team.prestige);
+      const ace = i === 0 && rng.chance(M.aceChance); // 에이스는 해마다 오지 않는다
+      // 전년도 성적이 좋았으면 에이스가 아닌 신입생도 특급일 수 있다
+      const bonus = !ace && starChance > 0 && rng.chance(starChance * M.starScale) ? clamp(rng.gauss(STAR_RECRUIT.bonus, STAR_RECRUIT.bonusSd), 6, 14) : 0;
+      const level = ace ? levelFor(M.weakAce + (M.strong - M.weakAce) * s) : recruitLevel(team.prestige) + bonus;
+      p = newPlayer(rng, state, pos, level, 1, M.spread);
+      star = bonus > 0 || (ace && s < 0.8); // 강팀의 첫 신입생은 남들과 같으므로 특급으로 표시하지 않는다
+    } else {
+      star = starChance > 0 && rng.chance(starChance);
+      p = newPlayer(rng, state, pos, team.prestige + (star ? clamp(rng.gauss(STAR_RECRUIT.bonus, STAR_RECRUIT.bonusSd), 6, 14) : 0));
+    }
     if (star) stars?.push(p.id);
     team.players.push(p);
     recruits.push(p);
