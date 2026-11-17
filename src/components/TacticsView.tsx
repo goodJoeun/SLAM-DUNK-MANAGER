@@ -29,6 +29,26 @@ const PACE_INFO: Record<string, string> = {
   1: '속공으로 쉬운 득점을 노립니다. 실책과 체력 소모가 늘어, 볼 핸들링과 체력·벤치가 좋은 팀에 맞습니다. 공격권이 많아져 전력이 앞설 때 유리합니다.',
 };
 
+// 카드에는 한 줄 요약만 적고, 자세한 설명(위의 *_INFO)은 고른 선택지 아래에 한 번만 보여 준다
+const FOCUS_SHORT: Record<Focus, string> = {
+  balanced: '슛을 고르게 나눔',
+  inside: '골밑슛·포스트업 위주',
+  outside: '3점슛 위주',
+  spread: '돌파와 3점만, 중거리는 버림',
+};
+const DEFENSE_SHORT: Record<Defense, string> = {
+  man: '각자 맡은 선수를 막음',
+  zone: '골밑을 지키고 외곽을 내줌',
+  press: '전방 압박으로 턴오버 유도',
+  switch: '오픈 3점을 막고 미스매치를 내줌',
+  drop: '림을 지키고 중거리를 내줌',
+};
+const PACE_SHORT: Record<string, string> = {
+  '-1': '공격권을 줄여 이변을 노림',
+  0: '보통 속도',
+  1: '속공으로 쉬운 득점을 노림',
+};
+
 // 선발 다섯 명의 득점 성향 (+면 안쪽, -면 외곽)
 function scoringLean(cs: Composites[]) {
   const avg = (f: (c: Composites) => number) => mean(cs.map(f));
@@ -52,23 +72,28 @@ function loadTags(defense: Defense, pace: number): Tag[] {
 const DEFENSE_TAGS = Object.fromEntries((['man', 'zone', 'press', 'switch', 'drop'] as Defense[]).map((d) => [d, loadTags(d, 0)])) as Record<Defense, Tag[]>;
 const PACE_TAGS: Record<string, Tag[]> = { '-1': loadTags('man', -1), 0: [], 1: loadTags('man', 1) };
 
-function Choice<K extends string>({ options, info, tags, value, onChange }: {
+function Choice<K extends string>({ options, short, info, tags, value, onChange }: {
   options: Record<K, string> | [K, string][];
-  info: Record<K, string>;
+  short: Record<K, string>; // 카드에 적는 한 줄
+  info: Record<K, string>; // 고른 선택지 아래에 적는 자세한 설명
   tags?: Record<K, Tag[]>;
   value: string;
   onChange: (v: K) => void;
 }) {
   const list = Array.isArray(options) ? options : (Object.entries(options) as [K, string][]);
+  const chosen = list.find(([k]) => k === value);
   return (
-    <div className="opts">
-      {list.map(([k, label]) => (
-        <button key={k} className={`opt ${value === k ? 'on' : ''}`} onClick={() => onChange(k)}>
-          <b>{label}</b><span>{info[k]}</span>
-          {tags?.[k]?.length ? <span className="opt-tags">{tags[k].map((tag) => <i key={tag.text} className={`pill ${tag.tone}`}>{tag.text}</i>)}</span> : null}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="opts">
+        {list.map(([k, label]) => (
+          <button key={k} className={`opt ${value === k ? 'on' : ''}`} aria-pressed={value === k} title={info[k]} onClick={() => onChange(k)}>
+            <b>{label}</b><span>{short[k]}</span>
+            {tags?.[k]?.length ? <span className="opt-tags">{tags[k].map((tag) => <i key={tag.text} className={`pill ${tag.tone}`}>{tag.text}</i>)}</span> : null}
+          </button>
+        ))}
+      </div>
+      {chosen && <p className="opt-detail"><b>{chosen[1]}</b> {info[chosen[0]]}</p>}
+    </>
   );
 }
 
@@ -154,13 +179,13 @@ export default function TacticsView({ S, act }: ViewProps) {
             </div>
           </Panel>
           <Panel title="공격 중심">
-            <Choice options={FOCUS} info={FOCUS_INFO} value={focus} onChange={(v) => act('tactic', 'focus', v)} />
+            <Choice options={FOCUS} short={FOCUS_SHORT} info={FOCUS_INFO} value={focus} onChange={(v) => act('tactic', 'focus', v)} />
           </Panel>
           <Panel title="수비">
-            <Choice options={DEFENSE} info={DEFENSE_INFO} tags={DEFENSE_TAGS} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
+            <Choice options={DEFENSE} short={DEFENSE_SHORT} info={DEFENSE_INFO} tags={DEFENSE_TAGS} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
           </Panel>
           <Panel title="템포">
-            <Choice options={PACE} info={PACE_INFO} tags={PACE_TAGS} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
+            <Choice options={PACE} short={PACE_SHORT} info={PACE_INFO} tags={PACE_TAGS} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
           </Panel>
           <Panel title="이 전술의 부담" action={<span className="hint">{DEFENSE[defense]} · {PACE.find(([k]) => k === pace)?.[1]} 템포</span>}>
             <div className="load">
