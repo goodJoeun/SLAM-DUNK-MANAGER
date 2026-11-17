@@ -21,7 +21,15 @@ const SAVE_KEY = 'hoops-manager-save-v2';
 const INBOX_KEY = 'hoops-manager-inbox-v1';
 const PORTRAIT_KEY = 'hoops-manager-portraits-v1'; // 선수 이름 -> 사용자가 올린 이미지 (게임을 새로 시작해도 남는다)
 const PREFS_KEY = 'hoops-manager-match-prefs-v1'; // 경기 속도·자동 정지·중계 보기 설정
+const SLOT_KEY = 'hoops-manager-slot-v1'; // 마지막으로 하던 세이브 칸
 const INBOX_LIMIT = 80;
+
+// 세이브 칸: 1번 칸은 칸이 생기기 전의 저장 위치를 그대로 쓴다 (예전 세이브가 1번 칸에 보인다)
+export const SLOTS = [1, 2, 3];
+const saveKey = (slot: number) => (slot === 1 ? SAVE_KEY : `${SAVE_KEY}-s${slot}`);
+const inboxKey = (slot: number) => (slot === 1 ? INBOX_KEY : `${INBOX_KEY}-s${slot}`);
+// 세이브 칸 목록에 보여 줄 요약 (빈 칸은 null)
+export interface SlotInfo { slot: number; team: string; when: string; done: boolean }
 
 export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'comp' | 'records';
 
@@ -37,6 +45,8 @@ export interface DayNote {
 
 export interface GameState {
   career: Career | null;
+  slot: number; // 지금 쓰는 세이브 칸. 게임을 고르는 화면에서는 새 게임이 들어갈 빈 칸 (없으면 0)
+  slots: (SlotInfo | null)[]; // 게임을 고르는 화면에 보여 줄 칸별 요약
   screen: ScreenKey;
   startSeed: number;
   nameStyle: NameStyle;
@@ -77,9 +87,19 @@ function removeKey(key: string) {
 }
 
 function save(S: GameState) {
-  writeJson(SAVE_KEY, S.career);
-  writeJson(INBOX_KEY, S.inbox);
+  if (!S.career || !S.slot) return;
+  writeJson(saveKey(S.slot), S.career);
+  writeJson(inboxKey(S.slot), S.inbox);
 }
+
+function slotInfo(slot: number): SlotInfo | null {
+  const c = readJson<Career | null>(saveKey(slot), null);
+  if (!c?.teams?.[c.userTeamId]) return null;
+  const d = today(c);
+  return { slot, team: c.teams[c.userTeamId].name, when: d ? `${d.year}년차 ${d.day}일째 · ${d.phase}` : '3년 캠페인 종료', done: !d };
+}
+const readSlots = () => SLOTS.map(slotInfo);
+const firstEmpty = (slots: (SlotInfo | null)[]) => SLOTS.find((n, i) => !slots[i]) ?? 0;
 
 function loadPrefs(): MatchPrefs {
   const saved = readJson<Partial<MatchPrefs>>(PREFS_KEY, {});
@@ -89,16 +109,21 @@ function loadPrefs(): MatchPrefs {
 }
 
 const initialState = (): GameState => {
-  const career = readJson<Career | null>(SAVE_KEY, null);
+  const last = readJson<number>(SLOT_KEY, 1);
+  const active = SLOTS.includes(last) ? last : 1;
+  const career = readJson<Career | null>(saveKey(active), null);
+  const slots = career ? [] : readSlots();
   return {
     career,
+    slot: career ? active : firstEmpty(slots),
+    slots,
     screen: 'home',
     startSeed: randomSeed(),
     nameStyle: 'kr',
     program: 'shooting',
     intensity: 'normal',
     resumeProgram: 'shooting',
-    inbox: career ? readJson<Message[]>(INBOX_KEY, []) : [],
+    inbox: career ? readJson<Message[]>(inboxKey(active), []) : [],
     messageId: null,
     match: null,
     playerId: null,
@@ -301,17 +326,43 @@ const actions = {
   // 학교 선택 화면: 무명 학교의 선수 구성을 새로 뽑는다
   reroll({ S }: Ctx) { if (!S.career) S.startSeed = randomSeed(); },
   start({ S }: Ctx, index: number) {
+    if (!S.slot || slotInfo(S.slot)) return; // 빈 칸이 있어야 시작한다 (다른 게임을 덮어쓰지 않는다)
     const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
     Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
     deliver(S, [welcomeMessage(career), recruitMessage(career)]);
     save(S);
+    writeJson(SLOT_KEY, S.slot);
   },
-  reset({ S }: Ctx) {
-    if (!window.confirm('지금 진행 중인 게임을 지우고 새로 시작할까요?')) return;
+  // 지금 게임을 저장해 두고 세이브 칸을 고르는 화면으로 나간다
+  menu({ S }: Ctx) {
     stopMatchTimer(S);
-    removeKey(SAVE_KEY);
-    removeKey(INBOX_KEY);
-    Object.assign(S, { career: null, match: null, inbox: [], messageId: null, playerId: null, dayNote: null, screen: 'home', startSeed: randomSeed() });
+    save(S);
+    const slots = readSlots();
+    Object.assign(S, {
+      career: null, match: null, inbox: [], messageId: null, playerId: null, schoolId: null, dayNote: null, lastEvent: undefined,
+      screen: 'home', startSeed: randomSeed(), slots, slot: firstEmpty(slots),
+    });
+  },
+  // 세이브 칸의 게임을 이어서 한다
+  load({ S }: Ctx, slot: number) {
+    const career = readJson<Career | null>(saveKey(slot), null);
+    if (S.career || !career) return;
+    Object.assign(S, {
+      career, slot, inbox: readJson<Message[]>(inboxKey(slot), []), screen: 'home', messageId: null, playerId: null, dayNote: null,
+      program: 'shooting', intensity: 'normal', resumeProgram: 'shooting',
+    });
+    writeJson(SLOT_KEY, slot);
+  },
+  // 새 게임이 들어갈 빈 칸을 고른다
+  pickSlot({ S }: Ctx, slot: number) { if (!S.career && SLOTS.includes(slot) && !slotInfo(slot)) S.slot = slot; },
+  deleteSlot({ S }: Ctx, slot: number) {
+    const info = slotInfo(slot);
+    if (S.career || !info) return;
+    if (!window.confirm(`${slot}번 칸의 게임(${info.team} · ${info.when})을 지울까요? 되돌릴 수 없습니다.`)) return;
+    removeKey(saveKey(slot));
+    removeKey(inboxKey(slot));
+    S.slots = readSlots();
+    if (!S.slot || slotInfo(S.slot)) S.slot = firstEmpty(S.slots);
   },
   screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; S.schoolId = null; S.squadTab = null; },
   // 선수단 화면의 신입생 스카우트 탭을 바로 연다

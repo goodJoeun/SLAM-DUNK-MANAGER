@@ -120,8 +120,8 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
             <div className="row"><span>팀 전력</span><Attr v={teamOverall(team)} /></div>
             <div className="row"><span>컨디션 {cond}</span><CondBar value={cond} /></div>
           </div>
-          {/* 진행 중인 게임을 지우는 버튼이라 "계속" 옆이 아니라 메뉴 맨 끝에 둔다 */}
-          <button className="nav-item nav-reset" title="지금 게임을 지우고 학교 선택부터 다시 시작합니다" onClick={() => act('reset')}>새 게임 시작</button>
+          {/* 게임을 나가는 버튼이라 "계속" 옆이 아니라 메뉴 맨 끝에 둔다 */}
+          <button className="nav-item nav-reset" title="지금 게임은 그대로 저장됩니다. 다른 칸의 게임을 이어 하거나 새 게임을 시작할 수 있습니다." onClick={() => act('menu')}>세이브 칸 · 새 게임</button>
         </nav>
       )}
 

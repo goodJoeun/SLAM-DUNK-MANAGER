@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GOAL_LABEL, createCareer, goalTierFor } from '@/game/season';
 import { teamOverall } from '@/game/school';
 import { overall } from '@/game/engine';
+import { SLOTS } from './useGame';
 import type { Act, GameState } from './useGame';
 import { Attr, Crest, NAME_STYLE, PosBadge, Seg, Stars, clubVars } from './ui';
 import type { Career } from '@/game/types';
@@ -67,6 +68,28 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
           <span className="hint">학교와 선수 이름을 한국어판 또는 일본 원작 이름으로 보여 줍니다. 같은 학교·같은 선수이고, 시작한 뒤에는 바꿀 수 없습니다.</span>
         </div>
       </div>
+      {S.slots.some(Boolean) && (
+        <section className="slots" aria-label="세이브 칸">
+          {SLOTS.map((n, i) => {
+            const s = S.slots[i];
+            return s ? (
+              <div key={n} className="slot" style={clubVars(s.team)}>
+                <Crest name={s.team} size={34} />
+                <div className="slot-body"><small>{n}번 칸</small><b>{s.team}</b><span>{s.when}</span></div>
+                <div className="slot-acts">
+                  <button className="btn primary small" onClick={() => act('load', n)}>{s.done ? '기록 보기' : '이어 하기'}</button>
+                  <button className="btn ghost small" onClick={() => act('deleteSlot', n)}>지우기</button>
+                </div>
+              </div>
+            ) : (
+              <button key={n} className={`slot empty ${S.slot === n ? 'on' : ''}`} aria-pressed={S.slot === n} onClick={() => act('pickSlot', n)}>
+                <div className="slot-body"><small>{n}번 칸</small><b>빈 칸</b><span>{S.slot === n ? '새 게임이 여기에 저장됩니다' : '눌러서 새 게임을 여기에 저장'}</span></div>
+              </button>
+            );
+          })}
+        </section>
+      )}
+      {!S.slot && <div className="notice bad">세이브 칸이 모두 찼습니다. 새 게임을 시작하려면 위에서 칸 하나를 지워야 합니다.</div>}
       <div className="page-title">
         <div><h1>학교 선택</h1><p>난이도는 지금 전력이 올해 목표에 얼마나 못 미치는지로 정해집니다. 학교 수준(별)은 매년 성적에 따라 오르내리고, 목표와 신입생의 질을 좌우합니다.</p></div>
         <div className="row"><span className="muted">정렬</span><Seg options={SORTS} value={sort} onChange={(v) => setSort(v as Sort)} />
@@ -86,7 +109,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
             </p>
           </div>
           <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
-          <button ref={startRef} className="btn primary" onClick={() => act('start', picked)}>이 학교로 시작</button>
+          <button ref={startRef} className="btn primary" disabled={!S.slot} title={S.slot ? `${S.slot}번 칸에 저장됩니다` : '빈 세이브 칸이 없습니다'} onClick={() => act('start', picked)}>이 학교로 시작</button>
         </div>
       )}
       <div className="school-grid">

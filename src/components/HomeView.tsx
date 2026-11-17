@@ -186,7 +186,7 @@ function EndView({ S, act }: ViewProps) {
   return (
     <div className="page">
       <PageTitle title="3년의 기록" sub={`${team.name} · 캠페인 종료`}>
-        <button className="btn primary" onClick={() => act('reset')}>새 게임 시작</button>
+        <button className="btn primary" title="이 기록은 세이브 칸에 남습니다" onClick={() => act('menu')}>세이브 칸 · 새 게임</button>
       </PageTitle>
       <div className="kv">
         <div><small>전국 우승</small><b>{titles}회</b></div>
