@@ -1,5 +1,5 @@
 // 화면 틀: 위쪽 학교 머리띠(날짜·다음 경기·계속 버튼)와 왼쪽 메뉴
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { today } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
@@ -17,6 +17,11 @@ const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
   { key: 'comp', label: '대회', icon: 'trophy' },
   { key: 'records', label: '기록', icon: 'chart' },
 ];
+
+// 휴대폰 화면의 아래쪽 탭. 나머지 메뉴는 '더보기'에 넣는다
+const TAB_KEYS: ScreenKey[] = ['home', 'inbox', 'squad', 'tactics', 'training'];
+const TABS = NAV.filter((n) => TAB_KEYS.includes(n.key));
+const MORE = NAV.filter((n) => !TAB_KEYS.includes(n.key));
 
 const REST_ADVICE = { low: 60, beforeMatch: 75 }; // 이 컨디션 아래에서 훈련을 이어 가려 하면 휴식을 권한다
 
@@ -63,6 +68,9 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  const [more, setMore] = useState(false); // 휴대폰 화면의 '더보기' 메뉴
+  const go = (key: ScreenKey) => { setMore(false); act('screen', key); };
+
   const c = S.career;
   const team = userTeam(c);
   const d = today(c); // 캠페인이 끝났으면 null
@@ -79,6 +87,24 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
     : cond < REST_ADVICE.low ? `컨디션 ${cond} · 휴식 권장`
       : d.daysToNextMatch === 1 && cond < REST_ADVICE.beforeMatch ? `내일 경기 · 컨디션 ${cond} · 휴식 권장` : null;
 
+  // 하루를 넘기는 버튼들. 넓은 화면에서는 머리띠에, 휴대폰에서는 아래쪽 고정 줄에 놓인다
+  const actions = !inMatch && d && (
+    <>
+      {!d.userMatch && (
+        <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
+      )}
+      <button
+        className={`btn continue ${decision || restAdvice ? 'alert' : ''}`}
+        onClick={() => act('proceed')}
+        title={decision ? '홈의 "오늘의 결정"을 먼저 골라야 하루가 넘어갑니다' : restAdvice ? '컨디션이 낮으면 훈련 효율이 떨어지고 다치기 쉬우며, 경기력도 떨어집니다. 훈련 화면에서 휴식을 고를 수 있습니다. (단축키: 스페이스)' : '단축키: 스페이스'}
+      >
+        <span className="c-main">{d.userMatch ? '경기 시작' : decision ? '결정 필요' : '계속'}<Icon name="next" /></span>
+        <small>{d.userMatch ? d.userMatch.label : decision ? '오늘의 결정을 먼저 고르세요' : restAdvice ?? `훈련: ${plan}`}</small>
+      </button>
+    </>
+  );
+  const moreOn = !S.schoolId && MORE.some((n) => n.key === S.screen);
+
   return (
     <div ref={appRef} className={`app ${inMatch ? 'in-match' : ''}`} style={clubVars(team.name)}>
       <header ref={headerRef} className="app-header">
@@ -93,19 +119,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
         <div className="spacer" />
         {inMatch && <span className="pill live">경기 중</span>}
         {!inMatch && d && <NextChip d={d} />}
-        {!inMatch && d && !d.userMatch && (
-          <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
-        )}
-        {!inMatch && d && (
-          <button
-            className={`btn continue ${decision || restAdvice ? 'alert' : ''}`}
-            onClick={() => act('proceed')}
-            title={decision ? '홈의 "오늘의 결정"을 먼저 골라야 하루가 넘어갑니다' : restAdvice ? '컨디션이 낮으면 훈련 효율이 떨어지고 다치기 쉬우며, 경기력도 떨어집니다. 훈련 화면에서 휴식을 고를 수 있습니다. (단축키: 스페이스)' : '단축키: 스페이스'}
-          >
-            <span className="c-main">{d.userMatch ? '경기 시작' : decision ? '결정 필요' : '계속'}<Icon name="next" /></span>
-            <small>{d.userMatch ? d.userMatch.label : decision ? '오늘의 결정을 먼저 고르세요' : restAdvice ?? `훈련: ${plan}`}</small>
-          </button>
-        )}
+        <div className="hdr-act">{actions}</div>
       </header>
 
       {!inMatch && (
@@ -123,6 +137,30 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
           {/* 게임을 나가는 버튼이라 "계속" 옆이 아니라 메뉴 맨 끝에 둔다 */}
           <button className="nav-item nav-reset" title="지금 게임은 그대로 저장됩니다. 표지에서 다른 칸의 게임을 이어 하거나 새 게임을 시작할 수 있습니다." onClick={() => act('menu')}>표지로 나가기</button>
         </nav>
+      )}
+
+      {/* 휴대폰 화면: '계속' 버튼과 메뉴를 엄지가 닿는 화면 아래에 고정한다 */}
+      {!inMatch && (
+        <div className="dock">
+          {more && (
+            <div className="dock-more">
+              {MORE.map((n) => (
+                <button key={n.key} className={`nav-item ${S.screen === n.key && !S.schoolId ? 'on' : ''}`} onClick={() => go(n.key)}><Icon name={n.icon} />{n.label}</button>
+              ))}
+              <button className="nav-item" onClick={() => { setMore(false); act('menu'); }}><Icon name="back" />표지로 나가기 <span className="faint">· 게임은 저장됩니다</span></button>
+            </div>
+          )}
+          {actions && <div className="dock-act">{actions}</div>}
+          <nav className="tabbar" aria-label="아래쪽 메뉴">
+            {TABS.map((n) => (
+              <button key={n.key} className={S.screen === n.key && !S.schoolId && !more ? 'on' : ''} onClick={() => go(n.key)}>
+                <Icon name={n.icon} /><span>{n.label}</span>
+                {n.key === 'inbox' && unread > 0 && <i className="badge">{unread}</i>}
+              </button>
+            ))}
+            <button className={more || moreOn ? 'on' : ''} aria-expanded={more} onClick={() => setMore(!more)}><Icon name="more" /><span>더보기</span></button>
+          </nav>
+        </div>
       )}
 
       <div className="content">

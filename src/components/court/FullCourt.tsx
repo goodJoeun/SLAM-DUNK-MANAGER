@@ -121,6 +121,8 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
             className={`dot ${mine && onPick ? 'pick' : ''} ${selected === p.id ? 'sel' : ''}`}
             onClick={mine && onPick ? () => onPick(p.id) : undefined}
           >
+            {/* 손가락으로 누르기 쉽게 보이는 원보다 넓은 터치 영역 */}
+            {mine && onPick && <circle className="hit" r="1.5" />}
             {hasBall && <circle className="holder" r="0.66" />}
             <circle className="body" r="0.44" fill={colors[p.side]} />
             {face ? (

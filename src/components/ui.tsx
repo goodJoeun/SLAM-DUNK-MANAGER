@@ -94,6 +94,7 @@ const ICONS = {
   alert: ['M12 4 2.5 20h19z', 'M12 10v4.5', 'M12 17.5h.01'],
   next: ['m9 6 6 6-6 6'],
   back: ['m15 6-6 6 6 6'],
+  more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
   bulb: ['M9 18h6', 'M10 21h4', 'M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z'],
 } satisfies Record<string, string[]>;
 export type IconName = keyof typeof ICONS;

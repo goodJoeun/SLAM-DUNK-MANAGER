@@ -22,7 +22,7 @@ function Side({ team: t, mine, away = false, prep = 0 }: { team: TeamView; mine:
       <Crest name={t.name} size={40} />
       <div className="who">
         <span className="nm">
-          {t.name}{mine && <span className="pill club" style={{ marginLeft: 6 }}>우리 팀</span>}
+          <span className="nm-t">{t.name}</span>{mine && <span className="pill club" style={{ marginLeft: 6 }}>우리 팀</span>}
           {prep > 0 && <span className="pill good" style={{ marginLeft: 6 }} title="경기 전 상대 분석으로 이 경기에서만 능력치가 오릅니다">준비 +{prep.toFixed(1)}</span>}
         </span>
         <span className="meta">
@@ -105,7 +105,7 @@ function BreakPanel({ info, mine, opp, side, tiredAt, onResume }: {
           <li><span className="muted">남은 작전 타임</span><span>{mine.timeoutsLeft}회</span></li>
         </ul>
       </div>
-      <p className="hint">쉬는 시간입니다. 코트 아래에서 전술을, 오른쪽 명단에서 교체를 손본 뒤 다음 쿼터를 시작하세요.</p>
+      <p className="hint">쉬는 시간입니다. 전술을 손보고, 코트 위 선수를 눌러 교체한 뒤 다음 쿼터를 시작하세요.</p>
     </div>
   );
 }
@@ -140,6 +140,9 @@ function Compare({ box }: { box: BoxTeam[] }) {
 }
 
 const MADE = /성공|블록|스틸/;
+
+type MatchTab = 'feed' | 'squad' | 'tactics' | 'stats';
+const MATCH_TABS: [MatchTab, string][] = [['feed', '중계'], ['squad', '선수·교체'], ['tactics', '전술'], ['stats', '기록']];
 
 // 경기 종료 창: 승패, 최종 점수, 양 팀 최다 득점자
 function EndModal({ faces, view, box, log, side, label, onFinish, onClose }: {
@@ -259,6 +262,14 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   };
   const outgoing = v.finished ? undefined : mine.court.find((p) => p.id === m.selected);
   const [confirmSkip, setConfirmSkip] = useState(false);
+  // 휴대폰 화면: 코트 아래 내용을 탭으로 나눠 보고, 덜 쓰는 조작은 '더보기'에 접어 둔다
+  const [tab, setTab] = useState<MatchTab>('feed');
+  const [moreOpen, setMoreOpen] = useState(false);
+  // 쿼터 사이 휴식 화면은 맨 위에 뜨므로, 아래쪽을 보고 있었다면 위로 올린다
+  const onBreak = Boolean(m.pause && m.breakInfo);
+  useEffect(() => {
+    if (onBreak && window.matchMedia('(max-width: 860px)').matches) window.scrollTo({ top: 0 });
+  }, [onBreak]);
 
   // 자동 정지 알림의 해결 버튼: 문제가 된 선수와, 대신 넣을 만한 벤치 선수(같은 포지션·체력·파울 여유 우선)
   // 지친 선수가 여럿이면 한 명씩 짝을 지어 한꺼번에 바꾼다. 체력이 덜 찬 벤치 선수(방금 뺀 선수)는 권하지 않는다.
@@ -280,7 +291,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const ended = live.finished && !m.pending;
 
   return (
-    <div className="page" style={colors}>
+    <div className="page match" data-tab={tab} style={colors}>
       {ended && !m.endSeen && (
         <EndModal faces={faces} view={live} box={m.game.result().box} log={m.game.result().log} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
       )}
@@ -294,7 +305,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         <Side team={v.teams[1]} mine={m.side === 1} away prep={m.side === 1 ? prepBonus : 0} />
       </div>
 
-      <div className="controls-bar">
+      <div className="match-dock">
+      <div className={`controls-bar ${moreOpen ? 'open' : ''}`}>
         {v.finished ? (
           <button className="btn primary" onClick={() => act('finish')}>경기 종료 — 결과 반영</button>
         ) : (
@@ -304,6 +316,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
               : <button className="btn primary play-btn" onClick={() => act('play')}><Icon name="next" />{started ? '계속 진행' : '경기 시작'}</button>}
             <Seg options={SPEED_OPTIONS} value={prefs.speed} onChange={(k) => act('speed', k as SpeedKey)} />
             <button className="btn" disabled={!mine.timeoutsLeft} onClick={() => act('timeout')}>작전 타임 ({mine.timeoutsLeft})</button>
+            <button className="btn more-btn" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>{moreOpen ? '접기' : '더보기'}</button>
+            <div className="ctl-more">
             <button className="btn" onClick={() => act('autosub')}>교체: {mine.auto ? 'AI 코치' : '직접'}</button>
             <span className="spacer" />
             {!m.playing && <button className="btn ghost" disabled={Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
@@ -320,6 +334,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
               </>
             )}
             {!started && <button className="btn ghost" onClick={() => act('leaveMatch')} title="경기를 시작하기 전에는 홈으로 돌아가 준비를 마저 할 수 있습니다"><Icon name="back" />홈으로</button>}
+            </div>
           </>
         )}
       </div>
@@ -356,16 +371,18 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
           {m.pauseFix?.kind === 'timeout' && (
             <button className="btn primary" disabled={!mine.timeoutsLeft} onClick={() => act('timeout')}>작전 타임 ({mine.timeoutsLeft})</button>
           )}
-          <button className={`btn ${fixShown ? '' : 'primary'}`} onClick={() => act('play')}>계속 진행</button>
+          <button className={`btn pb-resume ${fixShown ? '' : 'primary'}`} onClick={() => act('play')}>계속 진행</button>
         </div>
       )}
+      </div>
 
       {m.pause && m.breakInfo && !v.finished && (
         <BreakPanel info={m.breakInfo} mine={mine} opp={opp} side={m.side} tiredAt={prefs.tiredAt} onResume={() => act('play')} />
       )}
 
       <div className="match-main">
-        <Panel title="코트" flush action={<span className="hint">{SPEEDS[prefs.speed].perSecond ? (SPEEDS[prefs.speed].keyOnly ? '주요 장면만 움직임으로 보여 줍니다' : '모든 공격권을 움직임으로 보여 줍니다') : '움직임 없이 빠르게 진행합니다'}</span>}>
+        <Panel title="코트" flush className="court-panel" action={<span className="hint">{SPEEDS[prefs.speed].perSecond ? (SPEEDS[prefs.speed].keyOnly ? '주요 장면만 움직임으로 보여 줍니다' : '모든 공격권을 움직임으로 보여 줍니다') : '움직임 없이 빠르게 진행합니다'}</span>}>
+          <div className="court-stick">
           <FullCourt
             anim={m.anim}
             scene={m.scene ?? tipOffScene(live)}
@@ -377,7 +394,15 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             onPick={v.finished ? undefined : (id) => act('pick', 'court', id)}
           />
           {/* 코트를 보면서 바로 지시할 수 있게 전술을 코트 바로 아래에 한 줄로 둔다 */}
-          <div className="court-tactics" title="경기 중에도 바로 적용됩니다">
+          <div className="match-tabs" role="tablist">
+            {MATCH_TABS.map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+                {label}{k === 'feed' && m.notes.length > 0 && <i className="badge">{m.notes.length}</i>}
+              </button>
+            ))}
+          </div>
+          </div>
+          <div className="court-tactics mt mt-tactics" title="경기 중에도 바로 적용됩니다">
             <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
             <div className="controls">
               <label className="hint">에이스 지정
@@ -392,7 +417,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
 
         {/* 코트 옆: 코트 위 다섯 명(체력·득점·파울)과 중계. 교체할 선수를 고르면 중계 자리에 벤치가 뜬다 */}
         <div className="match-side">
-          <Panel title="코트 위 5명" flush action={<span className="hint">누르면 교체 · 막대는 체력</span>}>
+          <Panel title="코트 위 5명" flush className="mt mt-none" action={<span className="hint">누르면 교체 · 막대는 체력</span>}>
             {mine.court.map((p) => (
               <PlayerRow key={p.id} faces={faces} player={p} selected={m.selected === p.id} onClick={v.finished ? undefined : () => act('pick', 'court', p.id)} />
             ))}
@@ -402,7 +427,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <Panel
               title={`${outgoing.name} 대신 들어갈 선수`}
               flush
-              className="side-live"
+              className="side-live sub-sheet"
               action={<button className="btn ghost small" onClick={() => act('pick', 'court', outgoing.id)}>취소</button>}
             >
               {mine.bench.map((p) => (
@@ -413,7 +438,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <Panel
               title="중계"
               flush
-              className="side-live"
+              className="side-live mt mt-feed"
               action={<Seg options={sideTabs} value={sideTab === 'notes' ? 'notes' : prefs.feed} onChange={pickSideTab} />}
             >
               {sideTab === 'notes' ? (
@@ -448,7 +473,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       </div>
 
       <div className="match-grid">
-        <Panel title="벤치 · 개인 지시" flush>
+        <Panel title="벤치 · 개인 지시" flush className="mt mt-squad">
           <div className="sub-hint">
             {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 코트 위 선수에게는 공격·수비 지시를 줄 수 있습니다.'}
           </div>
@@ -469,10 +494,10 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         </Panel>
 
         <div className="stack">
-          <Panel title="경기 기록" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
+          <Panel title="경기 기록" className="mt mt-stats" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
             <Compare box={box} />
           </Panel>
-          <Panel title="자동 정지">
+          <Panel title="자동 정지" className="mt mt-tactics">
             <div className="toggles">
               {(Object.keys(ALERTS) as AlertKey[]).map((k) => (
                 <label key={k} className="toggle">
@@ -487,7 +512,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             </div>
             <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 지친 선수가 여럿이면 한 번에 묶어 알립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
           </Panel>
-          <Panel title={`${opp.name} 코트`} flush>
+          <Panel title={`${opp.name} 코트`} flush className="mt mt-stats">
             {opp.court.map((p) => <PlayerRow key={p.id} faces={faces} player={p} />)}
           </Panel>
         </div>
