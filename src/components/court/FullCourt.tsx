@@ -68,11 +68,12 @@ const Lines = memo(function Lines() {
   );
 });
 
-export default function FullCourt({ anim, scene, colors, labels, mySide, selected, onPick }: {
+export default function FullCourt({ anim, scene, colors, labels, faces, mySide, selected, onPick }: {
   anim: CourtAnimation | null;
   scene: Scene;
   colors: [string, string];
   labels: Record<string, string>; // 선수 id -> 이름(성 포함)
+  faces?: Record<string, string>; // 선수 id -> 이미지 주소. 있으면 등번호 대신 얼굴을 보여 준다
   mySide: number;
   selected?: string | null;
   onPick?: (id: string) => void; // 우리 팀 선수를 누르면 (교체 선택)
@@ -104,11 +105,15 @@ export default function FullCourt({ anim, scene, colors, labels, mySide, selecte
 
   return (
     <svg className="fullcourt" viewBox={`-1.2 -1.4 ${COURT.length + 2.4} ${COURT.width + 2.8}`} role="img" aria-label="풀코트 위 선수와 공의 위치">
+      <defs><clipPath id="fc-face"><circle r="0.44" /></clipPath></defs>
       <Lines />
       {frame.caption && <text className="caption" x={COURT.length / 2} y="-0.42">{frame.caption}</text>}
       {frame.players.map((p) => {
         const mine = p.side === mySide;
         const hasBall = ball.holder === p.id;
+        const face = faces?.[p.id];
+        // 연결된 원작 이미지는 세로로 긴 상반신(4:5)이라 위쪽 얼굴 부분만, 올린 이미지는 정사각형 그대로 원 안에 넣는다
+        const tall = face?.startsWith('/portraits/');
         return (
           <g
             key={p.id}
@@ -118,7 +123,12 @@ export default function FullCourt({ anim, scene, colors, labels, mySide, selecte
           >
             {hasBall && <circle className="holder" r="0.66" />}
             <circle className="body" r="0.44" fill={colors[p.side]} />
-            <text className="no" y="0.15">{p.slot + 1}</text>
+            {face ? (
+              <g className="face">
+                <image href={face} clipPath="url(#fc-face)" preserveAspectRatio="xMidYMin slice" {...(tall ? { x: -0.75, y: -0.44, width: 1.5, height: 1.875 } : { x: -0.44, y: -0.44, width: 0.88, height: 0.88 })} />
+                <circle className="ring" r="0.44" stroke={colors[p.side]} />
+              </g>
+            ) : <text className="no" y="0.15">{p.slot + 1}</text>}
             {/* 이름표가 겹치지 않게 상대는 공을 가진 선수만 이름을 보여 준다 (나머지는 마우스를 올리면 보인다) */}
             {(mine || hasBall) && <text className={`nm ${mine ? 'mine' : ''}`} y="1.0">{labels[p.id] ?? ''}</text>}
             <title>{labels[p.id] ?? ''}</title>

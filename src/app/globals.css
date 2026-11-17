@@ -585,6 +585,9 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .fullcourt .holder { fill: none; stroke: var(--gold); stroke-width: 0.08; }
 .fullcourt .dot.pick { cursor: pointer; }
 .fullcourt .dot.sel .body { stroke: var(--gold); stroke-width: 0.16; }
+.fullcourt .face { pointer-events: none; }
+.fullcourt .ring { fill: none; stroke-width: 0.1; }
+.fullcourt .dot.sel .ring { stroke: var(--gold); stroke-width: 0.14; }
 .fullcourt .ball { fill: #e8792b; stroke: #7a3410; stroke-width: 0.04; }
 .fullcourt .ball-shadow { fill: #000; }
 @media (prefers-color-scheme: light) {
@@ -614,6 +617,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .fullcourt .caption { fill: var(--text); font-size: 0.72px; font-weight: 800; text-anchor: middle; letter-spacing: 0.02em; }
 @media (max-width: 700px) {
   .fullcourt .body { r: 0.62px; }
+  .fullcourt .face { transform: scale(1.41); }
   .fullcourt .holder { r: 0.88px; }
   .fullcourt .no { font-size: 0.62px; }
   .fullcourt .nm { font-size: 0.74px; }

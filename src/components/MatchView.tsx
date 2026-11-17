@@ -7,6 +7,7 @@ import { ALERTS, FEED_MODES, FRESH_ENERGY, KEY_EVENT, SPEEDS, TIRED_LEVELS, brea
 import type { AlertKey, BreakInfo, FeedMode, SpeedKey } from './live';
 import FullCourt from './court/FullCourt';
 import { tipOffScene } from './court/choreo';
+import Portrait, { licensedPortrait } from './Portrait';
 import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
 
@@ -44,11 +45,12 @@ function RoleRow({ role, onChange }: { role?: PlayerRole; onChange: (kind: 'offe
   );
 }
 
-function PlayerRow({ player: p, selected = false, onClick }: { player: PlayerView; selected?: boolean; onClick?: () => void }) {
+// faces: 선수 id -> 이미지 주소. 이미지가 없는 선수는 소속 학교 색의 기본 그림이 나온다
+function PlayerRow({ player: p, team, faces, selected = false, onClick }: { player: PlayerView; team: string; faces: Record<string, string>; selected?: boolean; onClick?: () => void }) {
   return (
     <div className={`bench-row ${selected ? 'sel' : ''} ${onClick && p.out ? 'off' : ''} ${onClick ? '' : 'static'}`} onClick={onClick}>
       <PosBadge pos={p.pos} />
-      <span className="nm">{p.name} <span className="faint">{p.ovr}</span></span>
+      <span className="nm name-cell"><Portrait name={p.name} team={team} src={faces[p.id]} size={26} round /><span>{p.name} <span className="faint">{p.ovr}</span></span></span>
       <CondBar value={p.energy} />
       <span className="num">{p.pts}점</span>
       <span className={`num ${p.pf >= 4 ? 'bad' : 'faint'}`}>{p.pf}F</span>
@@ -139,7 +141,8 @@ function Compare({ box }: { box: BoxTeam[] }) {
 const MADE = /성공|블록|스틸/;
 
 // 경기 종료 창: 승패, 최종 점수, 양 팀 최다 득점자
-function EndModal({ view, box, log, side, label, onFinish, onClose }: {
+function EndModal({ faces, view, box, log, side, label, onFinish, onClose }: {
+  faces: Record<string, string>;
   view: { teams: TeamView[]; period: number };
   box: BoxTeam[];
   log: LogEvent[];
@@ -190,7 +193,7 @@ function EndModal({ view, box, log, side, label, onFinish, onClose }: {
             return (
               <li key={t.name}>
                 <span className="muted">{t.name} 최다 득점</span>
-                <span><b>{p.name}</b> {p.pts}점 · 리바 {p.orb + p.drb} · 어시 {p.ast}</span>
+                <span className="name-cell"><Portrait name={p.name} team={t.name} src={faces[p.id]} size={26} round /><span><b>{p.name}</b> {p.pts}점 · 리바 {p.orb + p.drb} · 어시 {p.ast}</span></span>
               </li>
             );
           })}
@@ -212,6 +215,14 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const mine = live.teams[m.side];
   const opp = live.teams[1 - m.side];
   const labels = Object.fromEntries(live.teams.flatMap((team) => [...team.court, ...team.bench]).map((p) => [p.id, p.name]));
+  // 선수 id -> 이미지 (올린 이미지가 우선, 없으면 연결된 원작 이미지)
+  const faces: Record<string, string> = {};
+  for (const team of live.teams) {
+    for (const p of (team.id ? S.career.teams[team.id]?.players : undefined) ?? []) {
+      const src = S.portraits[p.name] ?? licensedPortrait(p);
+      if (src) faces[p.id] = src;
+    }
+  }
   const courtColors: [string, string] = [clubColor(v.teams[0].name), clubColor(v.teams[1].name)];
   const clock = `${Math.floor(v.clock / 60)}:${String(v.clock % 60).padStart(2, '0')}`;
   const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);
@@ -258,7 +269,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   return (
     <div className="page" style={colors}>
       {ended && !m.endSeen && (
-        <EndModal view={live} box={m.game.result().box} log={m.game.result().log} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
+        <EndModal faces={faces} view={live} box={m.game.result().box} log={m.game.result().log} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
       )}
       <div className="scorebar">
         <Side team={v.teams[0]} mine={m.side === 0} prep={m.side === 0 ? prepBonus : 0} />
@@ -347,6 +358,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             scene={m.scene ?? tipOffScene(live)}
             colors={courtColors}
             labels={labels}
+            faces={faces}
             mySide={m.side}
             selected={m.selected}
             onPick={v.finished ? undefined : (id) => act('pick', 'court', id)}
@@ -369,7 +381,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         <div className="match-side">
           <Panel title="코트 위 5명" flush action={<span className="hint">누르면 교체 · 막대는 체력</span>}>
             {mine.court.map((p) => (
-              <PlayerRow key={p.id} player={p} selected={m.selected === p.id} onClick={v.finished ? undefined : () => act('pick', 'court', p.id)} />
+              <PlayerRow key={p.id} team={mine.name} faces={faces} player={p} selected={m.selected === p.id} onClick={v.finished ? undefined : () => act('pick', 'court', p.id)} />
             ))}
           </Panel>
 
@@ -381,7 +393,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
               action={<button className="btn ghost small" onClick={() => act('pick', 'court', outgoing.id)}>취소</button>}
             >
               {mine.bench.map((p) => (
-                <PlayerRow key={p.id} player={p} onClick={() => act('pick', 'bench', p.id)} />
+                <PlayerRow key={p.id} team={mine.name} faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} />
               ))}
             </Panel>
           ) : (
@@ -429,14 +441,14 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
           </div>
           {mine.court.map((p) => (
             <div key={p.id}>
-              <PlayerRow player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />
+              <PlayerRow team={mine.name} faces={faces} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />
               <RoleRow role={t.roles?.[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
             </div>
           ))}
           <div className="sub-hint">벤치</div>
           {mine.bench.map((p) => (
             <div key={p.id}>
-              <PlayerRow player={p} onClick={() => act('pick', 'bench', p.id)} />
+              <PlayerRow team={mine.name} faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} />
               {/* 벤치 선수의 지시는 미리 정해 둔 것만 보여 줘 목록을 짧게 유지한다 */}
               {t.roles?.[p.id] && <RoleRow role={t.roles[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />}
             </div>
@@ -463,7 +475,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 지친 선수가 여럿이면 한 번에 묶어 알립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
           </Panel>
           <Panel title={`${opp.name} 코트`} flush>
-            {opp.court.map((p) => <PlayerRow key={p.id} player={p} />)}
+            {opp.court.map((p) => <PlayerRow key={p.id} team={opp.name} faces={faces} player={p} />)}
           </Panel>
         </div>
       </div>
