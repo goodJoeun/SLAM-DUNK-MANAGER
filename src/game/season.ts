@@ -30,7 +30,7 @@ import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
   BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, ProgramKey, Round, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
+  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, DrawInfo, ProgramKey, Round, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
 } from './types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -264,10 +264,34 @@ function startSeason(state: Career) {
     });
   }
   state.dayIndex = 0;
-  if (state.calendar[0].start) startCompetition(state, state.calendar[0].start, rng);
+  announceDraw(state, rng);
 }
 
 // ---------- 대회 ----------
+
+// 대진 발표: 대회 현 예선이 시작되기 DRAW_LEAD일 전에 조 추첨·대진을 미리 정해, 첫 경기 상대도 분석할 수 있게 한다.
+// 앞선 대회가 아직 끝나지 않았으면(일정상 그럴 일은 없다) 시작하는 날에 정한다. 발표했으면 그 내용을 돌려준다.
+export const DRAW_LEAD = 4;
+function announceDraw(state: Career, rng: Rng): DrawInfo | null {
+  for (let k = 0; k <= DRAW_LEAD; k++) {
+    const key = state.calendar[state.dayIndex + k]?.start;
+    if (!key) continue;
+    const c = state.comp;
+    if (c && c.key === key) return null; // 이미 발표했다
+    if (c && c.stage !== 'done' && k > 0) return null;
+    startCompetition(state, key, rng);
+    const first = officialPairing(state);
+    if (!first) return null;
+    const me = state.userTeamId;
+    const opponentId = first.home === me ? first.away : first.home;
+    const group = state.comp!.groups?.find((g) => g.ids.includes(me));
+    return {
+      competition: state.comp!.name, daysUntil: k, label: first.label, opponentId, opponent: state.teams[opponentId].name,
+      group: group ? { name: group.name, teams: group.ids.map((id) => state.teams[id].name) } : undefined,
+    };
+  }
+  return null;
+}
 
 function startCompetition(state: Career, key: CompetitionKey, rng: Rng) {
   for (const id of state.guestIds) delete state.teams[id]; // 지난 대회의 타 현 대표는 정리한다
@@ -736,7 +760,7 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
   recordTrend(state, state.dayIndex + 1);
   state.dayIndex++;
   if (state.dayIndex >= state.calendar.length) report.yearEnd = endYear(state, ctx.rng);
-  else if (state.calendar[state.dayIndex].start) startCompetition(state, state.calendar[state.dayIndex].start!, ctx.rng);
+  else { const draw = announceDraw(state, ctx.rng); if (draw) report.draw = draw; }
   // 새 날 아침: 경기가 없는 날이면 감독이 결정할 사건이 생길 수 있다
   if (!state.finished && decision.events !== false && !userPairing(state)) {
     const event = rollEvent(state, ctx.rng);

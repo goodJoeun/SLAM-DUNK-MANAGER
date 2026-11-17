@@ -410,7 +410,7 @@ export interface UserMatchInfo {
   opponentId: string;
   opponent: string;
   opponentOverall: number;
-  opener: boolean; // 대회 첫 경기: 대진이 당일에 정해져 미리 분석할 수 없었다
+  opener: boolean; // 대회 첫 경기
 }
 
 export interface Today {
@@ -438,6 +438,16 @@ export interface YearSummary {
   prestige?: [number, number]; // 우리 학교 수준 [올해, 내년]
 }
 
+// 대회 대진 발표
+export interface DrawInfo {
+  competition: string;
+  daysUntil: number; // 첫 경기까지 남은 날
+  label: string; // 내 첫 경기 이름
+  opponentId: string;
+  opponent: string;
+  group?: { name: string; teams: string[] }; // 조별 리그면 내 조
+}
+
 export interface DayReport {
   year: number;
   day: number;
@@ -453,6 +463,7 @@ export interface DayReport {
   injuries: InjuryEvent[];
   competitionEnd: CompetitionResult | null;
   scout: PrepInfo | null; // 오늘 상대 분석을 했으면 그 결과
+  draw?: DrawInfo; // 오늘 일과 뒤에 다음 대회의 대진이 발표됐으면 그 내용
   yearEnd: YearSummary | null;
 }
 

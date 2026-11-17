@@ -152,6 +152,20 @@ export function buildMessages(
     });
   }
 
+  if (r.draw) {
+    const w = r.draw;
+    out.push({
+      ...when, kind: 'welcome', from: '대회 운영',
+      title: `${w.competition} 현 예선 대진 발표: 첫 상대 ${w.opponent}`,
+      summary: `${w.daysUntil}일 뒤 ${w.label}`,
+      body: [
+        `${w.competition} 현 예선 대진이 나왔습니다. 우리 학교의 첫 경기는 ${w.daysUntil}일 뒤 ${w.label}, 상대는 ${w.opponent}입니다.`,
+        w.group ? `${w.group.name}: ${w.group.teams.join(', ')}. 조 1위만 다음 단계로 올라갑니다.` : '지면 바로 탈락하는 토너먼트입니다.',
+        `경기 전 ${PREPARATION.window}일 안의 훈련일에 훈련 대신 상대 분석을 할 수 있습니다. 대회 화면에서 전체 대진을 볼 수 있습니다.`,
+      ],
+    });
+  }
+
   if (training && r.training && r.training.program !== 'scout') {
     const { program, intensity } = r.training;
     const label = program === 'rest' ? '휴식' : `${PROGRAMS[program].label} · ${INTENSITY[intensity].label}`;
