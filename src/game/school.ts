@@ -88,12 +88,20 @@ export function newPlayer(rng: Rng, state: Career, pos: number, prestige: number
 }
 
 // 인원이 부족한 포지션부터 신입생을 뽑는다
-export function recruitClass(rng: Rng, state: Career, team: Team, size = SCHOOL.classSize) {
+// 특급 신입생: 지난해 대회 성적이 좋았던 학교에는 처음부터 능력치가 높은 신입생이 올 수 있다.
+//   points = 그해 세 대회 성적 점수의 합 (SEASON.prestigeByTier 기준, -3 ~ 9). 성적이 좋을수록 확률이 높다.
+export const STAR_RECRUIT = { base: 0.04, perPoint: 0.035, min: 0.02, max: 0.35, bonus: 10, bonusSd: 2 };
+export const starRecruitChance = (points: number) => clamp(STAR_RECRUIT.base + STAR_RECRUIT.perPoint * points, STAR_RECRUIT.min, STAR_RECRUIT.max);
+
+// starChance: 신입생 한 명이 특급일 확률. stars에 특급 신입생의 id를 담아 준다.
+export function recruitClass(rng: Rng, state: Career, team: Team, size = SCHOOL.classSize, starChance = 0, stars?: string[]) {
   const recruits: Player[] = [];
   for (let i = 0; i < size; i++) {
     const count = [1, 2, 3, 4, 5].map((pos) => team.players.filter((p) => p.pos === pos).length + rng.next() * 0.5);
     const pos = count.indexOf(Math.min(...count)) + 1;
-    const p = newPlayer(rng, state, pos, team.prestige);
+    const star = starChance > 0 && rng.chance(starChance);
+    const p = newPlayer(rng, state, pos, team.prestige + (star ? clamp(rng.gauss(STAR_RECRUIT.bonus, STAR_RECRUIT.bonusSd), 6, 14) : 0));
+    if (star) stars?.push(p.id);
     team.players.push(p);
     recruits.push(p);
   }

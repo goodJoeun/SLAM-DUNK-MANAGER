@@ -27,6 +27,7 @@ export interface PlayerNote {
   ovr: number;
   potential?: number;
   scouted?: boolean; // 영입 목표로 정해 데려온 신입생
+  star?: boolean; // 특급 신입생
 }
 
 export interface Message {
@@ -53,6 +54,7 @@ export interface Message {
   graduates?: PlayerNote[];
   recruits?: PlayerNote[];
   missed?: PlayerNote[]; // 영입 목표였지만 놓친 유망주
+  starChance?: number; // 올해 성적으로 정해진 특급 신입생 확률 (신입생 한 명당)
   final?: boolean;
   results?: CompetitionResult[];
   body?: string[];
@@ -240,7 +242,8 @@ export function buildMessages(
         title: `${y.year}년차 종료 — 새 학년이 시작됩니다`,
         summary: `졸업 ${y.graduates.length}명 · 신입생 ${y.recruits.length}명${y.scouted?.length || y.missed?.length ? ` · 영입 목표 ${y.scouted?.length ?? 0}명 성공` : ''}`,
         graduates: y.graduates.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p) })),
-        recruits: y.recruits.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential, scouted: y.scouted?.includes(p.id) })),
+        recruits: y.recruits.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential, scouted: y.scouted?.includes(p.id), star: y.stars?.includes(p.id) })),
+        starChance: y.starChance,
         missed: y.missed?.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential })),
         results: y.results, yearReview: y.review, prestige: y.prestige,
       });

@@ -19,7 +19,7 @@
 import { makeRng } from './rng.ts';
 import { createGame, overall, simulateGame } from './engine.ts';
 import {
-  createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL,
+  createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL, starRecruitChance,
   trainTeam, applyMatch, overnight, aiTraining,
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName, BYE } from './competition.ts';
@@ -798,8 +798,14 @@ function endYear(state: Career, rng: Rng): YearSummary {
     for (const p of team.players) { p.year++; p.condition = 100; p.injuredDays = 0; }
     const joined = mine ? scouting.joined : [];
     team.players.push(...joined); // 영입에 성공한 유망주가 먼저 자리를 차지한다
-    const recruits = [...joined, ...recruitClass(rng, state, team, SCHOOL.classSize - joined.length)];
-    if (mine) { summary.graduates = leaving; summary.recruits = recruits; summary.scouted = joined.map((p) => p.id); summary.missed = scouting.missed; }
+    // 올해 성적이 좋았던 학교일수록 처음부터 능력치가 높은 신입생이 올 확률이 높다
+    const starChance = starRecruitChance(state.yearPoints[id] ?? 0);
+    const stars: string[] = [];
+    const recruits = [...joined, ...recruitClass(rng, state, team, SCHOOL.classSize - joined.length, starChance, stars)];
+    if (mine) {
+      summary.graduates = leaving; summary.recruits = recruits; summary.scouted = joined.map((p) => p.id); summary.missed = scouting.missed;
+      summary.stars = stars; summary.starChance = starChance;
+    }
   }
   for (const id of state.guestIds) delete state.teams[id];
   state.guestIds = [];

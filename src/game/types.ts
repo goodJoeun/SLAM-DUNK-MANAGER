@@ -434,6 +434,8 @@ export interface YearSummary {
   recruits: Player[];
   review?: YearReview;
   scouted?: string[]; // 신입생 중 영입 목표였던 선수 id
+  stars?: string[]; // 신입생 중 특급 신입생(처음부터 능력치가 높은 선수)의 id
+  starChance?: number; // 올해 성적으로 정해진, 신입생 한 명이 특급일 확률
   missed?: Player[]; // 영입 목표였지만 다른 학교로 간 유망주
   prestige?: [number, number]; // 우리 학교 수준 [올해, 내년]
 }

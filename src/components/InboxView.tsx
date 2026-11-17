@@ -86,8 +86,9 @@ function MessageBody({ m, career, act }: { m: Message; career: Career; act: Act 
           {m.graduates && <><h3>졸업생</h3>
             <ul className="lines">{m.graduates.map((p) => <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={p.ovr} /></li>)}</ul></>}
           {m.recruits && <><h3>신입생</h3>
+            {m.starChance != null && <p className="hint">올해 대회 성적에 따라, 신입생 한 명이 처음부터 능력치가 높은 특급 신입생일 확률은 {Math.round(m.starChance * 100)}%였습니다. 성적이 좋을수록 높아집니다.</p>}
             <ul className="lines">{m.recruits.map((p) => (
-              <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b>{p.scouted && <span className="pill good" style={{ marginLeft: 8 }}>영입 성공</span>}</span><span className="row"><Stars value={potentialStars(p.potential ?? 50)} /><Attr v={p.ovr} /></span></li>
+              <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b>{p.star && <span className="pill warn" style={{ marginLeft: 8 }}>특급 신입생</span>}{p.scouted && <span className="pill good" style={{ marginLeft: 8 }}>영입 성공</span>}</span><span className="row"><Stars value={potentialStars(p.potential ?? 50)} /><Attr v={p.ovr} /></span></li>
             ))}</ul></>}
           {m.missed && m.missed.length > 0 && <><h3>놓친 영입 목표</h3>
             <ul className="lines">{m.missed.map((p) => (
