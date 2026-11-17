@@ -6,6 +6,7 @@ import type { GameState, PlayingState, ScreenKey } from './useGame';
 import type { ViewProps } from './ui';
 import Shell from './Shell';
 import StartView from './StartView';
+import TitleView from './TitleView';
 import HomeView from './HomeView';
 import InboxView from './InboxView';
 import SquadView from './SquadView';
@@ -30,7 +31,7 @@ const isPlaying = (S: GameState): S is PlayingState => S.career !== null;
 
 export default function Game() {
   const { S, act } = useGame();
-  if (!isPlaying(S)) return <StartView S={S} act={act} />;
+  if (!isPlaying(S)) return S.stage === 'title' ? <TitleView S={S} act={act} /> : <StartView S={S} act={act} />;
   const Screen = SCREENS[S.screen];
   const school = S.schoolId ? S.career.teams[S.schoolId] : undefined; // 다른 현 대표는 대회가 끝나면 정리되어 없을 수 있다
   return (

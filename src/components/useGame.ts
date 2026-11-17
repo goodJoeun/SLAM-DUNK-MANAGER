@@ -47,6 +47,8 @@ export interface GameState {
   career: Career | null;
   slot: number; // 지금 쓰는 세이브 칸. 게임을 고르는 화면에서는 새 게임이 들어갈 빈 칸 (없으면 0)
   slots: (SlotInfo | null)[]; // 게임을 고르는 화면에 보여 줄 칸별 요약
+  stage: 'title' | 'new'; // 게임 밖에서 보는 화면: 표지 또는 학교 선택
+  lastSlot: number; // 표지의 "이어하기"가 여는 칸 (없으면 0)
   screen: ScreenKey;
   startSeed: number;
   nameStyle: NameStyle;
@@ -100,6 +102,8 @@ function slotInfo(slot: number): SlotInfo | null {
 }
 const readSlots = () => SLOTS.map(slotInfo);
 const firstEmpty = (slots: (SlotInfo | null)[]) => SLOTS.find((n, i) => !slots[i]) ?? 0;
+// 이어하기가 열 칸: 마지막으로 하던 칸, 비었으면 게임이 있는 첫 칸
+const lastOf = (slots: (SlotInfo | null)[], prefer: number) => (slots[prefer - 1] ? prefer : slots.find(Boolean)?.slot ?? 0);
 
 function loadPrefs(): MatchPrefs {
   const saved = readJson<Partial<MatchPrefs>>(PREFS_KEY, {});
@@ -110,12 +114,13 @@ function loadPrefs(): MatchPrefs {
 
 const initialState = (): GameState => {
   const last = readJson<number>(SLOT_KEY, 1);
-  const active = SLOTS.includes(last) ? last : 1;
-  const career = readJson<Career | null>(saveKey(active), null);
-  const slots = career ? [] : readSlots();
+  // 켜면 항상 표지에서 시작한다. 게임은 표지에서 "이어하기"를 눌러야 불러온다.
+  const slots = readSlots();
   return {
-    career,
-    slot: career ? active : firstEmpty(slots),
+    career: null,
+    stage: 'title',
+    lastSlot: lastOf(slots, SLOTS.includes(last) ? last : 1),
+    slot: firstEmpty(slots),
     slots,
     screen: 'home',
     startSeed: randomSeed(),
@@ -123,7 +128,7 @@ const initialState = (): GameState => {
     program: 'shooting',
     intensity: 'normal',
     resumeProgram: 'shooting',
-    inbox: career ? readJson<Message[]>(inboxKey(active), []) : [],
+    inbox: [],
     messageId: null,
     match: null,
     playerId: null,
@@ -333,14 +338,17 @@ const actions = {
     save(S);
     writeJson(SLOT_KEY, S.slot);
   },
-  // 지금 게임을 저장해 두고 세이브 칸을 고르는 화면으로 나간다
+  // 표지 <-> 학교 선택
+  newGame({ S }: Ctx) { if (!S.career) S.stage = 'new'; },
+  title({ S }: Ctx) { if (!S.career) S.stage = 'title'; },
+  // 지금 게임을 저장해 두고 표지로 나간다
   menu({ S }: Ctx) {
     stopMatchTimer(S);
     save(S);
     const slots = readSlots();
     Object.assign(S, {
       career: null, match: null, inbox: [], messageId: null, playerId: null, schoolId: null, dayNote: null, lastEvent: undefined,
-      screen: 'home', startSeed: randomSeed(), slots, slot: firstEmpty(slots),
+      screen: 'home', startSeed: randomSeed(), slots, slot: firstEmpty(slots), stage: 'title', lastSlot: lastOf(slots, S.slot || S.lastSlot),
     });
   },
   // 세이브 칸의 게임을 이어서 한다
@@ -363,6 +371,7 @@ const actions = {
     removeKey(inboxKey(slot));
     S.slots = readSlots();
     if (!S.slot || slotInfo(S.slot)) S.slot = firstEmpty(S.slots);
+    S.lastSlot = lastOf(S.slots, S.lastSlot);
   },
   screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; S.schoolId = null; S.squadTab = null; },
   // 선수단 화면의 신입생 스카우트 탭을 바로 연다

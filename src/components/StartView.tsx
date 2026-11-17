@@ -59,7 +59,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
   return (
     <div className="start">
       <div className="start-hero">
-        <span className="eyebrow">새 커리어</span>
+        <div className="row between"><span className="eyebrow">새 커리어</span><button className="btn ghost small" onClick={() => act('title')}>표지로 돌아가기</button></div>
         <h1>고교 농구 매니저</h1>
         <p>{p.prefecture}의 고교 농구부 감독이 되어 3년 동안 팀을 이끕니다. 매일 훈련을 정하고, 경기를 직접 지휘하고, 인터하이·국민체육대회·윈터컵 우승에 도전하세요.</p>
         <div className="row">
