@@ -7,17 +7,17 @@ import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, Seg,
 import type { IconName, ViewProps } from './ui';
 
 const KIND_ICON: Record<MessageKind, IconName> = {
-  welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics',
+  welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics', event: 'squad',
 };
 
 // 목록 필터: 종류가 비슷한 소식끼리 묶어 본다
 const FILTERS = { all: '전체', match: '경기·분석', training: '훈련·부상', comp: '대회', school: '학교' };
 type FilterKey = keyof typeof FILTERS;
 const FILTER_OF: Record<MessageKind, FilterKey> = {
-  match: 'match', scout: 'match', training: 'training', injury: 'training', round: 'comp', competition: 'comp', welcome: 'school', season: 'school',
+  match: 'match', scout: 'match', training: 'training', injury: 'training', round: 'comp', competition: 'comp', welcome: 'school', season: 'school', event: 'school',
 };
 
-function MessageBody({ m, career }: { m: Message; career: Career }) {
+function MessageBody({ m, career, act }: { m: Message; career: Career; act: Act }) {
   switch (m.kind) {
     case 'match': {
       const box = m.box ?? [];
@@ -107,9 +107,11 @@ function MessageBody({ m, career }: { m: Message; career: Career }) {
             <div key={sec.title}><h3>{sec.title}</h3><ul className="lines">{sec.lines.map((l) => <li key={l}><span>{l}</span></li>)}</ul></div>
           ))}
           {sc.hints.length > 0 && <><h3>코치 메모</h3><ul className="lines">{sc.hints.map((h) => <li key={h}><span>{h}</span></li>)}</ul></>}
-          {sc.days < PREPARATION.maxDays
-            ? <p className="hint">하루 더 분석하면 {sc.days === 1 ? '선발 다섯 명의 강점과 약점' : '선수별 성향과 벤치 전력'}까지 알아내고, 그 경기 보너스도 커집니다.</p>
-            : <p className="hint">분석을 모두 마쳤습니다. 이 정보를 바탕으로 어떤 전술과 선발로 맞설지는 감독이 정합니다.</p>}
+          {/* more: 경기 전에 분석할 날이 더 남았는지 (예전 저장의 보고서에는 없어 최대 일수로 판단한다) */}
+          {(sc.more ?? sc.days < PREPARATION.maxDays)
+            ? <p className="hint">하루 더 분석하면 {sc.days === 1 ? '선발 다섯 명의 강점·약점과 대응 실마리' : '선수별 성향과 벤치 전력'}까지 알아내고, 그 경기 보너스도 커집니다.</p>
+            : <p className="hint">{sc.days < PREPARATION.maxDays ? '경기 전까지 더 분석할 날이 없습니다.' : '분석을 모두 마쳤습니다.'} 이 정보를 바탕으로 어떤 전술과 선발로 맞설지는 감독이 정합니다.</p>}
+          <p><button className="btn small" onClick={() => act('screen', 'tactics')}><Icon name="tactics" />전술 화면에서 코치의 모의 경기 조언 보기</button></p>
         </>
       );
     }
@@ -126,7 +128,7 @@ function MessageView({ m, career, act }: { m: Message; career: Career; act: Act 
         <span className="meta">{m.from} · {m.year}년차 {m.day}일 · {m.phase}</span>
         <h2>{m.title}</h2>
       </header>
-      <MessageBody m={m} career={career} />
+      <MessageBody m={m} career={career} act={act} />
     </article>
   );
 }

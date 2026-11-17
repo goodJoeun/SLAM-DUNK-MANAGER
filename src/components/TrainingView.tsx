@@ -12,6 +12,7 @@ const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) 
 // 다음 공식전 상대 분석: 경기 3일 전부터 하루씩, 최대 3일
 function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: boolean; onPick: () => void }) {
   const max = PREPARATION.maxDays;
+  const reach = prep.reachDays ?? max; // 이번 경기 전까지 실제로 채울 수 있는 일수
   const reason = prep.daysUntil === 0 ? '오늘이 경기일입니다.'
     : prep.days >= max ? '준비를 모두 마쳤습니다.'
       : prep.daysUntil > PREPARATION.window ? `경기 ${PREPARATION.window}일 전부터 분석할 수 있습니다 (지금 ${prep.daysUntil}일 전).`
@@ -20,18 +21,21 @@ function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: bool
     <Panel title="다음 공식전 준비" action={<span className="pill club">{prep.daysUntil === 0 ? '오늘 경기' : `${prep.daysUntil}일 후`}</span>}>
       <div className="kv">
         <div><small>상대</small><b style={{ fontSize: 15 }}>{prep.opponent}</b><span className="muted">{prep.label}</span></div>
-        <div><small>분석한 날</small><b>{prep.days} / {max}일</b><span className="muted">하루에 능력치 +{PREPARATION.perDay}</span></div>
-        <div><small>그 경기 보너스</small><b className={prep.bonus ? 'good' : ''}>+{prep.bonus.toFixed(1)}</b><span className="muted">최대 +{(PREPARATION.perDay * max).toFixed(1)}</span></div>
+        <div><small>분석한 날</small><b>{prep.days} / {reach}일</b><span className="muted">하루에 능력치 +{PREPARATION.perDay}</span></div>
+        <div><small>그 경기 보너스</small><b className={prep.bonus ? 'good' : ''}>+{prep.bonus.toFixed(1)}</b><span className="muted">이번 경기 최대 +{(PREPARATION.perDay * reach).toFixed(1)}</span></div>
       </div>
       {prep.days > 0 && (
         <div className="advice">
           <Icon name="bulb" />
-          <span>분석 보고서는 받은 소식에 있습니다. {prep.days < max ? '하루 더 분석하면 더 자세한 내용이 나옵니다.' : '보고서를 보고 전술과 선발을 정하세요.'}</span>
+          <span>분석 보고서는 받은 소식에 있습니다. {prep.days < reach && prep.daysUntil > 0 ? '하루 더 분석하면 더 자세한 내용이 나옵니다.' : '보고서를 보고 전술과 선발을 정하세요.'}</span>
         </div>
       )}
       <button className={`opt ${selected ? 'on' : ''}`} disabled={!prep.canScout} onClick={onPick} style={{ opacity: prep.canScout ? 1 : 0.55 }}>
         <b>{prep.opponent} 분석·대비</b>
-        <span>{prep.canScout ? '영상 분석과 맞춤 연습. 1일째는 주요 선수와 전술, 2일째는 강점과 약점, 3일째는 선수별 성향과 벤치를 알아냅니다. 그날은 성장 훈련을 하지 않고, 컨디션은 조금만 씁니다.' : reason}</span>
+        <span>
+          {prep.canScout ? '영상 분석과 맞춤 연습. 1일째는 주요 선수와 전술, 2일째는 강점·약점과 대응 실마리, 3일째는 선수별 성향과 벤치를 알아냅니다. 분석한 만큼 그 경기에서 능력치가 오르고, 상대의 허술한 쪽을 노리는 공격과 집중 마크도 더 잘 통합니다. 그날은 성장 훈련을 하지 않고, 컨디션은 조금만 씁니다.' : reason}
+          {prep.canScout && reach < max && ` 이번 경기는 남은 훈련일이 모자라 ${reach}일까지만 분석할 수 있습니다.`}
+        </span>
       </button>
     </Panel>
   );
@@ -76,7 +80,7 @@ export default function TrainingView({ S, act }: ViewProps) {
                   );
                 })}
               </div>
-              <p className="hint">강하게 훈련할수록 빨리 크지만 지치고 다치기 쉽습니다. 지친 선수는 같은 훈련을 해도 덜 성장합니다.</p>
+              <p className="hint">강하게 훈련할수록 빨리 크지만 지치고 다치기 쉽고, 노력파가 아닌 선수는 사기가 떨어집니다. 지치거나 사기가 낮은 선수는 같은 훈련을 해도 덜 성장합니다. 휴식은 컨디션과 사기를 함께 회복합니다.</p>
             </Panel>
           )}
           <Panel title="오늘 진행">

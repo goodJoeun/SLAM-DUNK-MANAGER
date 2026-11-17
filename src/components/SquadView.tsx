@@ -3,6 +3,7 @@ import { PROGRAMS, SCHOOL, teamOverall } from '@/game/school';
 import { RECRUITING, SEASON, prospectsOf, recruitChance } from '@/game/season';
 import { overall } from '@/game/engine';
 import { RATING_KEYS } from '@/game/generate';
+import { TRAITS, moraleLabel, moraleOf, traitOf } from '@/game/people';
 import type { Career, Player, RatingKey } from '@/game/types';
 import type { Act } from './useGame';
 import Portrait, { PortraitEditor, licensedPortrait } from './Portrait';
@@ -137,12 +138,16 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
             {status(p, index)}
             {p.fixed && <span className="pill">원작 선수</span>}
           </div>
+          <div className="row" title={TRAITS[traitOf(p)].info}>
+            <span className="pill club">{TRAITS[traitOf(p)].label}</span><span className="muted">{TRAITS[traitOf(p)].info}</span>
+          </div>
         </div>
         <div className="ratings-sum">
           <div>종합<Attr v={ovr} big /></div>
           <div>현재 능력<Stars value={abilityStars(ovr)} /></div>
           <div>성장 잠재력<Stars value={potentialStars(p.potential)} /></div>
           <div>컨디션 {Math.round(p.condition)}<CondBar value={p.condition} /></div>
+          <div title="60이 보통입니다. 사기가 높으면 경기력과 훈련 효율이 오릅니다.">사기 {Math.round(moraleOf(p))}<b className={moraleOf(p) >= 68 ? 'good' : moraleOf(p) < 52 ? 'bad' : ''}>{moraleLabel(moraleOf(p))}</b></div>
         </div>
       </div>
 
@@ -221,8 +226,9 @@ export default function SquadView({ S, act }: ViewProps) {
                   {th('pot', '잠재력', 'c')}
                   {th('ovr', '종합')}
                   {th('cond', '컨디션')}
+                  <th className="c">사기</th>
+                  <th className="l">성격</th>
                   <th className="c">상태</th>
-                  <th className="l">개인 훈련</th>
                   {th('pts', '경기당 득점')}
                 </>
               ) : (
@@ -248,8 +254,9 @@ export default function SquadView({ S, act }: ViewProps) {
                       <td className="c"><Stars value={potentialStars(p.potential)} /></td>
                       <td><Attr v={ovr} /></td>
                       <td><span className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}><span className="num">{Math.round(p.condition)}</span><CondBar value={p.condition} /></span></td>
+                      <td className="c"><span className={moraleOf(p) >= 68 ? 'good' : moraleOf(p) < 52 ? 'bad' : 'muted'}>{moraleLabel(moraleOf(p))}</span></td>
+                      <td className="l" title={TRAITS[traitOf(p)].info}>{TRAITS[traitOf(p)].label}</td>
                       <td className="c">{status(p, i)}</td>
-                      <td className="l">{p.focus ? PROGRAMS[p.focus].label : <span className="faint">-</span>}</td>
                       <td>{avg == null ? <span className="faint">-</span> : avg.toFixed(1)}</td>
                     </>
                   ) : (

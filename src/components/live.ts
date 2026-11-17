@@ -6,7 +6,7 @@
 //   2) reveal: 연출이 끝나면 점수·중계·알림을 드러낸다. 그래야 슛이 들어가기 전에 점수가 먼저 바뀌지 않는다.
 import type { UserMatch } from '@/game/season';
 import type { Scene } from '@/game/court';
-import type { BoxTeam, GameView, LogEvent, StepResult } from '@/game/types';
+import type { BoxTeam, GameView, LogEvent, PlayerView, StepResult } from '@/game/types';
 import { choreograph, tipOffScene } from './court/choreo';
 import type { EndKind } from './court/choreo';
 import type { CourtAnimation } from './court/FullCourt';
@@ -22,8 +22,9 @@ export const SPEEDS: Record<SpeedKey, { label: string; perSecond: number; gap: n
 };
 export const BREAK_MS = 1500; // 쿼터 사이 휴식
 
-export type AlertKey = 'foul' | 'tired' | 'run' | 'clutch';
+export type AlertKey = 'period' | 'foul' | 'tired' | 'run' | 'clutch';
 export const ALERTS: Record<AlertKey, string> = {
+  period: '쿼터 종료·하프타임',
   foul: '우리 선수 파울 4개',
   tired: '우리 선수 체력 저하',
   run: '상대 연속 8점',
@@ -36,14 +37,23 @@ export const FEED_MODES: Record<FeedMode, string> = { key: '주요 장면', all:
 // 주요 장면: 교체는 양이 많아 전체 보기에만 나온다
 export const KEY_EVENT = /성공|턴오버|스틸|블록|파울|작전 타임|퇴장/;
 
+// 체력 저하 알림 기준: 코트 위 선수의 체력이 이 아래로 떨어지면 알린다
+export const TIRED_LEVELS = [30, 40, 50];
+// 한 명이 기준에 닿으면 기준에 거의 다다른 선수(이만큼 위까지)도 함께 묶어, 곧바로 같은 이유로 또 멈추지 않게 한다
+const TIRED_MARGIN = 8;
+// 지친 선수 대신 들어갈 벤치 선수는 체력이 이만큼은 돼야 한다 (방금 뺀 선수를 도로 넣으라고 권하지 않는다)
+export const FRESH_ENERGY = 70;
+
 export interface MatchPrefs {
   speed: SpeedKey;
   alerts: Record<AlertKey, boolean>;
+  tiredAt: number;
   feed: FeedMode;
 }
 export const DEFAULT_PREFS: MatchPrefs = {
   speed: 'normal',
-  alerts: { foul: true, tired: true, run: true, clutch: true },
+  alerts: { period: true, foul: true, tired: true, run: true, clutch: true },
+  tiredAt: 40,
   feed: 'key',
 };
 
@@ -57,8 +67,25 @@ export interface CoachNote {
   paused: boolean; // 이 알림 때문에 경기가 멈췄는지
 }
 
-// 자동 정지 알림에서 바로 할 수 있는 조치: 그 선수 교체, 또는 작전 타임
-export type PauseFix = { kind: 'sub'; playerId: string } | { kind: 'timeout' };
+// 자동 정지 알림에서 바로 할 수 있는 조치: 문제가 된 선수들 교체, 또는 작전 타임
+export type PauseFix = { kind: 'sub'; reason: 'tired' | 'foul'; playerIds: string[] } | { kind: 'timeout' };
+
+// 팀 기록 합계 (경기 기록 비교와 쿼터별 기록에 쓴다)
+export function teamTotals(t: BoxTeam) {
+  const sum = (f: (p: BoxTeam['players'][number]) => number) => t.players.reduce((s, p) => s + f(p), 0);
+  return {
+    pts: sum((p) => p.pts), fgm: sum((p) => p.fgm), fga: sum((p) => p.fga), tpm: sum((p) => p.tpm), tpa: sum((p) => p.tpa),
+    ftm: sum((p) => p.ftm), fta: sum((p) => p.fta), reb: sum((p) => p.orb + p.drb), ast: sum((p) => p.ast),
+    stl: sum((p) => p.stl), blk: sum((p) => p.blk), tov: sum((p) => p.tov),
+  };
+}
+export type TeamTotals = ReturnType<typeof teamTotals>;
+
+// 쿼터 사이 휴식: 방금 끝난 쿼터에 두 팀이 올린 기록 (홈, 원정 순)
+export interface BreakInfo {
+  period: number; // 방금 끝난 쿼터
+  quarter: [TeamTotals, TeamTotals];
+}
 
 // 엔진은 진행했지만 아직 화면에 드러내지 않은 공격권
 export interface Pending {
@@ -75,6 +102,8 @@ export interface ActiveMatch extends UserMatch {
   pause: string | null; // 자동으로 멈춘 이유
   pauseFix: PauseFix | null; // 멈춘 이유를 바로 해결할 방법 (알림 띠의 버튼)
   interlude: string | null; // 쿼터 사이 휴식 중이면 안내 문구
+  breakInfo: BreakInfo | null; // 쿼터가 막 끝났으면 그 쿼터의 기록 (다음 공격권이 시작되면 지운다)
+  periodMark: [TeamTotals, TeamTotals] | null; // 이번 쿼터가 시작될 때의 기록 합계
   notes: CoachNote[]; // 코치 알림 (최신이 앞)
   flags: Record<string, boolean>; // 같은 알림을 되풀이하지 않기 위한 표시
   // 코트 연출
@@ -90,7 +119,7 @@ export interface ActiveMatch extends UserMatch {
 }
 
 export const newMatch = (m: UserMatch): ActiveMatch => ({
-  ...m, feed: [], selected: null, timer: null, playing: false, pause: null, pauseFix: null, interlude: null, notes: [], flags: {},
+  ...m, feed: [], selected: null, timer: null, playing: false, pause: null, pauseFix: null, interlude: null, breakInfo: null, periodMark: null, notes: [], flags: {},
   scene: null, lastEnd: null, anim: null, pending: null, display: null, deferredLog: [], possessions: 0, logMark: 0, endSeen: false,
 });
 
@@ -99,6 +128,8 @@ const NOTE_LIMIT = 40;
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
 export const periodLabel = (period: number) => (period > 4 ? `연장 ${period - 4}` : `${period}쿼터`);
+// 쿼터가 끝났을 때의 이름: 2쿼터 뒤는 하프타임
+export const breakLabel = (period: number) => (period === 2 ? '전반 종료 · 하프타임' : `${periodLabel(period)} 종료`);
 const clockText = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
 export function addNote(m: ActiveMatch, view: GameView, tone: NoteTone, text: string, paused = false) {
@@ -117,6 +148,7 @@ function animates(prefs: MatchPrefs, step: StepResult) {
 
 // 1) 엔진을 한 공격권 진행하고 코트 연출을 만든다. 끝났으면 null.
 export function beginPossession(m: ActiveMatch, prefs: MatchPrefs): { pending: Pending; ms: number } | null {
+  m.breakInfo = null;
   const before = m.game.view();
   const result = m.game.result();
   const box = result.box;
@@ -157,9 +189,21 @@ function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogE
   };
 
   for (const p of me.court) {
-    const sub: PauseFix = { kind: 'sub', playerId: p.id };
-    if (p.pf >= 4 && !p.out) raise(`pf4:${p.id}`, 'warn', `${p.name} 파울 4개 — 한 번 더 하면 퇴장입니다.`, prefs.alerts.foul && manual, sub);
-    if (p.energy < 40) raise(`tired:${p.id}`, 'warn', `${p.name} 체력 ${p.energy} — 교체를 고려하세요.`, prefs.alerts.tired && manual, sub);
+    if (p.pf >= 4 && !p.out) {
+      raise(`pf4:${p.id}`, 'warn', `${p.name} 파울 4개 — 한 번 더 하면 퇴장입니다.`, prefs.alerts.foul && manual, { kind: 'sub', reason: 'foul', playerIds: [p.id] });
+    }
+  }
+  // 체력: 선수마다 따로 멈추지 않고, 지친 선수들을 한 번에 묶어 알린다
+  const unflagged = (p: PlayerView) => !p.out && !m.flags[`tired:${p.id}`];
+  if (me.court.some((p) => unflagged(p) && p.energy < prefs.tiredAt)) {
+    const group = me.court.filter((p) => unflagged(p) && p.energy < prefs.tiredAt + TIRED_MARGIN).sort((a, b) => a.energy - b.energy);
+    for (const p of group) m.flags[`tired:${p.id}`] = true;
+    const text = group.length === 1
+      ? `${group[0].name} 체력 ${group[0].energy} — 교체를 고려하세요.`
+      : `지친 선수 ${group.length}명 (${group.map((p) => `${p.name} ${p.energy}`).join(', ')}) — 교체를 고려하세요.`;
+    const pause = prefs.alerts.tired && manual;
+    addNote(m, after, 'warn', text, pause);
+    if (pause && !stop) { stop = text; m.pauseFix = { kind: 'sub', reason: 'tired', playerIds: group.map((p) => p.id) }; }
   }
   for (const p of [...me.court, ...me.bench]) if (p.energy >= 70) delete m.flags[`tired:${p.id}`]; // 회복하면 다시 알린다
 
@@ -196,10 +240,22 @@ export function reveal(m: ActiveMatch, prefs: MatchPrefs, pending: Pending, watc
   if (m.deferredLog.length) { m.feed.unshift(...[...m.deferredLog].reverse()); m.deferredLog = []; }
   if (m.feed.length > FEED_LIMIT) m.feed.length = FEED_LIMIT;
   const after = m.game.view();
-  const stop = watch ? review(m, prefs, after, step.events) : null;
-  if (watch && step.periodEnded) {
-    const [h, a] = after.teams;
-    addNote(m, after, 'info', `${step.finished ? '경기 종료' : `${periodLabel(pending.period)} 종료`} · ${h.name} ${h.score} : ${a.score} ${a.name}`);
+  let stop = watch ? review(m, prefs, after, step.events) : null;
+  if (step.periodEnded) {
+    // 방금 끝난 쿼터의 기록 = 지금 합계 - 쿼터 시작 때 합계
+    const now = m.game.result().box.map(teamTotals) as [TeamTotals, TeamTotals];
+    const diff = (a: TeamTotals, b: TeamTotals | undefined) =>
+      Object.fromEntries(Object.entries(a).map(([k, x]) => [k, x - (b?.[k as keyof TeamTotals] ?? 0)])) as TeamTotals;
+    if (!step.finished) m.breakInfo = { period: pending.period, quarter: [diff(now[0], m.periodMark?.[0]), diff(now[1], m.periodMark?.[1])] };
+    m.periodMark = now;
+    if (watch) {
+      const [h, a] = after.teams;
+      const text = `${step.finished ? '경기 종료' : breakLabel(pending.period)} · ${h.name} ${h.score} : ${a.score} ${a.name}`;
+      // 쿼터 사이는 감독이 손을 쓸 시간이다: 켜 두었으면 멈춰서 전술과 교체를 고치게 한다
+      const pause = !step.finished && prefs.alerts.period;
+      addNote(m, after, 'info', text, pause);
+      if (pause && !stop) { stop = `${text}. 전술과 교체를 손본 뒤 계속 진행하세요.`; m.pauseFix = null; }
+    }
   }
   return { stop, periodEnded: step.periodEnded, finished: step.finished };
 }

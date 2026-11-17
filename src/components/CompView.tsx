@@ -80,9 +80,9 @@ export default function CompView({ S }: ViewProps) {
             </Panel>
           )}
           {(c.stage === 'knockout' || c.stage === 'playoff' || c.stage === 'national') && c.bracket.length > 1 && (
-            <Panel title={`남은 학교 ${c.bracket.length}곳`}>
+            <Panel title={`남은 학교 ${c.bracket.filter(Boolean).length}곳`}>
               <div className="row">
-                {c.bracket.map((id) => <span key={id} className={`pill ${id === me ? 'club' : ''}`}>{teamName(career, id)}</span>)}
+                {c.bracket.filter(Boolean).map((id) => <span key={id} className={`pill ${id === me ? 'club' : ''}`}>{teamName(career, id)}</span>)}
               </div>
             </Panel>
           )}

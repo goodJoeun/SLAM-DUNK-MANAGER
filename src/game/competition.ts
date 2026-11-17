@@ -42,4 +42,8 @@ export function standings(ids: string[], matches: Match[]) {
   return Object.values(row).sort((x, y) => y.w - x.w || (y.pf - y.pa) - (x.pf - x.pa) || y.pf - x.pf);
 }
 
-export const roundName = (teamsLeft: number) => (teamsLeft === 2 ? '결승' : teamsLeft === 4 ? '준결승' : `${teamsLeft}강`);
+// 16강보다 큰 대진(전국 대회 본선)은 1회전, 2회전으로 부른다
+export const roundName = (slots: number) => (slots === 2 ? '결승' : slots === 4 ? '준결승' : slots === 64 ? '1회전' : slots === 32 ? '2회전' : `${slots}강`);
+
+// 대진표의 빈자리. 짝이 BYE인 학교는 경기 없이 다음 라운드로 올라간다 (부전승)
+export const BYE = '';

@@ -51,7 +51,14 @@ export interface Player extends BasePlayer {
   progress: Partial<Ratings>; // 능력치별 소수점 성장 누적
   focus: ProgramKey | null; // 개인 훈련 메뉴
   fixed?: boolean; // 데이터 파일에 명시된 선수
+  trait?: TraitKey; // 성격 (people.ts). 없으면 처음 읽을 때 정한다
+  morale?: number; // 사기 0~100, 60이 보통. 내 학교 선수만 변한다
 }
+
+export type TraitKey = 'steady' | 'worker' | 'genius' | 'clutch' | 'moody' | 'leader' | 'lazy' | 'ironman';
+export type EventKey = 'benchTalk' | 'nightPractice' | 'quarrel' | 'exam' | 'alumni' | 'slump' | 'rookie' | 'friendly' | 'ache' | 'late';
+// 감독의 결정을 기다리는 사건. a·b = 주인공 선수 id
+export interface CareerEvent { key: EventKey; a: string; b?: string }
 
 export interface Team {
   id: string;
@@ -67,6 +74,8 @@ export interface EnginePlayer extends BasePlayer {
   hidden?: { consistency: number };
   condition?: number;
   injuredDays?: number;
+  morale?: number;
+  trait?: TraitKey;
 }
 export interface EngineTeam {
   id?: string;
@@ -279,7 +288,7 @@ export interface Competition {
   groups: Group[] | null;
   groupPlayed: number;
   league: League | null;
-  bracket: string[];
+  bracket: string[]; // 대진 순서대로 둘씩 맞붙는다. BYE('')와 짝이 된 학교는 그 라운드를 쉰다
   runnerUp: string | null;
   rounds: Round[]; // 치른 라운드 기록
   finish: Record<string, string>; // 학교별 최종 성적 (표시용)
@@ -345,6 +354,10 @@ export interface Career {
   trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
   prospects?: Prospect[]; // 올해 눈여겨볼 중학 유망주 (우리 학교가 영입을 시도할 수 있는 후보)
   recruitTargets?: string[]; // 영입 목표로 정한 유망주의 선수 id
+  event?: CareerEvent; // 오늘 감독이 결정해야 하는 사건 (고르기 전에는 하루를 진행할 수 없다)
+  lastEventDay?: number;
+  lastEventKey?: EventKey;
+  forcedRest?: boolean; // 사건의 결과로 오늘 훈련이 휴식으로 바뀐다
 }
 
 // 중학 유망주. level = 이 선수가 보통 진학할 학교의 수준 (우리 학교 수준이 이보다 낮을수록 데려오기 어렵다)
@@ -372,6 +385,7 @@ export interface PrepInfo {
   days: number; // 지금까지 분석한 날 수
   bonus: number; // 그 경기에서 받는 능력치 보너스 (분석한 날 수에 비례)
   canScout: boolean; // 오늘 분석할 수 있는지
+  reachDays: number; // 경기 전까지 남은 훈련일을 모두 써도 채울 수 있는 분석 일수 (경기 간격이 짧으면 최대치보다 적다)
 }
 
 export interface UserMatchInfo {
@@ -380,6 +394,7 @@ export interface UserMatchInfo {
   opponentId: string;
   opponent: string;
   opponentOverall: number;
+  opener: boolean; // 대회 첫 경기: 대진이 당일에 정해져 미리 분석할 수 없었다
 }
 
 export interface Today {
@@ -447,10 +462,13 @@ export interface SchoolSpec {
   players: PlayerSpec[];
   benchLevel?: number;
   prefecture?: string;
+  draw?: number; // 전국 대회 대진표의 추첨 번호 (Dataset.draw 참고)
 }
 
 export interface Dataset {
   prefecture: string;
   schools: SchoolSpec[];
   nationals: SchoolSpec[];
+  // 인터하이 본선의 고정 대진표. size 참가 학교 수, home 우리 현 1위·2위의 추첨 번호, byes 1회전을 쉬는 번호
+  draw?: { size: number; home: [number, number]; byes: number[] };
 }

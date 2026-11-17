@@ -1,17 +1,19 @@
-import { useState } from 'react';
-import { composites, overall } from '@/game/engine';
+import { useEffect, useState } from 'react';
+import { composites, energyPerSecond, overall, startEnergy, tacticLoad } from '@/game/engine';
 import { teamOverall } from '@/game/school';
 import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
 import { today } from '@/game/season';
 import { scoutReport } from '@/game/scouting';
+import { adviseTactics } from '@/game/advice';
+import type { TacticsAdvice } from '@/game/advice';
 import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, userTeam } from './ui';
 import type { ViewProps } from './ui';
 
 const FOCUS_INFO: Record<Focus, string> = {
-  balanced: '슛 종류를 고르게 나눕니다.',
-  inside: '골밑슛과 포스트업 비중을 높이고, 안쪽에 강한 선수에게 공이 갑니다.',
-  outside: '3점슛 비중을 높이고, 슈터에게 공이 갑니다.',
+  balanced: '슛 종류를 고르게 나눕니다. 상대 수비에 허술한 쪽이 따로 없을 때 무난합니다.',
+  inside: '골밑슛과 포스트업 비중을 높이고, 안쪽에 강한 선수에게 공이 갑니다. 상대의 골밑 수비가 외곽 수비보다 허술할 때 잘 통하고, 반대면 손해입니다.',
+  outside: '3점슛 비중을 높이고, 슈터에게 공이 갑니다. 상대의 외곽 수비가 골밑 수비보다 허술할 때 잘 통하고, 반대면 손해입니다.',
   spread: '최신 5아웃 스페이싱. 다섯 명이 모두 외곽에 서서 골밑 돌파와 3점만 노리고 중거리는 버립니다. 슈터가 많을수록 돌파 공간이 넓어집니다.',
 };
 const DEFENSE_INFO: Record<Defense, string> = {
@@ -27,20 +29,33 @@ const PACE_INFO: Record<string, string> = {
   1: '속공으로 쉬운 득점을 노립니다. 실책과 체력 소모가 늘어, 볼 핸들링과 체력·벤치가 좋은 팀에 맞습니다. 공격권이 많아져 전력이 앞설 때 유리합니다.',
 };
 
-// AI 감독과 같은 기준으로 선발 다섯 명에 맞는 전술을 권한다
-function advise(cs: Composites[]) {
+// 선발 다섯 명의 득점 성향 (+면 안쪽, -면 외곽)
+function scoringLean(cs: Composites[]) {
   const avg = (f: (c: Composites) => number) => mean(cs.map(f));
-  const lean = avg((c) => Math.max(c.rim, c.post)) - avg((c) => Math.max(c.mid, c.three));
-  const focus: Focus = lean > 0.03 ? 'inside' : lean < -0.03 ? 'outside' : 'balanced';
-  let defense: Defense = 'man';
-  if (avg((c) => c.defInterior) - avg((c) => c.defPerimeter) > 0.02) defense = 'zone';
-  else if (avg((c) => c.stealing) + avg((c) => c.endurance) > 1.1) defense = 'press';
-  return { focus, defense, lean };
+  return avg((c) => Math.max(c.rim, c.post)) - avg((c) => Math.max(c.mid, c.three));
 }
 
-function Choice<K extends string>({ options, info, value, onChange }: {
+// 배율을 "+25%"처럼 적는다. 1에 가까우면 빈 문자열.
+const pctDelta = (x: number) => (Math.abs(x - 1) < 0.005 ? '' : `${x > 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`);
+
+// 선택지 카드에 붙는 부담 표시: 체력 소모와 파울이 기본(맨투맨·보통 템포)보다 얼마나 늘고 주는지
+type Tag = { text: string; tone: 'bad' | 'good' };
+function loadTags(defense: Defense, pace: number): Tag[] {
+  const load = tacticLoad(defense, pace);
+  const tags: Tag[] = [];
+  const add = (label: string, x: number) => { if (pctDelta(x)) tags.push({ text: `${label} ${pctDelta(x)}`, tone: x > 1 ? 'bad' : 'good' }); };
+  add('체력 소모', load.drain);
+  add('파울', load.foul);
+  add('슈팅 파울', load.shootingFoul);
+  return tags;
+}
+const DEFENSE_TAGS = Object.fromEntries((['man', 'zone', 'press', 'switch', 'drop'] as Defense[]).map((d) => [d, loadTags(d, 0)])) as Record<Defense, Tag[]>;
+const PACE_TAGS: Record<string, Tag[]> = { '-1': loadTags('man', -1), 0: [], 1: loadTags('man', 1) };
+
+function Choice<K extends string>({ options, info, tags, value, onChange }: {
   options: Record<K, string> | [K, string][];
   info: Record<K, string>;
+  tags?: Record<K, Tag[]>;
   value: string;
   onChange: (v: K) => void;
 }) {
@@ -50,6 +65,7 @@ function Choice<K extends string>({ options, info, value, onChange }: {
       {list.map(([k, label]) => (
         <button key={k} className={`opt ${value === k ? 'on' : ''}`} onClick={() => onChange(k)}>
           <b>{label}</b><span>{info[k]}</span>
+          {tags?.[k]?.length ? <span className="opt-tags">{tags[k].map((tag) => <i key={tag.text} className={`pill ${tag.tone}`}>{tag.text}</i>)}</span> : null}
         </button>
       ))}
     </div>
@@ -64,10 +80,34 @@ export default function TacticsView({ S, act }: ViewProps) {
   const t = team.tactics;
   const starters = team.players.slice(0, 5);
   const bench = team.players.slice(5);
-  const tip = advise(starters.map(composites));
+  const lean = scoringLean(starters.map(composites));
+  // 코치 조언: 다음 상대(정해지지 않았으면 현 내 중간 수준의 학교)와 모의 경기를 돌려 본 결과.
+  // 수백 경기를 돌리므로 화면을 먼저 그린 뒤 계산한다. 같은 날·같은 선발·같은 상대면 다시 계산하지 않는다.
+  const day = today(S.career);
+  const rivals = S.career.regionIds.filter((id) => id !== team.id).map((id) => S.career.teams[id]).sort((a, b) => a.prestige - b.prestige);
+  const nextId = day?.userMatch?.opponentId ?? prep?.opponentId;
+  const sparring = (nextId ? S.career.teams[nextId] : undefined) ?? rivals[Math.floor(rivals.length / 2)];
+  const scoutDays = prep && prep.opponentId === sparring.id ? prep.days : 0;
+  const adviceKey = `${S.career.year}-${S.career.dayIndex}-${sparring.id}-${scoutDays}-${starters.map((p) => p.id).join(',')}-${t.keyPlayerId ?? ''}-${t.denyPlayerId ?? ''}`;
+  const [advice, setAdvice] = useState<{ key: string; tip: TacticsAdvice } | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setAdvice({ key: adviceKey, tip: adviseTactics(team, sparring, scoutDays, S.career.seed + S.career.dayIndex * 1000, prep?.bonus ?? 0) }), 30);
+    return () => clearTimeout(timer);
+    // adviceKey가 팀·상대·분석 일수를 모두 담고 있다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adviceKey]);
+  const tip = advice?.key === adviceKey ? advice.tip : null;
   const focus = t.focus ?? 'balanced';
   const defense = t.defense ?? 'man';
   const pace = String(Math.round(t.pace ?? 0));
+  // 지금 고른 수비·템포의 부담: 체력 소모 배율과, 선발이 체력 저하 알림 기준까지 버티는 시간(쉬지 않고 뛸 때)
+  const load = tacticLoad(defense, Number(pace));
+  const tiredAt = S.prefs.tiredAt;
+  const lasting = starters
+    .map((p) => ({ name: p.name, min: Math.max(0, startEnergy(p.condition) - tiredAt / 100) / energyPerSecond(composites(p).endurance, load.drain) / 60 }))
+    .sort((a, b) => a.min - b.min);
+  const lastingAvg = mean(lasting.map((x) => x.min));
+  const heavy = lastingAvg < 20; // 전반(20분)을 못 버틴다
   // 선발 교체: 코트의 선발을 고른 뒤 벤치 선수(교체)나 다른 선발(자리 바꿈)을 누른다
   const [picked, setPicked] = useState<string | null>(null);
   const pickedSlot = starters.findIndex((p) => p.id === picked);
@@ -99,12 +139,15 @@ export default function TacticsView({ S, act }: ViewProps) {
               <Icon name="bulb" />
               <div className="stack" style={{ gap: 4 }}>
                 <span>
-                  선발 다섯 명은 {tip.lean > 0.03 ? '안쪽 득점' : tip.lean < -0.03 ? '외곽슛' : '안팎 고른 득점'}에 강합니다.
-                  공격은 <b>{FOCUS[tip.focus]}</b>, 수비는 <b>{DEFENSE[tip.defense]}</b>를 권합니다.
+                  선발 다섯 명은 {lean > 0.03 ? '안쪽 득점' : lean < -0.03 ? '외곽슛' : '안팎 고른 득점'}에 강합니다.{' '}
+                  {tip
+                    ? <>{nextId ? <><b>{sparring.name}</b>전을</> : <>현 내 중간 수준의 상대를</>} 가정해 모의 경기를 돌려 보니 공격은 <b>{FOCUS[tip.focus]}</b>, 수비는 <b>{DEFENSE[tip.defense]}</b>, 템포는 <b>{PACE.find(([k]) => k === String(tip.pace))?.[1]}</b>{tip.pace === 0 ? '이' : '가'} 가장 잘 통했습니다.</>
+                    : <>코치가 모의 경기를 돌려 보는 중입니다…</>}
                 </span>
-                {(focus !== tip.focus || defense !== tip.defense) && (
+                {tip && <span className="hint">선택지마다 {tip.games}경기씩 돌려 본 결과라 빗나갈 수 있습니다. 공식전 상대를 분석한 날이 늘수록 더 많이 돌려 봅니다.</span>}
+                {tip && (focus !== tip.focus || defense !== tip.defense || pace !== String(tip.pace)) && (
                   <span>
-                    <button className="btn small" onClick={() => { act('tactic', 'focus', tip.focus); act('tactic', 'defense', tip.defense); }}>조언대로 바꾸기</button>
+                    <button className="btn small" onClick={() => { act('tactic', 'focus', tip.focus); act('tactic', 'defense', tip.defense); act('tactic', 'pace', String(tip.pace)); }}>조언대로 바꾸기</button>
                   </span>
                 )}
               </div>
@@ -114,10 +157,25 @@ export default function TacticsView({ S, act }: ViewProps) {
             <Choice options={FOCUS} info={FOCUS_INFO} value={focus} onChange={(v) => act('tactic', 'focus', v)} />
           </Panel>
           <Panel title="수비">
-            <Choice options={DEFENSE} info={DEFENSE_INFO} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
+            <Choice options={DEFENSE} info={DEFENSE_INFO} tags={DEFENSE_TAGS} value={defense} onChange={(v) => act('tactic', 'defense', v)} />
           </Panel>
           <Panel title="템포">
-            <Choice options={PACE} info={PACE_INFO} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
+            <Choice options={PACE} info={PACE_INFO} tags={PACE_TAGS} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
+          </Panel>
+          <Panel title="이 전술의 부담" action={<span className="hint">{DEFENSE[defense]} · {PACE.find(([k]) => k === pace)?.[1]} 템포</span>}>
+            <div className="load">
+              <div><small>체력 소모</small><b className={load.drain > 1.2 ? 'bad' : load.drain < 0.95 ? 'good' : ''}>×{load.drain.toFixed(2)}</b><span>맨투맨·보통 템포 대비 {pctDelta(load.drain) || '같음'}</span></div>
+              <div><small>파울</small><b className={load.foul > 1 ? 'bad' : load.shootingFoul < 1 ? 'good' : ''}>{pctDelta(load.foul) || pctDelta(load.shootingFoul) || '기본'}</b><span>{load.foul > 1 ? '압박하다 나오는 파울' : load.shootingFoul < 1 ? '슈팅 파울이 줄어듭니다' : '늘거나 줄지 않습니다'}</span></div>
+              <div><small>선발이 버티는 시간</small><b className={heavy ? 'bad' : ''}>약 {Math.round(lastingAvg)}분</b><span>쉬지 않고 뛰어 체력 {tiredAt}까지 · 평균</span></div>
+            </div>
+            <p className="hint">
+              가장 먼저 지치는 선수: {lasting.slice(0, 2).map((x) => `${x.name} 약 ${Math.round(x.min)}분`).join(', ')}. 지금 컨디션과 지구력으로 어림한 값이고, 경기는 40분입니다.
+            </p>
+            {heavy && (
+              <p className="notice bad" style={{ margin: '8px 0 0' }}>
+                이 전술로는 선발이 전반(20분)을 다 뛰기 어렵습니다. 벤치를 자주 돌리거나, 템포를 늦추거나, 존 수비처럼 덜 지치는 수비를 함께 고려하세요.
+              </p>
+            )}
           </Panel>
         </div>
 

@@ -13,7 +13,7 @@
 import { makeRng } from './rng.ts';
 import type { Rng } from './rng.ts';
 import type {
-  BasePlayer, Composites, EngineTeam, EventInfo, GameOptions, GameResult, GameView, LogEvent, PlayerView,
+  BasePlayer, Composites, Defense, EngineTeam, EventInfo, GameOptions, GameResult, GameView, LogEvent, PlayerView,
   RatingKey, ShotType, StatLine, StepResult, Tactics,
 } from './types.ts';
 
@@ -37,7 +37,12 @@ export const TUNING = {
     mid: { make: 0.39, block: 0.03, foul: 0.05, assist: 0.45, pts: 2, orb: 0.95 },
     three: { make: 0.335, block: 0.01, foul: 0.02, assist: 0.75, pts: 3, orb: 0.92 },
   },
-  shotMixWeight: { rim: 1.0, post: 0.55, mid: 0.75, three: 1.2 },
+  shotMixWeight: { rim: 1.05, post: 0.55, mid: 0.9, three: 0.85 },
+  shotComfort: 3, // 자기 주무기보다 못하는 슛은 잘 안 쏜다 (센터가 3점을 남발하지 않게). 클수록 주무기에 몰린다
+  putbackChance: 0.4, // 공격 리바운드를 잡은 선수가 곧바로 골밑슛을 올려놓을 확률
+  putbackMake: -0.04, // 풋백은 수비 틈에서 쏘는 슛이라 조금 어렵다
+  foulCare: 0.12, // 파울이 쌓인 선수는 조심한다: 파울 1개당 파울 가능성 감소
+  foulTroubleMax: 2, // 파울 관리로 동시에 벤치에 앉히는 선수 수의 상한 (셋 이상 앉히면 코트가 무너진다)
   makeSkill: 0.27, // (공격 능력 - 수비 능력) 1.0 차이당 성공률 변화. 크면 전력 차가 곧바로 큰 점수 차가 된다
   offReboundWeight: 0.38,
   energyDrain: 0.00045,
@@ -52,11 +57,14 @@ export const TUNING = {
   crunchSeconds: 180, // 4쿼터 막판 접전: 베스트 5 고정
   crunchMargin: 8,
   garbageMargin: 20, // 4쿼터에 이 점수 차 이상이면 양 팀 모두 벤치 가동
-  garbageMarginEarly: 30, // 3쿼터부터 이만큼 벌어지면 일찍 주전을 뺀다
-  coastMargin: 20, // 후반에 이만큼 앞선 팀은 공격 시간을 더 쓴다
-  coastSeconds: 3,
+  garbageMarginEarly: 25, // 2쿼터 후반·3쿼터부터 이만큼 벌어지면 일찍 주전을 뺀다
+  coastMargin: 18, // 후반에 이만큼 앞선 팀은 공격 시간을 더 쓴다
+  coastSeconds: 4,
+  coastMake: -0.03, // 크게 앞선 팀은 무리하지 않는다 (슛 성공률 보정)
   formSd: 0.015, // 당일 컨디션 편차 (일관성이 낮을수록 커진다)
   formInconsistency: 0.05,
+  moraleForm: 0.02, // 사기 40 차이당 경기력 변화 (사기 100이면 +2%, 20이면 -2%). 사기가 없는 팀은 보통(60)으로 본다
+  clutchBoost: 0.05, // 승부사: 4쿼터 막판 접전에서 능력 상승
 
   // 흐름과 작전 타임
   runThreshold: 4, // 연속 득점이 이만큼 쌓이면 기세가 붙는다
@@ -68,8 +76,9 @@ export const TUNING = {
 
   // 전술
   focusShotBoost: 2.0, // 중심 전술의 슛 종류 가중
+  focusThreeBoost: 1.6, // 외곽 중심의 3점 가중. 골밑보다 작게 둬야 슛의 절반이 3점인 경기가 나오지 않는다
   focusUsageBias: 1.0, // 중심 전술에 맞는 선수에게 공이 몰리는 정도
-  keyPlayerUsage: 1.6, // 에이스 지정: 공격 비중 증가
+  keyPlayerUsage: 1.35, // 에이스 지정: 공격 비중 증가. 진짜 에이스에게 몰아주면 조금 이득이고, 아닌 선수를 고르면 본전이다
   // 한 선수에게 슛이 몰리는 데는 한계가 있고(상한), 몰릴수록 수비가 쏠려 그 선수는 어렵게 쏘고 동료는 편해진다
   usageCap: 0.40, // 한 선수가 가져갈 수 있는 팀 슛 비중의 상한
   usageCapKey: 0.50, // 에이스로 지정하면 더 몰아줄 수 있다
@@ -77,29 +86,33 @@ export const TUNING = {
   crowdMake: -0.3, // 넘는 비중 1.0당 그 선수의 성공률 변화
   crowdOthersMake: 0.25, // 팀에서 가장 몰리는 선수의 초과 비중 1.0당 동료의 성공률 변화
   shotEnergy: 0.004, // 슛을 만들어 쏠 때마다 드는 체력
-  keyPlayerMake: -0.02, // 에이스에게 공이 몰리면 수비도 그쪽으로 몰린다 (에이스 슛 성공률 보정)
-  focusRead: { inside: -0.02, outside: 0.012 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
-  focusExploit: 0.4, // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정 (능력 차 1.0당). 잘못 맞추면 손해
-  paceOffense: 4, // 템포 1단계당 공격 시간 변화(초)
-  paceDefense: 2, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
+  keyPlayerMake: 0, // 에이스 슛 성공률 보정. 수비가 몰리는 손해는 crowdMake가 이미 반영한다
+  focusRead: { inside: -0.012, outside: -0.008 }, // 한쪽으로 몰면 수비가 읽는다: 골밑은 좁아지고, 외곽은 패턴으로 만든 슛이라 조금 편하다 (평균적인 팀끼리 승률을 맞추는 값)
+  // 공격 중심을 상대 수비의 약한 쪽에 맞추면 얻는 성공률 보정. 잘못 맞추면 손해.
+  // 약한 쪽 = 상대의 외곽 수비와 골밑 수비의 차이(softPivot이 리그 평균). 상대 전력이 아니라 '어느 쪽이 더 허술한가'만 보므로 약팀도 강팀의 빈틈을 노릴 수 있다
+  focusExploit: 1.6,
+  softPivot: 0.015,
+  prepSharp: 0.25, // 상대 분석(준비 보너스 1.0당): 약점을 노리는 공격·집중 마크의 효과가 이만큼 커진다
+  paceOffense: 2, // 템포 1단계당 공격 시간 변화(초). 빠르게 뛰어도 공격권은 1할쯤만 는다 (크면 100점대 경기가 흔해진다)
+  paceDefense: 1, // 수비 팀 템포가 상대 공격 시간에 주는 영향(초)
   // 템포의 득실(1단계당). 빠르게: 속공으로 쉬운 슛이 늘지만 실책과 체력 소모도 는다. 느리게는 그 반대.
   // 볼 핸들링이 좋은 팀은 빨리 뛰어도 실책이 덜 늘고, 상대보다 체력이 남아 있을수록 속공이 잘 통한다.
-  paceMake: 0.012, // 슛 성공률
+  paceMake: 0.016, // 슛 성공률
   paceEnergyEdge: 0.15, // 코트 위 평균 체력이 상대보다 1.0 높을 때 속공 성공률 추가분
   paceTov: 0.012, // 턴오버
   paceTovSkill: 0.25, // (상대 스틸 - 우리 볼 핸들링) 1.0당 턴오버 추가분
   paceDrain: 0.18, // 우리 선수 체력 소모 배율 변화
   paceDrainOpp: 0.07, // 따라 뛰는 상대의 체력 소모 배율 변화
-  deny: { usage: 0.4, make: -0.09, othersMake: 0.012 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
+  deny: { usage: 0.35, make: -0.12, othersMake: 0.02 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
-  zone: { shooterBurn: 0.4, insideMake: -0.035, outsideMake: 0.033, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
-  press: { tovBase: 0.02, tovSkill: 0.25, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1.5 },
+  zone: { shooterBurn: 0.7, insideMake: -0.055, outsideMake: 0.05, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
+  press: { tovBase: 0.02, tovSkill: 0.45, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1 },
   // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
-  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56 },
+  spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56, read: -0.018 }, // read: 슛이 두 종류뿐이라 수비가 읽는다 (전체 슛 성공률 보정)
   // 스위치: 스크린에 오픈 3점을 덜 내주지만, 키 작은 수비수가 빅맨을 막는 미스매치를 상대가 노린다
-  switchD: { outsideMake: -0.012, postMake: 0.06, postMix: 1.35 },
+  switchD: { outsideMake: -0.025, postMake: 0.11, postMix: 1.35 },
   // 드롭: 빅맨이 골밑을 지켜 림 공격은 막지만 중거리 풀업은 내준다
-  drop: { rimMake: -0.03, midMake: 0.05, midMix: 1.5, threeMake: 0.005 },
+  drop: { rimMake: -0.05, midMake: 0.065, midMix: 1.5, threeMake: 0.01 },
   // 선수별 개인 지시
   roles: {
     aggressiveUsage: 1.45, aggressiveMake: -0.01, aggressiveTov: 1.3, // 적극 공격: 많이 쏘지만 무리한 슛도 섞인다
@@ -114,6 +127,26 @@ export const TUNING = {
 const r = (p: BasePlayer, k: RatingKey) => p.ratings[k] / 100;
 
 // 원본 능력치 -> 엔진이 쓰는 합성 능력치 (0~1)
+// 수비 방식이 체력 소모에 주는 배율
+const defenseDrain = (d: Defense | null | undefined) => (d === 'press' ? TUNING.press.drain : d === 'zone' ? TUNING.zone.drain : 1);
+
+// 전술이 우리 팀의 체력·파울에 주는 부담 (전술 화면 안내용). 경기 중 계산(elapse, 파울 판정)과 같은 값을 쓴다.
+//   drain: 체력 소모 배율 (상대 템포는 보통으로 가정), foul: 슛과 무관한 파울 배율, shootingFoul: 슈팅 파울 배율
+export function tacticLoad(defense: Defense | null | undefined, pace: number) {
+  const T = TUNING;
+  return {
+    drain: defenseDrain(defense) * (1 + T.paceDrain * pace),
+    foul: defense === 'press' ? T.press.foul : 1,
+    shootingFoul: defense === 'zone' ? T.zone.shootingFoul : 1,
+  };
+}
+
+// 코트 위에서 1초 뛸 때 줄어드는 체력 (0~1 기준). style은 전술 배율.
+export const energyPerSecond = (endurance: number, style = 1) => TUNING.energyDrain * style * (1.3 - 0.6 * endurance);
+
+// 경기 시작 때의 체력 (0~1): 지친 채로 경기에 나오면 체력이 덜 찬 상태로 시작한다
+export const startEnergy = (condition: number | null | undefined) => (condition == null ? 1 : 0.85 + 0.15 * (condition / 100));
+
 export function composites(p: BasePlayer): Composites {
   const c: Composites = {
     ballHandling: 0.6 * r(p, 'drb') + 0.2 * r(p, 'spd') + 0.2 * r(p, 'oiq'),
@@ -158,7 +191,8 @@ interface GamePlayer {
   c: Composites;
   ovr: number;
   rank: number; // 교체 판단에 쓰는 가치. 선발은 감독이 고른 선수이므로 벤치보다 낮게 보지 않는다
-  form: number; // 당일 컨디션 보정
+  form: number; // 당일 컨디션 보정 (일관성에 따른 기복 + 사기)
+  clutch: boolean; // 승부사
   energy: number; // 0~1
   injured: boolean;
   since: number; // 마지막으로 코트에 들어오거나 나간 시각
@@ -180,6 +214,7 @@ interface GameTeam {
   subs: number;
   run: number;
   timeoutsLeft: number;
+  plan: number; // 상대 분석으로 다듬은 경기 계획의 날카로움 (1 = 분석 없음)
 }
 
 // 준비 보너스: 이 경기에서만 키를 뺀 능력치를 올린 것처럼 계산한다 (표시용 종합 능력치는 그대로)
@@ -200,8 +235,9 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
     return {
       id: p.id, name: p.name, pos: p.pos, c: composites(prepared(p, prep)), ovr: overall(p),
       rank: i < 5 ? Math.max(overall(p), benchBest * 1.05) : overall(p),
-      form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)),
-      energy: p.condition == null ? 1 : 0.85 + 0.15 * (p.condition / 100), // 지친 채로 경기에 나오면 체력이 덜 찬 상태
+      form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)) + (T.moraleForm * ((p.morale ?? 60) - 60)) / 40,
+      clutch: p.trait === 'clutch',
+      energy: startEnergy(p.condition),
       injured: (p.injuredDays ?? 0) > 0,
       since: 0, stat: emptyLine(), starter: i < 5, home: i < 5 ? i : -1,
     };
@@ -214,6 +250,7 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
     court: players.slice(0, 5), // 슬롯 순서 = 포지션 1~5
     auto, score: 0, teamFouls: 0, possessions: 0, subs: 0, run: 0,
     timeoutsLeft: T.timeouts.firstHalf,
+    plan: 1 + T.prepSharp * prep,
   };
 }
 
@@ -240,7 +277,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   };
 
   // 피로·컨디션 반영 능력치
-  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form);
+  const clutchTime = () => period >= 4 && clock <= T.crunchSeconds && Math.abs(teams[0].score - teams[1].score) <= T.crunchMargin;
+  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * (1 + p.form + (p.clutch && clutchTime() ? T.clutchBoost : 0));
   const avg = (team: GameTeam, key: keyof Composites) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
   const avgEnergy = (team: GameTeam) => team.court.reduce((s, p) => s + p.energy, 0) / 5;
   const pick = (players: GamePlayer[], weightFn: (p: GamePlayer) => number) => players[rng.weighted(players.map(weightFn))];
@@ -259,11 +297,11 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const d = team.tactics.defense;
       const opp = teams[1 - teams.indexOf(team)];
       const tempo = 1 + T.paceDrain * team.tactics.pace + T.paceDrainOpp * opp.tactics.pace;
-      const style = (d === 'press' ? T.press.drain : d === 'zone' ? T.zone.drain : 1) * tempo;
+      const style = defenseDrain(d) * tempo;
       for (const p of team.players) {
         if (team.court.includes(p)) {
           p.stat.sec += sec;
-          p.energy = Math.max(0, p.energy - sec * T.energyDrain * style * (1.3 - 0.6 * p.c.endurance));
+          p.energy = Math.max(0, p.energy - sec * energyPerSecond(p.c.endurance, style));
         } else {
           p.energy = Math.min(1, p.energy + sec * T.energyRecover);
         }
@@ -287,11 +325,13 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   function autoSubstitute(team: GameTeam, opp: GameTeam) {
     const margin = Math.abs(team.score - opp.score);
     const crunch = isFinal() && clock <= T.crunchSeconds && margin <= T.crunchMargin;
-    const garbage = (period === 4 && margin >= T.garbageMargin) || (period === 3 && margin >= T.garbageMarginEarly);
-    const foulTrouble = (p: GamePlayer) => {
-      if (crunch || period > 4 || (period === 4 && clock <= 300)) return false;
-      return p.stat.pf >= Math.min(4, period + 1); // 1Q 2개, 2Q 3개, 이후 4개면 아낀다
-    };
+    const garbage = (period === 4 && margin >= T.garbageMargin) || ((period === 3 || (period === 2 && clock <= 300)) && margin >= T.garbageMarginEarly);
+    // 파울 관리: 1Q 2개, 2Q 3개, 이후 4개면 아낀다. 여럿이 걸리면 파울이 많은 순(같으면 주전 먼저)으로 상한까지만 앉힌다
+    const saving = crunch || period > 4 || (period === 4 && clock <= 300) ? [] : team.players
+      .filter((p) => !gone(p) && p.stat.pf >= Math.min(4, period + 1))
+      .sort((a, b) => b.stat.pf - a.stat.pf || b.rank - a.rank)
+      .slice(0, T.foulTroubleMax);
+    const foulTrouble = (p: GamePlayer) => saving.includes(p);
     const unavailable = (p: GamePlayer) => gone(p) || foulTrouble(p) || (garbage && p.starter);
     const mustLeave = (p: GamePlayer) =>
       unavailable(p) ||
@@ -338,7 +378,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     return lastMissed;
   }
 
-  // 리바운드. 공격 리바운드면 true
+  // 리바운드. 공격 리바운드면 잡은 선수, 수비 리바운드면 null
   function rebound(off: GameTeam, def: GameTeam, orbMult = 1) {
     const zone = def.tactics.defense === 'zone' ? T.zone.defReb : 1;
     const o = avg(off, 'rebounding') * T.offReboundWeight * orbMult;
@@ -348,7 +388,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     const who = pick(team.court, (p) => eff(p, 'rebounding') ** 3);
     who.stat[offensive ? 'orb' : 'drb']++;
     say(team, `${who.name} ${offensive ? '공격' : '수비'} 리바운드`, { kind: 'rebound', actor: who.id, offensive });
-    return offensive;
+    return offensive ? who : null;
   }
 
   // 누가 쏠지: 공격 비중 + 전술 중심에 맞는 선수 + 에이스 지정 / 상대의 집중 마크
@@ -357,7 +397,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   // 수비 지시에 따른 파울 가능성 배율
   const foulRisk = (team: GameTeam, p: GamePlayer) => {
     const r = defenseRole(team, p);
-    return r === 'tight' ? T.roles.tightFoul : r === 'safe' ? T.roles.safeFoul : 1;
+    const care = Math.max(0.4, 1 - T.foulCare * p.stat.pf); // 파울이 쌓일수록 몸을 사린다
+    return (r === 'tight' ? T.roles.tightFoul : r === 'safe' ? T.roles.safeFoul : 1) * care;
   };
 
   function chooseShooter(off: GameTeam, def: GameTeam) {
@@ -388,7 +429,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   function chooseShot(off: GameTeam, def: GameTeam, shooter: GamePlayer, threeUrgency: number) {
     const w = { ...T.shotMixWeight };
     if (off.tactics.focus === 'inside') { w.rim *= T.focusShotBoost; w.post *= T.focusShotBoost; }
-    if (off.tactics.focus === 'outside') { w.three *= T.focusShotBoost; }
+    if (off.tactics.focus === 'outside') { w.three *= T.focusThreeBoost; }
     if (def.tactics.defense === 'zone') { w.three *= T.zone.threeMix; w.rim *= T.zone.rimMix; }
     if (def.tactics.defense === 'press') { w.rim *= T.press.rimMix; }
     if (off.tactics.focus === 'spread') { w.three *= T.spread.threeMix; w.rim *= T.spread.rimMix; w.mid *= T.spread.midMix; w.post *= T.spread.postMix; }
@@ -400,13 +441,23 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     else if (role === 'post') w.post *= T.roles.specialtyMix;
     w.three *= threeUrgency;
     const types: ShotType[] = ['rim', 'post', 'mid', 'three'];
-    return types[rng.weighted(types.map((t) => w[t] * shooter.c[t] ** 2.5))];
+    const best = Math.max(...types.map((t) => shooter.c[t]));
+    return types[rng.weighted(types.map((t) => w[t] * shooter.c[t] ** 2.5 * (shooter.c[t] / best) ** T.shotComfort))];
   }
 
   // 한 번의 공격권. 공격 리바운드가 나오는 동안 계속된다.
   function possession(off: GameTeam, def: GameTeam) {
     off.possessions++;
     let secondChance = false;
+    let putback: GamePlayer | null = null; // 공격 리바운드를 잡아 곧바로 올려놓으려는 선수
+    // 리바운드 다툼. 공격 팀이 잡으면 true (공격이 이어진다)
+    const board = (orbMult: number, canPutback = true) => {
+      const who = rebound(off, def, orbMult);
+      if (!who) return false;
+      secondChance = true;
+      putback = canPutback && rng.chance(T.putbackChance) ? who : null;
+      return true;
+    };
     while (clock > 0) {
       const diff = off.score - def.score;
       const late = isFinal() && clock <= 120;
@@ -422,15 +473,19 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         say(def, `${fouler.name} 파울 작전`, { kind: 'foul', actor: fouler.id });
         if (bonus()) {
           const shooter = pick(off.court, (p) => p.c.ballHandling ** 2);
-          if (freeThrows(off, def, shooter, 2) && rebound(off, def, 0.5)) { secondChance = true; continue; }
+          if (freeThrows(off, def, shooter, 2) && board(0.5)) continue;
           return;
         }
         continue;
       }
 
       // 공격 시간
+      const tip: GamePlayer | null = putback && off.court.includes(putback) ? putback : null;
+      putback = null;
       let seconds: number;
-      if (!secondChance && clock <= 24 && !hurry) {
+      if (tip) {
+        seconds = rng.int(1, 2); // 잡자마자 올려놓는다
+      } else if (!secondChance && clock <= 24 && !hurry) {
         seconds = Math.max(1, clock - rng.int(0, 3)); // 마지막 공격은 시간을 다 쓰고 쏜다
       } else {
         const d = def.tactics.defense;
@@ -447,13 +502,13 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
 
       // 1) 일반 파울
       const pressing = def.tactics.defense === 'press';
-      if (rng.chance(T.nonShootingFoul * (pressing ? T.press.foul : 1))) {
+      if (!tip && rng.chance(T.nonShootingFoul * (pressing ? T.press.foul : 1))) {
         const fouler = pick(def.court, (p) => (1.3 - p.c.defPerimeter) * foulRisk(def, p));
         addFoul(def, fouler);
         say(def, `${fouler.name} 파울`, { kind: 'foul', actor: fouler.id });
         if (bonus()) {
           const shooter = pick(off.court, (p) => p.c.usage);
-          if (freeThrows(off, def, shooter, 2) && rebound(off, def, 0.5)) { secondChance = true; continue; }
+          if (freeThrows(off, def, shooter, 2) && board(0.5)) continue;
           return;
         }
         secondChance = true; // 사이드 아웃 후 짧은 공격
@@ -467,7 +522,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const holdBack = T.roles.conservativeTov * off.court.filter((p) => offenseRole(off, p) === 'conservative').length;
       const paceTov = off.tactics.pace * Math.max(0, T.paceTov + T.paceTovSkill * gap); // 빨리 뛸수록 실책이 늘고, 천천히 하면 준다
       const pTov = T.turnoverBase + pressTov + T.turnoverSkill * gap + holdBack + paceTov;
-      if (rng.chance(clamp(pTov, 0.04, 0.4))) {
+      if (!tip && rng.chance(clamp(pTov, 0.04, 0.4))) {
         const loser = pick(off.court, (p) => p.c.usage * (1.3 - p.c.ballHandling) * (offenseRole(off, p) === 'aggressive' ? T.roles.aggressiveTov : 1));
         loser.stat.tov++;
         if (rng.chance(T.stealShare)) {
@@ -481,14 +536,16 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       }
 
       // 3) 슛
-      const { slot, share, topShare, isTop } = chooseShooter(off, def);
+      const { slot, share, topShare, isTop } = tip
+        ? { slot: off.court.indexOf(tip), share: 0, topShare: 0, isTop: false }
+        : chooseShooter(off, def);
       const shooter = off.court[slot];
       shooter.energy = Math.max(0, shooter.energy - T.shotEnergy);
       const defender = def.court[slot];
       let threeUrgency = 1;
       if (hurry) threeUrgency = diff <= -6 ? 2.5 : 1.5;
       if (isFinal() && clock <= 30 && diff === -3) threeUrgency = 5;
-      const type = chooseShot(off, def, shooter, threeUrgency);
+      const type: ShotType = tip ? 'rim' : chooseShot(off, def, shooter, threeUrgency);
       const S = T.shot[type];
       const inside = type === 'rim' || type === 'post';
       const zone = def.tactics.defense === 'zone';
@@ -501,15 +558,19 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       // 공격 중심이 상대 수비의 약한 쪽을 노리면 더 잘 들어간다 (반대로 강한 쪽을 노리면 손해)
       if (off.tactics.focus === 'inside' && inside) pMake += T.focusRead.inside;
       if (off.tactics.focus === 'outside' && !inside) pMake += T.focusRead.outside;
-      if (T.focusExploit && off.tactics.focus === 'inside' && inside) pMake += T.focusExploit * (Math.max(avg(off, 'rim'), avg(off, 'post')) - avg(def, 'defInterior'));
-      if (T.focusExploit && off.tactics.focus === 'outside' && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+      // soft > 0: 상대는 골밑 수비가 상대적으로 허술하다. soft < 0: 외곽 수비가 허술하다
+      const soft = avg(def, 'defPerimeter') - avg(def, 'defInterior') - T.softPivot;
+      const exploit = (x: number) => T.focusExploit * (x > 0 ? x * off.plan : x);
+      if (off.tactics.focus === 'inside' && inside) pMake += exploit(soft);
+      if (off.tactics.focus === 'outside' && !inside) pMake += exploit(-soft);
       if (off.tactics.pace) pMake += off.tactics.pace * (T.paceMake + T.paceEnergyEdge * (avgEnergy(off) - avgEnergy(def))); // 속공: 상대가 지쳐 있을수록 잘 통한다
       if (shooter.id === off.tactics.keyPlayerId) pMake += T.keyPlayerMake;
       pMake += T.crowdMake * Math.max(0, share - T.crowdFrom); // 공이 몰리는 선수에겐 수비도 몰린다
       if (!isTop) pMake += T.crowdOthersMake * Math.max(0, topShare - T.crowdFrom); // 그만큼 동료는 편해진다
       if (off.tactics.focus === 'spread') {
+        pMake += T.spread.read;
         if (type === 'rim') pMake += T.spread.rimSpacing * (avg(off, 'three') - T.spread.spacingPivot); // 슈터가 많으면 돌파 공간이 열리고, 없으면 막힌다
-        if (T.focusExploit && !inside) pMake += T.focusExploit * (avg(off, 'three') - avg(def, 'defPerimeter'));
+        if (!inside) pMake += exploit(-soft);
       }
       if (def.tactics.defense === 'switch') pMake += type === 'post' ? T.switchD.postMake : inside ? 0 : T.switchD.outsideMake;
       if (def.tactics.defense === 'drop') pMake += type === 'rim' ? T.drop.rimMake : type === 'mid' ? T.drop.midMake : type === 'three' ? T.drop.threeMake : 0;
@@ -520,8 +581,10 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       if (guardRole === 'tight') pMake += T.roles.tightMake;
       else if (guardRole === 'safe') pMake += T.roles.safeMake;
       if (pressing && type === 'rim') pMake += T.press.rimMake; // 프레스가 뚫리면 쉬운 득점
-      if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make : T.deny.othersMake;
+      if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make * def.plan : T.deny.othersMake;
       if (off.run >= T.runThreshold) pMake += Math.min(T.runBoostMax, off.run * T.runBoostPerPoint); // 기세
+      if (tip) pMake += T.putbackMake;
+      if (period >= 3 && diff >= T.coastMargin) pMake += T.coastMake; // 크게 앞서면 무리하지 않는다
       pMake = clamp(pMake, 0.05, 0.9);
 
       const fouled = rng.chance(S.foul * (zone ? T.zone.shootingFoul : 1) * foulRisk(def, defender));
@@ -533,7 +596,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         shooter.stat.fga++;
         if (type === 'three') shooter.stat.tpa++;
         say(def, `${blocker.name} 블록! (${shooter.name} ${SHOT_LABEL[type]})`, { kind: 'block', actor: blocker.id, other: shooter.id, shot: type });
-        if (rebound(off, def, S.orb)) { secondChance = true; continue; }
+        if (board(S.orb)) continue;
         return;
       }
 
@@ -556,15 +619,15 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
           text += ` (어시스트 ${passer.name})`;
         }
         say(off, fouled ? `${text} + 파울` : text, { kind: 'shot', actor: shooter.id, shot: type, made: true, assist });
-        if (fouled && freeThrows(off, def, shooter, 1) && rebound(off, def, 0.5)) { secondChance = true; continue; }
+        if (fouled && freeThrows(off, def, shooter, 1) && board(0.5)) continue;
         return;
       }
       if (fouled) {
-        if (freeThrows(off, def, shooter, S.pts, type) && rebound(off, def, 0.5)) { secondChance = true; continue; }
+        if (freeThrows(off, def, shooter, S.pts, type) && board(0.5)) continue;
         return;
       }
       say(off, `${shooter.name} ${SHOT_LABEL[type]} 실패`, { kind: 'shot', actor: shooter.id, shot: type, made: false });
-      if (rebound(off, def, S.orb)) { secondChance = true; continue; }
+      if (board(S.orb)) continue;
       return;
     }
   }

@@ -22,13 +22,14 @@ import {
   createSchool, setLineup, recruitClass, pickTactics, teamOverall, newPlayer, SCHOOL,
   trainTeam, applyMatch, overnight, aiTraining,
 } from './school.ts';
-import { bracketOrder, roundRobin, standings, roundName } from './competition.ts';
+import { bracketOrder, roundRobin, standings, roundName, BYE } from './competition.ts';
 import { DATASETS, buildSchool } from './dataset.ts';
+import { moraleAfterMatch, moraleAfterTraining, moraleOvernight, rollEvent } from './people.ts';
 import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
 import type {
   BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, ProgramKey, Round, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
+  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, ProgramKey, Round, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
 } from './types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -45,6 +46,7 @@ export interface DayDecision {
   program?: ProgramKey;
   intensity?: IntensityKey;
   match?: Pick<UserMatch, 'game' | 'home' | 'away'> | null;
+  events?: boolean; // false면 다음 날 사건을 만들지 않는다 (자동 진행 스크립트용)
 }
 
 interface CalendarBlock {
@@ -71,7 +73,7 @@ export const SEASON = {
   ],
   regionSize: 16, // 현 예선 참가 학교
   groupSize: 4, // 조별 리그: 4팀씩 4개 조, 각 조 1위가 다음 단계로
-  nationalSize: 16,
+  nationalSize: 16, // 전국 대회 본선 참가 학교. 원작 데이터의 인터하이는 대진표(Dataset.draw)대로 59개교가 나온다
   guestPrestige: 58, // 다른 현 대표의 평균 수준
   prestigeByTier: [-1, 0, 1, 2, 2, 3], // 대회 성적(tier)별 학교 수준 변화. 한 해 3개 대회의 평균을 쓴다
   prestigeRegression: 0.25,
@@ -88,12 +90,12 @@ export const SEASON = {
   } as Record<CompetitionKey, { name: string; format: Format[]; qualifiers: number }>,
 
   // 한 해 일정. T 훈련일, P 연습 경기, M 공식전.
-  // 공식전(M) 수는 대회 구조와 맞아야 한다: 조별 3, 결승 리그 3, 플레이오프 2, 16강 토너먼트 4, 전국 대회 4.
+  // 공식전(M) 수는 대회 구조와 맞아야 한다: 조별 3, 결승 리그 3, 플레이오프 2, 16강 토너먼트 4, 전국 대회 4 (인터하이는 64강 대진이라 6).
   calendar: [
     { phase: '봄 훈련', days: 'TTTPTTTPTTTPTT' },
     { phase: '인터하이 현 예선', days: 'MTTMTTMTTMTTMTTM', start: 'interhigh' },
     { phase: '여름 합숙', days: 'TTTTTPTT', camp: true },
-    { phase: '인터하이', days: 'MTMTMTM' },
+    { phase: '인터하이', days: 'MTMTMTMTMTM' },
     { phase: '가을 훈련', days: 'TTTPTT' },
     { phase: '국민체육대회 현 예선', days: 'MTMTMTM', start: 'kokutai' },
     { phase: '국민체육대회', days: 'MTMTMTM' },
@@ -106,7 +108,8 @@ export const SEASON = {
 // 경기 전 준비: 다음 공식전이 window일 안으로 다가오면 훈련 대신 상대를 분석할 수 있다.
 // 하루마다 그 상대와의 경기에서만 능력치(키 제외) +perDay, 최대 maxDays일까지 쌓인다. AI 학교는 준비하지 않는다.
 // 분석하면 코치가 상대 보고서를 준다 (scouting.ts). 보고서는 정보일 뿐이고, 어떻게 싸울지는 감독이 정한다.
-export const PREPARATION = { perDay: 1.4, maxDays: 3, window: 3 };
+// perDay가 크면 '공식전 전에는 무조건 분석'이 정답이 된다. 3일을 다 써도 전술 선택과 비슷한 크기가 되게 둔다.
+export const PREPARATION = { perDay: 0.8, maxDays: 3, window: 3 };
 
 const DAY_TYPE: Record<string, DayType> = { T: 'training', P: 'practice', M: 'official' };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
@@ -343,6 +346,8 @@ function playMatch(state: Career, ctx: DayContext, home: string, away: string, o
     if (!state.regionIds.includes(id)) return;
     const result = applyMatch(ctx.rng, state.teams[id], g.box[side], strength[1 - side], official);
     if (id === state.userTeamId) {
+      const minutes = Object.fromEntries(g.box[side].players.map((p) => [p.id, p.sec]));
+      moraleAfterMatch(state.teams[id], minutes, match.winner === id, official, strength[1 - side] - strength[side]);
       ctx.report.userBox = g.box;
       ctx.report.growth.push(...result.growth);
       ctx.report.injuries.push(...result.injuries);
@@ -361,7 +366,9 @@ function playKnockoutRound(state: Career, ctx: DayContext, tierOf: (size: number
   const matches: Match[] = [];
   const winners: string[] = [];
   for (let i = 0; i < size; i += 2) {
-    const match = playMatch(state, ctx, c.bracket[i], c.bracket[i + 1], true);
+    const [a, b] = [c.bracket[i], c.bracket[i + 1]];
+    if (a === BYE || b === BYE) { winners.push(a || b); continue; } // 부전승
+    const match = playMatch(state, ctx, a, b, true);
     matches.push(match);
     winners.push(match.winner);
     const loser = match.winner === match.home ? match.away : match.home;
@@ -446,7 +453,7 @@ function playRound(state: Career, ctx: DayContext): Round | null {
   }
 
   if (c.stage === 'national') {
-    const round = playKnockoutRound(state, ctx, (size) => (size === SEASON.nationalSize ? 3 : 4));
+    const round = playKnockoutRound(state, ctx, (size) => (size > 8 ? 3 : 4));
     if (c.bracket.length === 1) {
       c.champion = c.bracket[0];
       c.finish[c.champion] = `${c.name} 우승`;
@@ -458,29 +465,49 @@ function playRound(state: Career, ctx: DayContext): Round | null {
   return null;
 }
 
-// 전국 대회: 우리 현 대표 + 다른 현 대표들. 같은 현의 두 팀은 결승에서만 만난다.
+// 전국 대회: 우리 현 대표 + 다른 현 대표들.
+//   원작 데이터의 인터하이  원작 대진표 그대로 59개교. 현 1위·2위가 해남·북산의 자리에 들어간다.
+//   그 밖의 대회           16개교를 추첨한다. 같은 현의 두 팀은 결승에서만 만난다.
 function setupNational(state: Career, rng: Rng, reps: string[]) {
   const c = state.comp!;
-  // 데이터에 이름난 강호가 있으면 먼저 넣고, 남는 자리는 그 밖의 현 대표로 채운다
-  const named = (state.dataset ? DATASETS[state.dataset] : null)?.nationals ?? [];
-  const taken = new Set(named.map((s) => s.prefecture));
-  const prefectures = shuffle(rng, SEASON.otherPrefectures.filter((p) => !taken.has(p)));
-  const guests: string[] = [];
-  for (let i = 0; i < SEASON.nationalSize - reps.length; i++) {
-    const team = named[i]
-      ? buildSchool(rng, state, named[i])
-      : createSchool(rng, state, `${prefectures[(i - named.length) % prefectures.length]} 대표`, Math.round(clamp(rng.gauss(SEASON.guestPrestige, 5), 45, 75)));
+  const data = state.dataset ? DATASETS[state.dataset] : null;
+  const named = data?.nationals ?? [];
+  const addGuest = (team: Team) => {
     team.tactics = pickTactics(rng, team);
     state.teams[team.id] = team;
-    guests.push(team.id);
+    state.guestIds.push(team.id);
+    return team.id;
+  };
+  state.guestIds = [];
+  c.stage = 'national';
+
+  const draw = data?.draw;
+  if (draw && c.key === 'interhigh' && reps.length === draw.home.length) {
+    const slot: Record<number, string> = {};
+    draw.home.forEach((no, i) => { slot[no] = reps[i]; });
+    for (const spec of named) if (spec.draw) slot[spec.draw] = addGuest(buildSchool(rng, state, spec));
+    c.bracket = [];
+    for (let no = 1; no <= draw.size; no++) {
+      c.bracket.push(slot[no]);
+      if (draw.byes.includes(no)) c.bracket.push(BYE);
+    }
+    return;
   }
-  shuffle(rng, guests); // 대진 추첨
-  state.guestIds = guests;
+
+  // 데이터에 학교가 있으면 그중에서 뽑는다. 강호일수록 자주 나오지만 해마다 얼굴이 조금씩 바뀐다.
+  const count = SEASON.nationalSize - reps.length;
+  const invited = named.map((spec) => ({ spec, score: spec.prestige + rng.gauss(0, 4) })).sort((a, b) => b.score - a.score).slice(0, count);
+  const prefectures = shuffle(rng, [...SEASON.otherPrefectures]);
+  for (let i = 0; i < count; i++) {
+    addGuest(invited[i]
+      ? buildSchool(rng, state, invited[i].spec)
+      : createSchool(rng, state, `${prefectures[i % prefectures.length]} 대표`, Math.round(clamp(rng.gauss(SEASON.guestPrestige, 5), 45, 75))));
+  }
+  const guests = shuffle(rng, [...state.guestIds]); // 대진 추첨
   const half = SEASON.nationalSize / 2;
   c.bracket = reps.length > 1
     ? [reps[0], ...guests.slice(0, half - 1), reps[1], ...guests.slice(half - 1)]
     : [reps[0], ...guests];
-  c.stage = 'national';
 }
 
 function finishCompetition(state: Career) {
@@ -527,20 +554,32 @@ function officialPairing(state: Career): { home: string; away: string; official:
     const i = c.bracket.indexOf(me);
     if (i < 0) return null;
     const j = i - (i % 2);
+    if (c.bracket[j] === BYE || c.bracket[j + 1] === BYE) return null; // 부전승: 이번 라운드는 쉰다
     return { home: c.bracket[j], away: c.bracket[j + 1], official: true, label: `${stageLabel(c)} ${roundName(c.bracket.length)}` };
   }
   return null;
+}
+
+// 내 팀이 이번 라운드를 부전승으로 쉬는지
+export function userHasBye(state: Career) {
+  const c = state.comp;
+  if (!c || c.stage !== 'national') return false;
+  const i = c.bracket.indexOf(state.userTeamId);
+  return i >= 0 && c.bracket[i ^ 1] === BYE;
 }
 
 // ---------- 하루 진행 ----------
 
 // 내 팀이 실제로 뛰는 다음 경기일까지 남은 날. 탈락한 대회의 남은 공식전 날은 건너뛴다.
 function nextMatchIn(state: Career) {
-  const alive = officialPairing(state) !== null; // 지금 대회에서 아직 다음 경기가 있다
+  const bye = userHasBye(state);
+  const alive = bye || officialPairing(state) !== null; // 지금 대회에서 아직 다음 경기가 있다
   let newCompetition = false; // 그 날까지 새 대회가 시작되면 다시 처음부터 뛴다
+  let skip = bye ? 1 : 0; // 부전승이면 다음 공식전 날은 경기가 없다
   for (let i = state.dayIndex; i < state.calendar.length; i++) {
     const d = state.calendar[i];
     if (i > state.dayIndex && d.start) newCompetition = true;
+    if (d.type === 'official' && !newCompetition && skip-- > 0) continue;
     if (d.type === 'practice' || (d.type === 'official' && (alive || newCompetition))) return i - state.dayIndex;
   }
   return null;
@@ -554,7 +593,10 @@ export function today(state: Career): Today | null {
   let userMatch: UserMatchInfo | null = null;
   if (pairing) {
     const opponentId = pairing.home === state.userTeamId ? pairing.away : pairing.home;
-    userMatch = { label: pairing.label, official: pairing.official, opponentId, opponent: state.teams[opponentId].name, opponentOverall: teamOverall(state.teams[opponentId]) };
+    userMatch = {
+      label: pairing.label, official: pairing.official, opponentId, opponent: state.teams[opponentId].name, opponentOverall: teamOverall(state.teams[opponentId]),
+      opener: pairing.official && !state.comp?.rounds.length,
+    };
   }
   return {
     year: state.year, day: state.dayIndex + 1, of: state.calendar.length,
@@ -594,6 +636,7 @@ export function upcomingOfficial(state: Career): PrepInfo | null {
     opponentId, opponent: state.teams[opponentId].name, label: pairing.label, daysUntil, days,
     bonus: prepBonus(state, opponentId),
     canScout: daysUntil >= 1 && daysUntil <= PREPARATION.window && days < PREPARATION.maxDays,
+    reachDays: Math.min(PREPARATION.maxDays, days + Math.min(daysUntil, PREPARATION.window)),
   };
 }
 
@@ -622,11 +665,13 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
     const team = state.teams[id];
     const mine = id === state.userTeamId;
     const matchTomorrow = tomorrow?.type === 'official' || (mine && tomorrow?.type === 'practice');
-    const choice: TrainingChoice = mine && decision.program
+    let choice: TrainingChoice = mine && decision.program
       ? { program: decision.program, intensity: decision.intensity ?? 'normal' }
       : aiTraining(ctx.rng, team, matchTomorrow);
+    if (mine && state.forcedRest) choice = { program: 'rest', intensity: 'normal' }; // 사건의 결과로 오늘은 쉰다
     const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp });
     if (mine) {
+      moraleAfterTraining(team, choice.program, choice.intensity);
       if (choice.program === 'scout' && upcoming?.canScout) {
         const days = upcoming.days + 1;
         state.prep = { ...state.prep, [upcoming.opponentId]: days };
@@ -642,9 +687,17 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
     overnight(state.teams[id]);
     setLineup(state.teams[id]);
   }
+  moraleOvernight(state.teams[state.userTeamId]);
+  delete state.forcedRest;
+  delete state.event; // 고르지 않고 넘어간 사건은 사라진다
   state.dayIndex++;
   if (state.dayIndex >= state.calendar.length) report.yearEnd = endYear(state, ctx.rng);
   else if (state.calendar[state.dayIndex].start) startCompetition(state, state.calendar[state.dayIndex].start!, ctx.rng);
+  // 새 날 아침: 경기가 없는 날이면 감독이 결정할 사건이 생길 수 있다
+  if (!state.finished && decision.events !== false && !userPairing(state)) {
+    const event = rollEvent(state, ctx.rng);
+    if (event) state.event = event;
+  }
   return report;
 }
 

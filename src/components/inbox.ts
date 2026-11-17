@@ -8,7 +8,7 @@ import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import { PREPARATION, seasonGoal, today } from '@/game/season';
 import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent, YearReview } from '@/game/types';
 
-export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout';
+export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout' | 'event';
 
 export interface MatchLine {
   home: string;
@@ -55,7 +55,7 @@ export interface Message {
   body?: string[];
   days?: number; // 훈련 보고: 이 보고에 묶인 훈련 일수
   programs?: Record<string, number>; // 훈련 보고: 메뉴별 일수
-  scout?: { opponent: string; label: string; days: number; bonus: number; players: PlayerNote[]; tactics: string; hints: string[]; sections?: ScoutSection[] }; // hints: 예전 저장에 남은 코치 메모
+  scout?: { opponent: string; label: string; days: number; bonus: number; players: PlayerNote[]; tactics: string; hints: string[]; sections?: ScoutSection[]; more?: boolean }; // hints: 예전 저장에 남은 코치 메모
 }
 
 export type MessageDraft = Omit<Message, 'id' | 'unread'>;
@@ -113,13 +113,16 @@ export function buildMessages(
   if (r.scout) {
     const sc = r.scout;
     const opp = career.teams[sc.opponentId];
+    // 오늘 분석을 마친 뒤 경기 전까지 남은 훈련일 (오늘 포함 daysUntil일 중 하루를 썼다)
+    const daysLeft = Math.max(0, sc.daysUntil - 1);
+    const reach = Math.min(PREPARATION.maxDays, sc.days + daysLeft);
     // 날마다 그때까지 알아낸 내용을 모두 담은 보고서를 다시 보낸다 (가장 최근 것만 보면 된다)
     out.push({
       ...when, kind: 'scout', from: '코치진',
-      title: `상대 분석 보고서: ${sc.opponent} (${sc.days}/${PREPARATION.maxDays}일)`,
+      title: `상대 분석 보고서: ${sc.opponent} (${sc.days}/${reach}일)`,
       summary: `${sc.label} · 그 경기 능력치 +${sc.bonus.toFixed(1)}`,
       scout: {
-        opponent: sc.opponent, label: sc.label, days: sc.days, bonus: sc.bonus, hints: [],
+        opponent: sc.opponent, label: sc.label, days: sc.days, bonus: sc.bonus, hints: [], more: sc.days < reach,
         ...(opp ? scoutReport(opp, sc.days) : { players: [], tactics: '', sections: [] }),
       },
     });
@@ -131,7 +134,7 @@ export function buildMessages(
     out.push({
       ...when, kind: 'training', from: '코치진',
       title: `훈련 보고: ${label}`,
-      summary: r.growth.length ? `능력치 상승 ${r.growth.length}건` : '눈에 띄는 변화 없음',
+      summary: milestones(r.growth) || (r.growth.length ? `능력치 상승 ${r.growth.length}건` : '눈에 띄는 변화 없음'),
       growth: r.growth, days: 1, programs: { [label]: 1 },
     });
   }
@@ -202,6 +205,12 @@ export function buildMessages(
   return out;
 }
 
+// 눈에 띄는 성장: 능력치가 10 단위 고비(60, 70, 80...)를 넘은 것만 추린다
+export function milestones(growth: GrowthEvent[]) {
+  const hit = growth.filter((g) => g.to >= 60 && g.to % 10 === 0);
+  return hit.slice(0, 2).map((g) => `${g.name} ${g.label} ${g.to} 돌파`).join(' · ') + (hit.length > 2 ? ` 외 ${hit.length - 2}건` : '');
+}
+
 // ---------- 받은 소식 정리 ----------
 // 소식이 날마다 한 통씩 쌓이지 않도록, 새 소식을 넣기 전에 묶거나 바꿔치기할 이전 소식을 찾는다.
 const weekOf = (day: number) => Math.ceil(day / 7);
@@ -230,7 +239,7 @@ export function mergeTraining(old: Message, d: MessageDraft): MessageDraft {
   return {
     ...d,
     title: `주간 훈련 보고: ${weekOf(d.day)}주차 (${days}일)`,
-    summary: `${growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음'} · ${menu}`,
+    summary: `${milestones(growth) || (growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음')} · ${menu}`,
     growth, days, programs,
   };
 }
@@ -244,7 +253,7 @@ export function trainingDigest(last: DayReport, days: number, growth: GrowthEven
     year: last.year, day: last.day, phase: last.phase,
     kind: 'training', from: 'AI 코치',
     title: `AI 코치 훈련 보고 (${days}일)`,
-    summary: growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음',
+    summary: milestones(growth) || (growth.length ? `능력치 상승 ${growth.length}건` : '눈에 띄는 변화 없음'),
     growth,
   };
 }
