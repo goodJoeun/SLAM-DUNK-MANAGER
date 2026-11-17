@@ -13,7 +13,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko">
+    // 브라우저 확장 프로그램(클립보드 등)이 <html>에 속성을 끼워 넣어 생기는 hydration 경고를 무시
+    <html lang="ko" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );
