@@ -39,6 +39,7 @@ export interface Message {
   unread: boolean;
   box?: BoxTeam[];
   review?: string[]; // 코치 총평
+  moments?: string[]; // 승부처 요약
   yearReview?: YearReview; // 연말 평가
   prestige?: [number, number]; // 학교 수준 [올해, 내년]
   won?: boolean;
@@ -104,6 +105,7 @@ export function buildMessages(
         title: `${won ? '승리' : '패배'} · ${mine.name} ${mine.score} : ${opp.score} ${opp.name}`,
         summary: `${official ? r.round?.name ?? '공식전' : '연습 경기'} · 최다 득점 ${top.name} ${top.pts}점`,
         box: r.userBox, won, official,
+        moments: r.moments,
         review: reviewMatch(mine, opp, career.teams[me].tactics, career.teams[opp.id ?? ''] ? [teamOverall(career.teams[me]), teamOverall(career.teams[opp.id!])] : undefined),
         growth: r.training ? undefined : r.growth, // 경기한 날은 훈련 대신 경기 경험으로 성장한다
       });

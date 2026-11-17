@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { today } from '@/game/season';
+import { keyMoments, playerRating } from '@/game/review';
 import type { BoxTeam, LogEvent, PlayerRole, PlayerView, TeamView } from '@/game/types';
 import type { ActiveMatch } from './useGame';
 import { ALERTS, FEED_MODES, FRESH_ENERGY, KEY_EVENT, SPEEDS, TIRED_LEVELS, breakLabel, periodLabel, teamTotals } from './live';
@@ -8,7 +9,7 @@ import type { AlertKey, BreakInfo, FeedMode, SpeedKey } from './live';
 import FullCourt from './court/FullCourt';
 import { tipOffScene } from './court/choreo';
 import Portrait, { licensedPortrait } from './Portrait';
-import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Seg, Select, TacticSelects, clubColor } from './ui';
+import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Rating, Seg, Select, TacticSelects, clubColor } from './ui';
 import type { ViewProps } from './ui';
 
 const SPEED_OPTIONS = Object.entries(SPEEDS).map(([k, v]) => [k, v.label] as [string, string]);
@@ -166,6 +167,8 @@ function EndModal({ faces, view, box, log, side, label, onFinish, onClose }: {
     if (Number.isFinite(x) && Number.isFinite(y)) ends[e.period - 1] = [x, y];
   }
   if (ends.length) ends[ends.length - 1] = [h.score, a.score];
+  const moments = keyMoments(log, side);
+  const best = box[side].players.filter((p) => p.sec > 0).reduce((x, y) => (playerRating(y) > playerRating(x) ? y : x));
   const quarters = ends.map((q, i) => { const prev = ends[i - 1] ?? [0, 0]; return [q[0] - prev[0], q[1] - prev[1]]; });
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -197,7 +200,17 @@ function EndModal({ faces, view, box, log, side, label, onFinish, onClose }: {
               </li>
             );
           })}
+          <li>
+            <span className="muted">우리 팀 최고 평점</span>
+            <span className="name-cell"><Portrait name={best.name} src={faces[best.id]} size={26} round /><span><b>{best.name}</b> <Rating v={playerRating(best)} /></span></span>
+          </li>
         </ul>
+        {moments.length > 0 && (
+          <div className="moments">
+            <h3>승부처</h3>
+            <ul>{moments.map((l) => <li key={l}>{l}</li>)}</ul>
+          </div>
+        )}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn ghost" onClick={onClose}>기록 더 보기</button>
           <button className="btn primary" autoFocus onClick={onFinish}>결과 반영</button>

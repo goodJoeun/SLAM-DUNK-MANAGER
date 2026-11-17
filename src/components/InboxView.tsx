@@ -26,6 +26,7 @@ function MessageBody({ m, career, act }: { m: Message; career: Career; act: Act 
       return (
         <>
           <div className={`notice ${m.won ? 'good' : 'bad'}`}>{m.summary}</div>
+          {m.moments && m.moments.length > 0 && <><h3>승부처</h3><ul className="lines">{m.moments.map((l) => <li key={l}><span>{l}</span></li>)}</ul></>}
           {m.review && m.review.length > 0 && <><h3>코치 총평</h3><ul className="lines">{m.review.map((l) => <li key={l}><span>{l}</span></li>)}</ul></>}
           {mine && <><h3>{mine.name}</h3><BoxTable team={mine} /></>}
           {opp && <><h3>{opp.name}</h3><BoxTable team={opp} /></>}

@@ -331,6 +331,7 @@ export interface GameLine {
   score: string; // "우리 - 상대"
   sec: number; pts: number; reb: number; ast: number; stl: number; blk: number;
   fgm: number; fga: number; tpm: number; tpa: number;
+  rating?: number; // 평점 (review.ts의 playerRating)
 }
 // 종합 능력치가 바뀐 시점 (성장 추이)
 export interface TrendPoint { year: number; day: number; ovr: number }
@@ -447,6 +448,7 @@ export interface DayReport {
   practice: Match | null;
   training: TrainingChoice | null;
   userBox: BoxTeam[] | null;
+  moments?: string[]; // 내 팀 경기의 승부처 요약 (중계 기록이 있을 때만)
   growth: GrowthEvent[];
   injuries: InjuryEvent[];
   competitionEnd: CompetitionResult | null;

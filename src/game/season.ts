@@ -24,6 +24,7 @@ import {
 } from './school.ts';
 import { bracketOrder, roundRobin, standings, roundName, BYE } from './competition.ts';
 import { DATASETS, buildSchool } from './dataset.ts';
+import { keyMoments, playerRating } from './review.ts';
 import { moraleAfterMatch, moraleAfterTraining, moraleOvernight, rollEvent } from './people.ts';
 import type { Rng } from './rng.ts';
 import type { Game } from './engine.ts';
@@ -319,6 +320,7 @@ function logUserGame(state: Career, mine: BoxTeam, opp: BoxTeam, official: boole
     (log[p.id] ??= []).push({
       year: state.year, day: state.dayIndex + 1, opponent: opp.name, official, won: mine.score > opp.score, score: `${mine.score} - ${opp.score}`,
       sec: Math.round(p.sec), pts: p.pts, reb: p.orb + p.drb, ast: p.ast, stl: p.stl, blk: p.blk, fgm: p.fgm, fga: p.fga, tpm: p.tpm, tpa: p.tpa,
+      rating: playerRating(p),
     });
   }
 }
@@ -380,6 +382,7 @@ function playMatch(state: Career, ctx: DayContext, home: string, away: string, o
       const minutes = Object.fromEntries(g.box[side].players.map((p) => [p.id, p.sec]));
       moraleAfterMatch(state.teams[id], minutes, match.winner === id, official, strength[1 - side] - strength[side]);
       ctx.report.userBox = g.box;
+      if (g.log.length) ctx.report.moments = keyMoments(g.log, side);
       logUserGame(state, g.box[side], g.box[1 - side], official);
       ctx.report.growth.push(...result.growth);
       ctx.report.injuries.push(...result.injuries);

@@ -675,3 +675,11 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .attr-vs { display: inline-flex; align-items: center; gap: 6px; }
 .attr-vs small { min-width: 24px; text-align: right; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 p.pad { padding: 12px 14px; }
+
+/* 선수 평점, 경기 종료 창의 승부처 */
+.rating { display: inline-block; min-width: 32px; padding: 1px 6px; border-radius: 4px; background: var(--panel-2); font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.rating.hi { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+.rating.lo { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
+.moments { display: grid; gap: 6px; text-align: left; }
+.moments h3 { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.moments ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; font-size: 13px; }

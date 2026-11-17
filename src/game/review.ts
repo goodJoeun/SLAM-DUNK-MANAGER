@@ -1,6 +1,6 @@
 // 경기 후 코치 총평: 박스스코어에서 승부를 가른 지점, 전술이 통했는지, 눈에 띈 선수를 뽑아 몇 줄로 정리한다.
 // 다음 경기의 전술·선발을 정할 때 근거가 되도록, 숫자를 붙여 사실 위주로 쓴다.
-import type { BoxPlayer, BoxTeam, Tactics } from './types.ts';
+import type { BoxPlayer, BoxTeam, LogEvent, Tactics } from './types.ts';
 
 const sum = (t: BoxTeam, f: (p: BoxPlayer) => number) => t.players.reduce((s, p) => s + f(p), 0);
 const pct = (made: number, tried: number) => (tried ? Math.round((100 * made) / tried) : 0);
@@ -73,5 +73,75 @@ export function reviewMatch(mine: BoxTeam, opp: BoxTeam, tactics: Partial<Tactic
   if (oppTop.pts >= 25) lines.push(`상대 ${oppTop.name}에게 ${oppTop.pts}점을 내줬습니다. 다시 만나면 집중 마크를 고려할 만합니다.`);
   if (a.bench - b.bench >= 10) lines.push(`벤치 득점 ${a.bench} 대 ${b.bench}로 앞섰습니다.`);
   else if (b.bench - a.bench >= 10) lines.push(`벤치 득점 ${a.bench} 대 ${b.bench}로 밀렸습니다.`);
+  return lines;
+}
+
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+// 선수 평점 (3.0~10.0, 6.0이 보통). 박스스코어 한 줄을 하나의 숫자로 줄인 것으로,
+// 득점뿐 아니라 슛 효율·리바운드·어시스트·수비·실책을 함께 본다.
+export function playerRating(p: BoxPlayer): number {
+  const score = p.pts + 0.4 * p.fgm - 0.7 * p.fga - 0.4 * (p.fta - p.ftm)
+    + 0.7 * p.orb + 0.3 * p.drb + p.stl + 0.7 * p.ast + 0.7 * p.blk - 0.4 * p.pf - p.tov;
+  return Math.round(clamp(5.2 + score * 0.17, 3, 10) * 10) / 10;
+}
+
+const periodName = (n: number) => (n <= 4 ? `${n}쿼터` : `연장${n > 5 ? n - 4 : ''}`);
+
+// 승부처 요약: 중계 기록의 점수 흐름에서 가장 큰 연속 득점, 최다 점수 차, 역전 횟수를 뽑는다. side = 우리 팀 (0 홈, 1 원정)
+export function keyMoments(log: LogEvent[], side: number): string[] {
+  const pts: { period: number; clock: string; mine: number; opp: number }[] = [];
+  for (const e of log) {
+    const [h, a] = e.score.split('-').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(a)) continue;
+    const mine = side === 0 ? h : a;
+    const opp = side === 0 ? a : h;
+    const last = pts[pts.length - 1];
+    if (last ? last.mine !== mine || last.opp !== opp : mine + opp > 0) pts.push({ period: e.period, clock: e.clock, mine, opp });
+  }
+  if (pts.length < 2) return [];
+  const final = pts[pts.length - 1];
+  const won = final.mine > final.opp;
+  const lines: string[] = [];
+
+  // 1) 가장 큰 연속 득점 (상대가 한 점도 못 넣는 동안)
+  interface Run { ours: boolean; points: number; from: typeof pts[number]; before: [number, number]; after: [number, number] }
+  let best: Run | null = null;
+  let run: Run | null = null;
+  let prev = { mine: 0, opp: 0 };
+  for (const p of pts) {
+    const ours = p.mine > prev.mine;
+    const gained = ours ? p.mine - prev.mine : p.opp - prev.opp;
+    if (run && run.ours === ours) { run.points += gained; run.after = [p.mine, p.opp]; }
+    else run = { ours, points: gained, from: p, before: [prev.mine, prev.opp], after: [p.mine, p.opp] };
+    if (!best || run.points > best.points || (run.points === best.points && run.ours === won && best.ours !== won)) best = { ...run };
+    prev = p;
+  }
+  if (best && best.points >= 8) {
+    lines.push(`${periodName(best.from.period)} ${best.from.clock}부터 ${best.ours ? '우리가' : '상대가'} ${best.points}점을 연속으로 넣었습니다 (${best.before[0]}-${best.before[1]} → ${best.after[0]}-${best.after[1]}).`);
+  }
+
+  // 2) 리드가 바뀐 흐름
+  let changes = 0;
+  let leader = 0; // 1 우리, -1 상대
+  let lastChange: typeof pts[number] | null = null;
+  let maxLead = { diff: 0, at: pts[0] };
+  let maxDeficit = { diff: 0, at: pts[0] };
+  for (const p of pts) {
+    const diff = p.mine - p.opp;
+    if (diff > maxLead.diff) maxLead = { diff, at: p };
+    if (-diff > maxDeficit.diff) maxDeficit = { diff: -diff, at: p };
+    const now = Math.sign(diff);
+    if (now && now !== leader) { if (leader) { changes++; lastChange = p; } leader = now; }
+  }
+  if (!changes) lines.push(won ? '한 번도 리드를 내주지 않았습니다.' : '경기 내내 끌려갔습니다.');
+  else if (lastChange && lastChange.period === 1) lines.push(won ? '1쿼터에 잡은 리드를 끝까지 지켰습니다.' : '1쿼터에 리드를 내준 뒤 되찾지 못했습니다.');
+  else if (lastChange) lines.push(`리드가 ${changes}번 바뀌었습니다. 마지막으로 뒤집힌 것은 ${periodName(lastChange.period)} ${lastChange.clock}입니다 (${won ? '우리' : '상대'} 리드, ${lastChange.mine}-${lastChange.opp}).`);
+
+  // 3) 가장 크게 벌어진 순간 (결과와 반대 방향이면 더 눈여겨볼 만하다)
+  if (won && maxDeficit.diff >= 8) lines.push(`${periodName(maxDeficit.at.period)}에 ${maxDeficit.diff}점 차까지 뒤졌다가 뒤집었습니다.`);
+  else if (!won && maxLead.diff >= 8) lines.push(`${periodName(maxLead.at.period)}에 ${maxLead.diff}점 차까지 앞섰지만 지키지 못했습니다.`);
+  else if (won && maxLead.diff >= 10) lines.push(`가장 크게 앞선 것은 ${periodName(maxLead.at.period)}의 ${maxLead.diff}점 차입니다.`);
+  else if (!won && maxDeficit.diff >= 10) lines.push(`가장 크게 뒤진 것은 ${periodName(maxDeficit.at.period)}의 ${maxDeficit.diff}점 차입니다.`);
   return lines;
 }

@@ -8,7 +8,7 @@ import type { Career, Player, RatingKey, TrendPoint } from '@/game/types';
 import type { Act } from './useGame';
 import Portrait, { PortraitEditor, licensedPortrait } from './Portrait';
 import {
-  ATTR_GROUPS, Attr, CondBar, Crest, Icon, PageTitle, Panel, POS_NAME, PosBadge, RATING_SHORT, Seg, Select, Stars,
+  ATTR_GROUPS, Attr, CondBar, Crest, Icon, PageTitle, Panel, POS_NAME, PosBadge, RATING_SHORT, Rating, Seg, Select, Stars,
   abilityStars, pct, potentialStars, userTeam,
 } from './ui';
 import type { ViewProps } from './ui';
@@ -235,7 +235,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
             {recent.length ? (
               <div className="table-wrap"><table className="data">
                 <thead><tr>
-                  <th className="l">날짜</th><th className="l">상대</th><th className="c">결과</th><th>출전</th><th>득점</th><th>리바운드</th><th>어시스트</th><th>야투</th><th>3점</th>
+                  <th className="l">날짜</th><th className="l">상대</th><th className="c">결과</th><th>평점</th><th>출전</th><th>득점</th><th>리바운드</th><th>어시스트</th><th>야투</th><th>3점</th>
                 </tr></thead>
                 <tbody>
                   {recent.map((g) => (
@@ -243,6 +243,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
                       <td className="l muted">{g.year}년차 {g.day}일</td>
                       <td className="l">{g.opponent}{!g.official && <span className="faint"> · 연습</span>}</td>
                       <td className="c"><span className={g.won ? 'good' : 'bad'}>{g.won ? '승' : '패'}</span> <span className="muted">{g.score}</span></td>
+                      <td>{g.rating == null ? <span className="faint">-</span> : <Rating v={g.rating} />}</td>
                       <td>{Math.round(g.sec / 60)}분</td>
                       <td><b>{g.pts}</b></td>
                       <td>{g.reb}</td>

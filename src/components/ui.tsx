@@ -1,5 +1,6 @@
 // 여러 화면이 함께 쓰는 작은 부품과 표기 규칙.
 import type { CSSProperties, ReactNode } from 'react';
+import { playerRating } from '@/game/review';
 import type { BoxTeam, Career, Defense, Focus, GrowthEvent, Match, NameStyle, RatingKey, Tactics } from '@/game/types';
 import type { MatchLine } from './inbox';
 import type { Act, PlayingState } from './useGame';
@@ -229,18 +230,24 @@ export function FormPills({ results, size = 5 }: { results: boolean[]; size?: nu
   );
 }
 
+// 선수 평점: 7.5 이상은 좋은 경기, 5.0 미만은 부진
+export function Rating({ v }: { v: number }) {
+  return <span className={`rating ${v >= 7.5 ? 'hi' : v < 5 ? 'lo' : ''}`}>{v.toFixed(1)}</span>;
+}
+
 export function BoxTable({ team }: { team: BoxTeam }) {
   const players = team.players.filter((p) => p.sec > 0).sort((a, b) => b.pts - a.pts);
   return (
     <div className="table-wrap"><table className="data">
       <thead><tr>
-        <th className="l">선수</th><th>분</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th>
+        <th className="l">선수</th><th title="득점·슛 효율·리바운드·어시스트·수비·실책을 합친 점수입니다. 6.0이 보통입니다.">평점</th><th>분</th><th>득점</th><th>야투</th><th>3점</th><th>자유투</th>
         <th>리바</th><th>어시</th><th>스틸</th><th>블록</th><th>턴오버</th><th>파울</th>
       </tr></thead>
       <tbody>
         {players.map((p) => (
           <tr key={p.id}>
             <td className="l name"><PosBadge pos={p.pos} /> {p.name}</td>
+            <td><Rating v={playerRating(p)} /></td>
             <td>{Math.round(p.sec / 60)}</td><td><b>{p.pts}</b></td><td>{p.fgm}/{p.fga}</td><td>{p.tpm}/{p.tpa}</td><td>{p.ftm}/{p.fta}</td>
             <td>{p.orb + p.drb}</td><td>{p.ast}</td><td>{p.stl}</td><td>{p.blk}</td><td>{p.tov}</td><td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
           </tr>
