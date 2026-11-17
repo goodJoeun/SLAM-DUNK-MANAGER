@@ -5,7 +5,7 @@ import type { Composites, Defense, Focus } from '@/game/types';
 import Court from './Court';
 import { today } from '@/game/season';
 import { scoutReport } from '@/game/scouting';
-import { adviseTactics } from '@/game/advice';
+import { adviseTactics, mockWins } from '@/game/advice';
 import type { TacticsAdvice } from '@/game/advice';
 import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, userTeam } from './ui';
 import type { ViewProps } from './ui';
@@ -125,6 +125,18 @@ export default function TacticsView({ S, act }: ViewProps) {
   const focus = t.focus ?? 'balanced';
   const defense = t.defense ?? 'man';
   const pace = String(Math.round(t.pace ?? 0));
+  // 지금 고른 전술로도 같은 모의 경기를 돌려, 조언과 얼마나 차이 나는지 보여 준다 (조언을 따를지 판단할 근거)
+  const follows = !!tip && focus === tip.focus && defense === tip.defense && pace === String(tip.pace);
+  const mineKey = `${adviceKey}|${focus}-${defense}-${pace}`;
+  const [mineWins, setMineWins] = useState<{ key: string; wins: number } | null>(null);
+  useEffect(() => {
+    if (!tip || follows) return;
+    const timer = setTimeout(() => setMineWins({ key: mineKey, wins: mockWins(team, sparring, { focus, defense, pace: Number(pace) }, tip.games, S.career.seed + S.career.dayIndex * 1000, prep?.bonus ?? 0) }), 30);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mineKey, !!tip, follows]);
+  const current = follows ? tip!.wins : mineWins?.key === mineKey ? mineWins.wins : null;
+  const edge = tip && current != null ? tip.wins - current : null;
   // 지금 고른 수비·템포의 부담: 체력 소모 배율과, 선발이 체력 저하 알림 기준까지 버티는 시간(쉬지 않고 뛸 때)
   const load = tacticLoad(defense, Number(pace));
   const tiredAt = S.prefs.tiredAt;
@@ -169,8 +181,15 @@ export default function TacticsView({ S, act }: ViewProps) {
                     ? <>{nextId ? <><b>{sparring.name}</b>전을</> : <>현 내 중간 수준의 상대를</>} 가정해 모의 경기를 돌려 보니 공격은 <b>{FOCUS[tip.focus]}</b>, 수비는 <b>{DEFENSE[tip.defense]}</b>, 템포는 <b>{PACE.find(([k]) => k === String(tip.pace))?.[1]}</b>{tip.pace === 0 ? '이' : '가'} 가장 잘 통했습니다.</>
                     : <>코치가 모의 경기를 돌려 보는 중입니다…</>}
                 </span>
-                {tip && <span className="hint">선택지마다 {tip.games}경기씩 돌려 본 결과라 빗나갈 수 있습니다. 공식전 상대를 분석한 날이 늘수록 더 많이 돌려 봅니다.</span>}
-                {tip && (focus !== tip.focus || defense !== tip.defense || pace !== String(tip.pace)) && (
+                {tip && (
+                  <span>
+                    모의 {tip.games}경기: 조언 전술 <b>{tip.wins}승</b>
+                    {!follows && <> · 지금 전술 <b>{current == null ? '…' : `${current}승`}</b></>}
+                    {follows ? ' (지금 쓰는 전술)' : edge == null ? '' : edge < 0 ? ' — 모의 경기에서는 지금 전술이 더 나았습니다.' : edge * 8 <= tip.games ? ' — 차이가 작아 우연일 수 있습니다.' : edge * 4 >= tip.games ? ' — 차이가 큽니다.' : ' — 조언 쪽이 조금 낫습니다.'}
+                  </span>
+                )}
+                {tip && <span className="hint">선택지마다 {tip.games}경기씩만 돌려 본 결과라 빗나갈 수 있고, 조언이 늘 가장 좋은 전술인 것도 아닙니다. 공식전 상대를 분석한 날이 늘수록 더 많이 돌려 봅니다.</span>}
+                {tip && !follows && (
                   <span>
                     <button className="btn small" onClick={() => { act('tactic', 'focus', tip.focus); act('tactic', 'defense', tip.defense); act('tactic', 'pace', String(tip.pace)); }}>조언대로 바꾸기</button>
                   </span>

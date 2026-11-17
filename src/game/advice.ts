@@ -10,6 +10,15 @@ export interface TacticsAdvice {
   defense: Defense;
   pace: number;
   games: number; // 선택지 하나당 돌려 본 모의 경기 수
+  wins: number; // 그중 조언한 전술로 이긴 경기 수
+}
+
+// 한 전술로 모의 경기를 games번 돌려 이긴 횟수. 조언과 같은 시드 묶음을 쓰므로 조언 전술의 전적과 바로 견줄 수 있다.
+export function mockWins(team: Team, opponent: Team, tactics: Partial<Tactics>, games: number, seed = 1, prep = 0) {
+  const mine = { ...team, tactics: { ...team.tactics, ...tactics } };
+  let w = 0;
+  for (let i = 0; i < games; i++) if (simulateGame(mine, opponent, { seed: seed + i, prep: [prep, 0] }).winner === 'home') w++;
+  return w;
 }
 
 const FOCUSES: Focus[] = ['balanced', 'inside', 'outside', 'spread'];
@@ -20,12 +29,7 @@ const DEFENSES: Defense[] = ['man', 'zone', 'press', 'switch', 'drop'];
 // prep: 상대 분석으로 얻은 준비 보너스. 분석한 팀은 약점 공략이 더 잘 통하므로 모의 경기에도 반영한다.
 export function adviseTactics(team: Team, opponent: Team, scoutDays = 0, seed = 1, prep = 0): TacticsAdvice {
   const games = ADVICE.baseGames + ADVICE.gamesPerScoutDay * scoutDays;
-  const wins = (tactics: Partial<Tactics>) => {
-    const mine = { ...team, tactics: { ...team.tactics, ...tactics } };
-    let w = 0;
-    for (let i = 0; i < games; i++) if (simulateGame(mine, opponent, { seed: seed + i, prep: [prep, 0] }).winner === 'home') w++;
-    return w;
-  };
+  const wins = (tactics: Partial<Tactics>) => mockWins(team, opponent, tactics, games, seed, prep);
   // 동률이면 앞의 선택지(기본에 가까운 쪽)를 고른다
   const best = <T,>(options: T[], patch: (o: T) => Partial<Tactics>) => {
     let top = options[0];
@@ -36,5 +40,5 @@ export function adviseTactics(team: Team, opponent: Team, scoutDays = 0, seed = 
   const focus = best(FOCUSES, (f) => ({ focus: f, defense: 'man', pace: 0 }));
   const defense = best(DEFENSES, (d) => ({ focus, defense: d, pace: 0 }));
   const pace = best([0, -1, 1], (p) => ({ focus, defense, pace: p }));
-  return { focus, defense, pace, games };
+  return { focus, defense, pace, games, wins: wins({ focus, defense, pace }) };
 }
