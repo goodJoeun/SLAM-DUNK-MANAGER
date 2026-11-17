@@ -72,9 +72,9 @@ export default function CompView({ S }: ViewProps) {
           )}
           {c.groups && (
             <Panel title="조별 리그" flush>
-              <div className="dash" style={{ gap: 0 }}>
+              <div className="groups">
                 {c.groups.map((g) => (
-                  <div key={g.name} className="span-6"><StandingsTable career={career} title={g.name} ids={g.ids} matches={g.matches} /></div>
+                  <div key={g.name}><StandingsTable career={career} title={g.name} ids={g.ids} matches={g.matches} /></div>
                 ))}
               </div>
             </Panel>

@@ -326,7 +326,7 @@ export default function SquadView({ S, act }: ViewProps) {
                   {th('ovr', '종합')}
                   {th('cond', '컨디션')}
                   <th className="c">사기</th>
-                  <th className="l">성격</th>
+                  <th className="l hide-narrow">성격</th>
                   <th className="c">상태</th>
                   {th('pts', '경기당 득점')}
                 </>
@@ -354,7 +354,7 @@ export default function SquadView({ S, act }: ViewProps) {
                       <td><Attr v={ovr} /></td>
                       <td><span className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}><span className="num">{Math.round(p.condition)}</span><CondBar value={p.condition} /></span></td>
                       <td className="c"><span className={moraleOf(p) >= 68 ? 'good' : moraleOf(p) < 52 ? 'bad' : 'muted'}>{moraleLabel(moraleOf(p))}</span></td>
-                      <td className="l" title={TRAITS[traitOf(p)].info}>{TRAITS[traitOf(p)].label}</td>
+                      <td className="l hide-narrow" title={TRAITS[traitOf(p)].info}>{TRAITS[traitOf(p)].label}</td>
                       <td className="c">{status(p, i)}</td>
                       <td>{avg == null ? <span className="faint">-</span> : avg.toFixed(1)}</td>
                     </>

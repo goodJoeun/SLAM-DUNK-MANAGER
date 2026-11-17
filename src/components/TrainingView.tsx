@@ -106,9 +106,9 @@ export default function TrainingView({ S, act }: ViewProps) {
               {team.players.map((p) => (
                 <tr key={p.id} className={p.injuredDays ? 'dim' : ''}>
                   <td className="l"><PosBadge pos={p.pos} /></td>
-                  <td className="l name">{p.name}{p.injuredDays ? <span className="pill bad" style={{ marginLeft: 6 }}>부상 {p.injuredDays}일</span> : null}</td>
+                  <td className="l name"><button className="name-link" title="선수 상세 보기" onClick={() => act('player', p.id)}>{p.name}</button>{p.injuredDays ? <span className="pill bad" style={{ marginLeft: 6 }}>부상 {p.injuredDays}일</span> : null}</td>
                   <td><span className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}><span className="num">{Math.round(p.condition)}</span><CondBar value={p.condition} /></span></td>
-                  <td className="l" style={{ minWidth: 140 }}>
+                  <td className="l focus-cell">
                     <Select options={FOCUS_PROGRAMS} value={p.focus} onChange={(v) => act('playerFocus', p.id, v)}><option value="">없음</option></Select>
                   </td>
                 </tr>

@@ -687,3 +687,12 @@ p.pad { padding: 12px 14px; }
 /* 전술 카드: 고른 선택지의 자세한 설명 */
 .opt-detail { margin: 10px 0 0; padding: 8px 10px; border-left: 3px solid var(--club); border-radius: 0 6px 6px 0; background: var(--panel-2); font-size: 12.5px; line-height: 1.55; color: var(--muted); }
 .opt-detail b { margin-right: 4px; color: var(--text); }
+
+/* 좁은 화면(1024px 안팎)에서 표가 가로로 넘치지 않게 */
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.focus-cell { min-width: 88px; }
+.focus-cell select { width: 100%; min-width: 0; }
+@media (max-width: 1180px) { .hide-narrow { display: none; } }
+/* 표 안의 선수 이름: 누르면 선수 상세로 */
+.name-link { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: inherit; cursor: pointer; text-align: left; }
+.name-link:hover, .name-link:focus-visible { color: var(--club); text-decoration: underline; }
