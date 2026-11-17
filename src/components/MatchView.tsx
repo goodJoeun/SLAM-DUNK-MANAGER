@@ -9,7 +9,7 @@ import type { AlertKey, BreakInfo, FeedMode, SpeedKey } from './live';
 import FullCourt from './court/FullCourt';
 import { tipOffScene } from './court/choreo';
 import Portrait, { licensedPortrait } from './Portrait';
-import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Rating, Seg, Select, TacticSelects, clubColor } from './ui';
+import { CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, Panel, PosBadge, Rating, Seg, Select, TacticSelects, matchColors } from './ui';
 import type { ViewProps } from './ui';
 
 const SPEED_OPTIONS = Object.entries(SPEEDS).map(([k, v]) => [k, v.label] as [string, string]);
@@ -236,7 +236,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       if (src) faces[p.id] = src;
     }
   }
-  const courtColors: [string, string] = [clubColor(v.teams[0].name), clubColor(v.teams[1].name)];
+  const courtColors = matchColors([v.teams[0].name, v.teams[1].name], m.side);
   const clock = `${Math.floor(v.clock / 60)}:${String(v.clock % 60).padStart(2, '0')}`;
   const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);
   const started = m.feed.length > 0 || m.possessions > 0;
@@ -247,7 +247,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const upcoming = today(S.career)?.prep;
   const prepBonus = upcoming && upcoming.daysUntil === 0 && (upcoming.opponentId === m.home || upcoming.opponentId === m.away) ? upcoming.bonus : 0;
   const feed = (prefs.feed === 'key' ? m.feed.filter((e) => KEY_EVENT.test(e.text)) : m.feed).slice(0, 150);
-  const colors = { '--home': clubColor(v.teams[0].name), '--away': clubColor(v.teams[1].name) } as CSSProperties;
+  const colors = { '--home': courtColors[0], '--away': courtColors[1] } as CSSProperties;
 
   // 코트 옆 패널: 중계(주요 장면·전체)와 코치 알림을 한 자리에서 바꿔 본다
   const [sideTab, setSideTab] = useState<'feed' | 'notes'>('feed');

@@ -1,4 +1,4 @@
-import { PREPARATION, SEASON, seasonGoal, today, userHasBye } from '@/game/season';
+import { PREPARATION, SEASON, seasonGoal, today, upcomingOfficial, userHasBye } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
@@ -225,6 +225,9 @@ export default function HomeView({ S, act }: ViewProps) {
   const tired = fit.filter((p) => p.condition < 60);
   const matches = S.inbox.filter((m) => m.kind === 'match');
   const upcoming = c.calendar.slice(c.dayIndex, c.dayIndex + 8).map((day, i) => ({ day, n: c.dayIndex + i + 1 }));
+  // 공식전은 대진이 정해진 바로 다음 경기만 상대를 안다
+  const official = upcomingOfficial(c);
+  const officialDay = official ? c.dayIndex + official.daysUntil + 1 : null;
 
   return (
     <div className="page">
@@ -283,7 +286,7 @@ export default function HomeView({ S, act }: ViewProps) {
                   ? <span className="pill">{day.camp ? '합숙 훈련' : '훈련'}</span>
                   : day.type === 'practice'
                     ? <span className="pill club">연습 · {teamName(c, day.opponentId ?? '')}</span>
-                    : <span className="pill warn">공식전</span>}
+                    : <span className="pill warn">{n === officialDay && official ? `공식전 · ${official.opponent}` : '공식전'}</span>}
               </li>
             ))}
           </ul>

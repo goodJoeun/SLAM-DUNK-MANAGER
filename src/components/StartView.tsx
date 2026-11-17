@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { createCareer } from '@/game/season';
 import { teamOverall } from '@/game/school';
 import { overall } from '@/game/engine';
@@ -11,6 +11,10 @@ const prestigeStars = (prestige: number) => Math.max(0.5, Math.min(5, Math.round
 export default function StartView({ S, act }: { S: GameState; act: Act }) {
   const { startSeed, nameStyle } = S;
   const p = useMemo(() => createCareer({ seed: startSeed, dataset: 'original', nameStyle }), [startSeed, nameStyle]);
+  // 학교를 누르면 바로 시작하지 않고, 한 번 확인한다
+  const [picked, setPicked] = useState<number | null>(null);
+  const chosen = picked == null ? null : p.teams[p.regionIds[picked]];
+  const rank = chosen ? p.regionIds.map((id) => teamOverall(p.teams[id])).filter((x) => x > teamOverall(chosen)).length + 1 : 0;
   return (
     <div className="start">
       <div className="start-hero">
@@ -25,12 +29,25 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
       <div className="page-title">
         <div><h1>학교 선택</h1><p>학교 수준이 낮을수록 어렵습니다. 수준은 매년 성적에 따라 오르내리고, 신입생의 질을 좌우합니다.</p></div>
       </div>
+      {chosen && picked != null && (
+        <div className="notice start-confirm" style={clubVars(chosen.name)}>
+          <Crest name={chosen.name} size={40} />
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <b style={{ fontSize: 16 }}>{chosen.name} 감독으로 시작할까요?</b>
+            <p className="muted" style={{ margin: '2px 0 0' }}>
+              팀 전력 {teamOverall(chosen)} · 현 내 {p.regionIds.length}개교 중 {rank}위 · 난이도 {difficulty(chosen.prestige)} · 선수 {chosen.players.length}명. 시작한 뒤에는 학교를 바꿀 수 없습니다.
+            </p>
+          </div>
+          <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
+          <button className="btn primary" onClick={() => act('start', picked)}>이 학교로 시작</button>
+        </div>
+      )}
       <div className="school-grid">
         {p.regionIds.map((id, i) => {
           const t = p.teams[id];
           const stars = t.players.filter((x) => x.fixed).sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((x) => x.name).join(', ');
           return (
-            <button key={id} className="school-card" style={clubVars(t.name)} onClick={() => act('start', i)}>
+            <button key={id} className={`school-card ${picked === i ? 'on' : ''}`} style={clubVars(t.name)} onClick={() => setPicked(i)}>
               <Crest name={t.name} size={40} />
               <div className="sc-body">
                 <b>{t.name}</b>

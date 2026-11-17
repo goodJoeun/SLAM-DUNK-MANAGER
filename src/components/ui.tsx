@@ -58,6 +58,14 @@ export function clubHue(name: string) {
   return h;
 }
 export const clubColor = (name: string) => `hsl(${clubHue(name)} 62% 46%)`;
+// 경기 화면의 양 팀 색. 두 학교 색이 비슷하면 상대(mySide가 아닌 쪽)를 어두운 원정 유니폼 색으로 바꿔 구분한다.
+export function matchColors(names: [string, string], mySide: number): [string, string] {
+  const hues = names.map(clubHue);
+  const gap = Math.abs(hues[0] - hues[1]);
+  const colors: [string, string] = [clubColor(names[0]), clubColor(names[1])];
+  if (Math.min(gap, 360 - gap) < 50) colors[1 - mySide] = `hsl(${hues[1 - mySide]} 18% 24%)`;
+  return colors;
+}
 export const clubVars = (name: string) => ({ '--club': clubColor(name) }) as CSSProperties;
 
 export function Crest({ name, size = 32 }: { name: string; size?: number }) {
