@@ -432,9 +432,12 @@ const actions = {
     setLineup(userTeam(S)); // 사건으로 빠지게 된 선수가 있으면 선발을 다시 짠다
     save(S);
   },
-  playerFocus({ S }: Ctx, id: string, value: string) {
-    const player = userTeam(S).players.find((p) => p.id === id);
-    if (player) player.focus = (value || null) as ProgramKey | null;
+  // 선수 한 명 또는 여러 명의 개인 훈련을 한꺼번에 정한다
+  playerFocus({ S }: Ctx, id: string | string[], value: string) {
+    const ids = new Set(Array.isArray(id) ? id : [id]);
+    for (const player of userTeam(S).players) {
+      if (ids.has(player.id)) player.focus = (value || null) as ProgramKey | null;
+    }
     save(S);
   },
 

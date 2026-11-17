@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { today } from '@/game/season';
 import { PROGRAMS, INTENSITY, RATING_LABEL } from '@/game/school';
 import { PREPARATION } from '@/game/season';
@@ -48,6 +49,18 @@ export default function TrainingView({ S, act }: ViewProps) {
   const cond = Math.round(mean(team.players.filter((p) => !p.injuredDays).map((p) => p.condition)));
   const I = INTENSITY[S.intensity];
   const matchDay = Boolean(d?.userMatch);
+
+  // 개인 훈련을 한꺼번에 정할 선수들 (체크한 선수 id). 팀을 떠난 선수는 세지 않도록 지금 명단과 맞춰 본다
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const picked = team.players.filter((p) => checked.has(p.id));
+  const allPicked = picked.length === team.players.length && picked.length > 0;
+  const toggle = (id: string) => setChecked((prev) => {
+    const next = new Set(prev);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  });
+  // 고른 선수들의 개인 훈련이 모두 같으면 그 값을, 섞여 있으면 고르기 전 상태를 보여 준다
+  const shared = picked.length && picked.every((p) => p.focus === picked[0].focus) ? picked[0].focus ?? '' : 'mixed';
 
   return (
     <div className="page">
@@ -100,11 +113,28 @@ export default function TrainingView({ S, act }: ViewProps) {
         </div>
 
         <Panel title="선수별 상태 · 개인 훈련" flush>
+          <div className="bulk-bar">
+            {picked.length ? (
+              <>
+                <b>{picked.length}명 선택</b>
+                <label className="hint">개인 훈련 한꺼번에 지정
+                  <select value={shared} onChange={(e) => act('playerFocus', picked.map((p) => p.id), e.target.value)}>
+                    {shared === 'mixed' && <option value="mixed" disabled>훈련 고르기</option>}
+                    <option value="">없음</option>
+                    {Object.entries(FOCUS_PROGRAMS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                  </select>
+                </label>
+                <span className="spacer" />
+                <button className="btn ghost small" onClick={() => setChecked(new Set())}>선택 해제</button>
+              </>
+            ) : <span className="hint">선수를 체크하면 여러 명의 개인 훈련을 한꺼번에 정할 수 있습니다.</span>}
+          </div>
           <div className="table-wrap"><table className="data">
-            <thead><tr><th className="l">포지션</th><th className="l">이름</th><th>컨디션</th><th className="l">개인 훈련</th></tr></thead>
+            <thead><tr><th className="check"><input type="checkbox" aria-label="모든 선수 선택" checked={allPicked} onChange={() => setChecked(allPicked ? new Set() : new Set(team.players.map((p) => p.id)))} /></th><th className="l">포지션</th><th className="l">이름</th><th>컨디션</th><th className="l">개인 훈련</th></tr></thead>
             <tbody>
               {team.players.map((p) => (
-                <tr key={p.id} className={p.injuredDays ? 'dim' : ''}>
+                <tr key={p.id} className={`${p.injuredDays ? 'dim' : ''} ${checked.has(p.id) ? 'picked' : ''}`}>
+                  <td className="check"><input type="checkbox" aria-label={`${p.name} 선택`} checked={checked.has(p.id)} onChange={() => toggle(p.id)} /></td>
                   <td className="l"><PosBadge pos={p.pos} /></td>
                   <td className="l name"><button className="name-link" title="선수 상세 보기" onClick={() => act('player', p.id)}>{p.name}</button>{p.injuredDays ? <span className="pill bad" style={{ marginLeft: 6 }}>부상 {p.injuredDays}일</span> : null}</td>
                   <td><span className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}><span className="num">{Math.round(p.condition)}</span><CondBar value={p.condition} /></span></td>
