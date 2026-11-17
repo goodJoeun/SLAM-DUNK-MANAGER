@@ -11,6 +11,8 @@ const GOAL_SHORT = ['', '현 예선 8강', '현 예선 최종 단계', '전국 �
 // 목표를 이루려면 현 안에서 대략 몇 위 안에 들어야 하는가
 const GOAL_NEEDS = [16, 8, 4, 2, 2, 1];
 const DIFFICULTY = ['쉬움', '보통', '어려움', '매우 어려움'];
+const SORTS = { base: '기본', ovr: '전력순', easy: '쉬운 순', hard: '어려운 순' };
+type Sort = keyof typeof SORTS;
 
 // 학교를 고를 때 보여 줄 정보. 난이도는 "지금 전력 순위가 올해 목표에 얼마나 못 미치는가"로 정한다.
 function schoolInfo(p: Career, id: string) {
@@ -26,7 +28,7 @@ function schoolInfo(p: Career, id: string) {
   const why = short <= -2
     ? `전력이 현 내 ${rank}위로, 올해 목표(${GOAL_SHORT[tier]})에 여유가 있습니다.`
     : short <= 0
-    ? `전력이 현 내 ${rank}위로, 올해 목표(${GOAL_SHORT[tier]})에 겨우 닿는 수준입니다.`
+    ? `전력이 현 내 ${rank}위로, 올해 목표(${GOAL_SHORT[tier]})에 닿을 만한 수준입니다.`
     : `전력은 현 내 ${rank}위인데, 올해 목표(${GOAL_SHORT[tier]})는 ${GOAL_NEEDS[tier]}위 안에 들어야 이룰 수 있습니다.`;
   return { t, ovr, rank, tier, level, ace, why, seniors: top5.filter((x) => x.year === 3).length }; // 상위 5명 중 내년에 졸업하는 선수
 }
@@ -40,6 +42,16 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
   const chosen = picked == null ? null : p.teams[p.regionIds[picked]];
   const info = useMemo(() => Object.fromEntries(p.regionIds.map((id) => [id, schoolInfo(p, id)])), [p]);
   const ci = chosen ? info[chosen.id] : null;
+  // 보여 주는 순서만 바꾼다. 고른 학교는 원래 순번(picked)으로 기억한다.
+  const [sort, setSort] = useState<Sort>('base');
+  const order = useMemo(() => {
+    const idx = p.regionIds.map((_, i) => i);
+    const of = (i: number) => info[p.regionIds[i]];
+    if (sort === 'ovr') idx.sort((a, b) => of(b).ovr - of(a).ovr);
+    if (sort === 'easy') idx.sort((a, b) => of(a).level - of(b).level || of(b).ovr - of(a).ovr);
+    if (sort === 'hard') idx.sort((a, b) => of(b).level - of(a).level || of(a).ovr - of(b).ovr);
+    return idx;
+  }, [p, info, sort]);
   return (
     <div className="start">
       <div className="start-hero">
@@ -47,12 +59,14 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
         <h1>고교 농구 매니저</h1>
         <p>{p.prefecture}의 고교 농구부 감독이 되어 3년 동안 팀을 이끕니다. 매일 훈련을 정하고, 경기를 직접 지휘하고, 인터하이·국민체육대회·윈터컵 우승에 도전하세요.</p>
         <div className="row">
-          <span className="muted">선수 이름 표기</span>
+          <span className="muted">이름 표기</span>
           <Seg options={NAME_STYLE} value={nameStyle} onChange={(v) => { if (v !== nameStyle) act('namestyle'); }} />
+          <span className="hint">학교와 선수 이름을 한국어판 또는 일본 원작 이름으로 보여 줍니다. 같은 학교·같은 선수이고, 시작한 뒤에는 바꿀 수 없습니다.</span>
         </div>
       </div>
       <div className="page-title">
         <div><h1>학교 선택</h1><p>난이도는 지금 전력이 올해 목표에 얼마나 못 미치는지로 정해집니다. 학교 수준(별)은 매년 성적에 따라 오르내리고, 목표와 신입생의 질을 좌우합니다.</p></div>
+        <div className="row"><span className="muted">정렬</span><Seg options={SORTS} value={sort} onChange={(v) => setSort(v as Sort)} /></div>
       </div>
       {chosen && ci && picked != null && (
         <div className="notice start-confirm" style={clubVars(chosen.name)}>
@@ -63,7 +77,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
               난이도 <b>{DIFFICULTY[ci.level]}</b> · {ci.why}
             </p>
             <p className="muted" style={{ margin: '2px 0 0' }}>
-              올해 목표: {GOAL_LABEL[ci.tier]}. 시작한 뒤에는 학교를 바꿀 수 없습니다.
+              <span className="hide-phone">올해 목표: {GOAL_LABEL[ci.tier]}. </span>시작한 뒤에는 학교를 바꿀 수 없습니다.
             </p>
           </div>
           <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
@@ -71,11 +85,12 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
         </div>
       )}
       <div className="school-grid">
-        {p.regionIds.map((id, i) => {
+        {order.map((i) => {
+          const id = p.regionIds[i];
           const { t, ovr, rank, tier, level, ace, why, seniors } = info[id];
           const stars = t.players.filter((x) => x.fixed).sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((x) => x.name).join(', ');
           return (
-            <button key={id} className={`school-card ${picked === i ? 'on' : ''}`} style={clubVars(t.name)} onClick={() => setPicked(i)}>
+            <button key={id} className={`school-card ${picked === i ? 'on' : ''}`} aria-pressed={picked === i} style={clubVars(t.name)} onClick={() => setPicked(i)}>
               <Crest name={t.name} size={40} />
               <div className="sc-body">
                 <b>{t.name}</b>
