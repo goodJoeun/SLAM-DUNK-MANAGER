@@ -5,7 +5,7 @@ import { scoutReport } from '@/game/scouting';
 import { reviewMatch } from '@/game/review';
 import type { ScoutSection } from '@/game/scouting';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
-import { PREPARATION, seasonGoal, today } from '@/game/season';
+import { PREPARATION, RECRUITING, SEASON, prospectsOf, recruitChance, seasonGoal, today } from '@/game/season';
 import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent, YearReview } from '@/game/types';
 
 export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout' | 'event';
@@ -67,6 +67,8 @@ export type MessageDraft = Omit<Message, 'id' | 'unread'>;
 export const teamNames = (career: Career): Record<string, string> =>
   Object.fromEntries(Object.values(career.teams).map((t) => [t.id, t.name]));
 
+const RECRUIT_REMINDER = 14; // 학년 종료 며칠 전에 영입 목표를 상기시킬지
+
 export function welcomeMessage(career: Career): MessageDraft {
   const team = career.teams[career.userTeamId];
   const d = today(career);
@@ -81,6 +83,24 @@ export function welcomeMessage(career: Career): MessageDraft {
       '한 해에 인터하이, 국민체육대회, 윈터컵 세 대회가 열립니다.',
       `올해 목표는 "${seasonGoal(career).label}"입니다. 세 대회 중 한 번이라도 이루면 됩니다. 연말에 달성 여부에 따라 학교의 지원(학교 수준)이 달라지고, 학교 수준은 신입생의 질을 좌우합니다.`,
     ],
+  };
+}
+
+// 올해의 중학 유망주 명단이 나왔다는 안내 (부임 첫날과 새 학년 첫날)
+export function recruitMessage(career: Career): MessageDraft {
+  const d = today(career);
+  const best = [...prospectsOf(career)].sort((a, b) => overall(b.player) - overall(a.player))[0];
+  return {
+    year: d?.year ?? career.year, day: d?.day ?? 1, phase: d?.phase ?? '',
+    kind: 'welcome', from: '코치진',
+    title: '올해의 중학 유망주 명단이 나왔습니다',
+    summary: `선수단 › 신입생 스카우트에서 영입 목표를 ${RECRUITING.maxTargets}명까지 정하세요.`,
+    body: [
+      `내년에 입학할 중학 유망주 ${prospectsOf(career).length}명을 추렸습니다. 이 중 ${RECRUITING.maxTargets}명까지 영입 목표로 정할 수 있습니다.`,
+      best ? `가장 눈에 띄는 선수는 ${best.player.name}(종합 ${overall(best.player)})이고, 지금 우리 학교로 올 가능성은 ${Math.round(recruitChance(career, best) * 100)}%입니다.` : '',
+      '학교 수준이 높고 교장의 신임이 클수록 잘 옵니다. 결과는 학년이 바뀔 때 나오고, 목표로 정하지 않은 자리는 코치가 부족한 포지션 위주로 채웁니다.',
+      '선수단 화면의 "신입생 스카우트" 탭이나 홈의 팀 상태에서 정할 수 있습니다.',
+    ].filter(Boolean),
   };
 }
 
@@ -176,6 +196,21 @@ export function buildMessages(
     });
   }
 
+  // 학년이 끝나기 2주 전인데 영입 목표가 비어 있으면 한 번 알려 준다
+  const left = career.calendar.length - career.dayIndex;
+  if (!r.yearEnd && left === RECRUIT_REMINDER && career.year < SEASON.campaignYears && (career.recruitTargets?.length ?? 0) < RECRUITING.maxTargets) {
+    const n = career.recruitTargets?.length ?? 0;
+    out.push({
+      ...when, kind: 'welcome', from: '코치진',
+      title: `신입생 영입 목표가 ${n ? '한 자리 비어' : '비어'} 있습니다`,
+      summary: `학년이 ${left}일 뒤에 끝납니다. 영입 목표 ${n}/${RECRUITING.maxTargets}명`,
+      body: [
+        `학년이 ${left}일 뒤에 끝나는데 영입 목표가 ${n}/${RECRUITING.maxTargets}명입니다. 정하지 않은 자리는 코치가 부족한 포지션 위주로 채웁니다.`,
+        '선수단 화면의 "신입생 스카우트" 탭에서 정할 수 있습니다.',
+      ],
+    });
+  }
+
   if (r.yearEnd) {
     const y = r.yearEnd;
     if (y.final) {
@@ -195,6 +230,7 @@ export function buildMessages(
         missed: y.missed?.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential })),
         results: y.results, yearReview: y.review, prestige: y.prestige,
       });
+      if (career.year < SEASON.campaignYears) out.push(recruitMessage(career));
       out.push({
         ...when, kind: 'season', from: '교장',
         title: `${y.year + 1}년차 목표: ${seasonGoal(career).label}`,

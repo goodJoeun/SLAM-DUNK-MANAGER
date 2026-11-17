@@ -1,4 +1,4 @@
-import { PREPARATION, SEASON, seasonGoal, today, upcomingOfficial, userHasBye } from '@/game/season';
+import { PREPARATION, SEASON, seasonGoal, today, upcomingOfficial, userHasBye, userMatchDays, RECRUITING } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
@@ -12,11 +12,10 @@ import type { ViewProps } from './ui';
 
 const STAGE_SHORT: Record<string, string> = { group: '조별 리그', finalLeague: '결승 리그', playoff: '플레이오프', knockout: '토너먼트', national: '전국 대회', done: '종료' };
 
+// 우리 팀이 실제로 뛰는 다음 경기 (탈락한 대회의 남은 경기일은 건너뛴다)
 function nextFixture(c: Career) {
-  for (let i = c.dayIndex; i < c.calendar.length; i++) {
-    if (c.calendar[i].type !== 'training') return { inDays: i - c.dayIndex, day: c.calendar[i] };
-  }
-  return null;
+  const i = userMatchDays(c)[0];
+  return i == null ? null : { inDays: i - c.dayIndex, day: c.calendar[i] };
 }
 
 // 경기 당일의 상대 정보. 주요 선수는 누구나 아는 정보이고, 전술과 강·약점은 상대 분석을 한 만큼만 보인다.
@@ -228,6 +227,8 @@ export default function HomeView({ S, act }: ViewProps) {
   // 공식전은 대진이 정해진 바로 다음 경기만 상대를 안다
   const official = upcomingOfficial(c);
   const officialDay = official ? c.dayIndex + official.daysUntil + 1 : null;
+  const ours = new Set(userMatchDays(c).map((i) => i + 1)); // 우리 팀이 뛰는 날
+  const targets = c.recruitTargets?.length ?? 0;
 
   return (
     <div className="page">
@@ -249,6 +250,12 @@ export default function HomeView({ S, act }: ViewProps) {
               {' · '}교장의 신임 {goal.trust}
             </span>
           </div>
+          {c.year < SEASON.campaignYears && (
+            <div className="notice click" style={{ marginTop: 8, cursor: 'pointer' }} onClick={() => act('recruit')}>
+              <b>신입생 스카우트</b> · 영입 목표 {targets}/{RECRUITING.maxTargets}명<br />
+              <span className="muted">{targets < RECRUITING.maxTargets ? '중학 유망주 중 데려올 선수를 정하세요. 학년이 바뀔 때 결과가 나옵니다.' : '학년이 바뀔 때 영입 결과가 나옵니다.'}</span>
+            </div>
+          )}
           {injured.length > 0 && (
             <ul className="lines">
               {injured.map((p) => (
@@ -286,7 +293,8 @@ export default function HomeView({ S, act }: ViewProps) {
                   ? <span className="pill">{day.camp ? '합숙 훈련' : '훈련'}</span>
                   : day.type === 'practice'
                     ? <span className="pill club">연습 · {teamName(c, day.opponentId ?? '')}</span>
-                    : <span className="pill warn">{n === officialDay && official ? `공식전 · ${official.opponent}` : '공식전'}</span>}
+                    : !ours.has(n) ? <span className="pill">다른 학교 경기 · 훈련</span>
+                      : <span className="pill warn">{n === officialDay && official ? `공식전 · ${official.opponent}` : '공식전'}</span>}
               </li>
             ))}
           </ul>

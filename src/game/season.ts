@@ -605,8 +605,9 @@ export function userHasBye(state: Career) {
 
 // ---------- 하루 진행 ----------
 
-// 내 팀이 실제로 뛰는 다음 경기일까지 남은 날. 탈락한 대회의 남은 공식전 날은 건너뛴다.
-function nextMatchIn(state: Career) {
+// 내 팀이 실제로 뛰는(지금 알기로 뛸 수 있는) 남은 경기일의 달력 위치. 탈락한 대회의 남은 공식전 날은 건너뛴다.
+export function userMatchDays(state: Career): number[] {
+  const days: number[] = [];
   const bye = userHasBye(state);
   const alive = bye || officialPairing(state) !== null; // 지금 대회에서 아직 다음 경기가 있다
   let newCompetition = false; // 그 날까지 새 대회가 시작되면 다시 처음부터 뛴다
@@ -615,9 +616,15 @@ function nextMatchIn(state: Career) {
     const d = state.calendar[i];
     if (i > state.dayIndex && d.start) newCompetition = true;
     if (d.type === 'official' && !newCompetition && skip-- > 0) continue;
-    if (d.type === 'practice' || (d.type === 'official' && (alive || newCompetition))) return i - state.dayIndex;
+    if (d.type === 'practice' || (d.type === 'official' && (alive || newCompetition))) days.push(i);
   }
-  return null;
+  return days;
+}
+
+// 다음 경기일까지 남은 날 (0이면 오늘). 남은 경기가 없으면 null
+function nextMatchIn(state: Career) {
+  const next = userMatchDays(state)[0];
+  return next == null ? null : next - state.dayIndex;
 }
 
 // 오늘의 일정

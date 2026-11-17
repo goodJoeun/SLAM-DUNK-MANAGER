@@ -288,7 +288,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
 }
 
 export default function SquadView({ S, act }: ViewProps) {
-  const [view, setView] = useState<View>('overview');
+  const [view, setView] = useState<View>(S.squadTab === 'recruit' ? 'recruit' : 'overview');
   const [sort, setSort] = useState<SortKey>('lineup');
   const c = S.career;
   const team = userTeam(c);

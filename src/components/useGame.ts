@@ -14,7 +14,7 @@ import type {
 } from '@/game/types';
 import { BREAK_MS, DEFAULT_PREFS, SPEEDS, TIRED_LEVELS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
-import { buildMessages, mergeTraining, quiet, supersedes, teamNames, trainingDigest, welcomeMessage } from './inbox';
+import { recruitMessage, buildMessages, mergeTraining, quiet, supersedes, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
 
 const SAVE_KEY = 'hoops-manager-save-v2';
@@ -47,6 +47,7 @@ export interface GameState {
   messageId: number | null;
   match: ActiveMatch | null;
   playerId: string | null;
+  squadTab?: string | null; // 선수단 화면을 열 때 먼저 보여 줄 탭 (저장하지 않는다)
   schoolId?: string | null; // 열어 본 다른 학교의 정보 화면 (저장하지 않는다)
   portraits: Record<string, string>;
   prefs: MatchPrefs;
@@ -300,7 +301,7 @@ const actions = {
   start({ S }: Ctx, index: number) {
     const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
     Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
-    deliver(S, [welcomeMessage(career)]);
+    deliver(S, [welcomeMessage(career), recruitMessage(career)]);
     save(S);
   },
   reset({ S }: Ctx) {
@@ -310,7 +311,9 @@ const actions = {
     removeKey(INBOX_KEY);
     Object.assign(S, { career: null, match: null, inbox: [], messageId: null, playerId: null, dayNote: null, screen: 'home', startSeed: randomSeed() });
   },
-  screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; S.schoolId = null; },
+  screen({ S }: Ctx, key: ScreenKey) { S.screen = key; S.playerId = null; S.schoolId = null; S.squadTab = null; },
+  // 선수단 화면의 신입생 스카우트 탭을 바로 연다
+  recruit({ S }: Ctx) { S.screen = 'squad'; S.playerId = null; S.schoolId = null; S.squadTab = 'recruit'; },
   // 학교 이름을 누르면 그 학교의 정보 화면을 연다. 우리 학교면 선수단으로 간다.
   school({ S }: Ctx, id: string | null) {
     if (id && id === S.career?.userTeamId) { S.schoolId = null; S.playerId = null; S.screen = 'squad'; return; }
