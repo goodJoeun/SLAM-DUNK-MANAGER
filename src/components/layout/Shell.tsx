@@ -14,7 +14,9 @@ const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
   { key: 'squad', label: '선수단', icon: 'squad' },
   { key: 'tactics', label: '전술', icon: 'tactics' },
   { key: 'training', label: '훈련', icon: 'training' },
+  { key: 'schedule', label: '일정', icon: 'calendar' },
   { key: 'comp', label: '대회', icon: 'trophy' },
+  { key: 'schools', label: '학교', icon: 'school' },
   { key: 'records', label: '기록', icon: 'chart' },
 ];
 

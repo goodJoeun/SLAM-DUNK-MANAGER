@@ -292,7 +292,7 @@ export default function HomeView({ S, act }: ViewProps) {
 
         <CompetitionPanel c={c} act={act} />
 
-        <Panel title="다가오는 일정" className="span-4">
+        <Panel title="다가오는 일정" className="span-4" action={<button className="btn ghost small" onClick={() => act('screen', 'schedule')}>전체 일정</button>}>
           <ul className="lines">
             {upcoming.map(({ day, n }) => (
               <li key={n}>

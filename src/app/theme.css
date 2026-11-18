@@ -222,3 +222,17 @@ input[type='checkbox'] { accent-color: var(--club); }
   .role-edit .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .role-edit .seg button { padding: 4px 0; letter-spacing: -0.03em; white-space: nowrap; }
 }
+
+/* ---------- 일정 화면 ---------- */
+.sched { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+.sched-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.sched-day { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 32px; padding: 4px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
+.sched-day:last-child { border-bottom: 0; }
+.sched-day > .num { color: var(--muted); font-weight: 700; }
+.sched-day .what { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sched-day.practice { box-shadow: inset 3px 0 0 var(--info); }
+.sched-day.official { box-shadow: inset 3px 0 0 var(--club); }
+.sched-day.past { opacity: 0.62; }
+.sched-day.now { background: color-mix(in srgb, var(--club) 22%, transparent); opacity: 1; }
+.sched-result { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sched-past > .panel-h { box-shadow: inset 4px 0 0 var(--line); background: none; }

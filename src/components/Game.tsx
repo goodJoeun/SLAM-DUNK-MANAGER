@@ -14,6 +14,8 @@ import TacticsView from './screens/TacticsView';
 import TrainingView from './screens/TrainingView';
 import CompView from './screens/CompView';
 import RecordsView from './screens/RecordsView';
+import ScheduleView from './screens/ScheduleView';
+import SchoolsView from './screens/SchoolsView';
 import MatchView from './screens/MatchView';
 import SchoolView from './screens/SchoolView';
 import TouchTips from './layout/TouchTips';
@@ -24,7 +26,9 @@ const SCREENS: Record<ScreenKey, ComponentType<ViewProps>> = {
   squad: SquadView,
   tactics: TacticsView,
   training: TrainingView,
+  schedule: ScheduleView,
   comp: CompView,
+  schools: SchoolsView,
   records: RecordsView,
 };
 

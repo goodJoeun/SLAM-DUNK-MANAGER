@@ -35,7 +35,7 @@ const matchKey = (slot: number) => (slot === 1 ? MATCH_KEY : `${MATCH_KEY}-s${sl
 // 세이브 칸 목록에 보여 줄 요약 (빈 칸은 null)
 export interface SlotInfo { slot: number; team: string; when: string; done: boolean }
 
-export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'comp' | 'records';
+export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'schedule' | 'comp' | 'schools' | 'records';
 
 export type { ActiveMatch } from './live';
 
