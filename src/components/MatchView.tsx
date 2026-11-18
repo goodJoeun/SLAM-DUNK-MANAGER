@@ -250,11 +250,23 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   // 집중 마크 담당 후보: 코트 위 선수를 먼저, 대상을 막을 때의 수비력과 함께 보여 준다
   const denyTarget = t.denyPlayerId ? S.career.teams[opp.id ?? '']?.players.find((p) => p.id === t.denyPlayerId) : undefined;
   const myRoster = S.career.teams[mine.id ?? '']?.players ?? [];
-  const markerLabel = (p: PlayerView, benched: boolean) => {
+  const outlookOf = (p: PlayerView) => {
     const src = myRoster.find((x) => x.id === p.id);
-    const o = src && denyTarget ? denyOutlook(src, denyTarget) : null;
+    return src && denyTarget ? denyOutlook(src, denyTarget) : null;
+  };
+  // 추천 담당: 대상에게 마크 효과가 가장 큰 선수. 코트 위 선수를 먼저 보고, 벤치에 훨씬 나은 선수(10 이상)가 있을 때만 벤치 선수를 권한다
+  const bestOf = (players: PlayerView[]) => players
+    .map((p) => ({ p, power: Math.round((outlookOf(p)?.power ?? 0) * 100) }))
+    .reduce<{ p: PlayerView; power: number } | null>((a, b) => (!a || b.power > a.power ? b : a), null);
+  const bestCourt = denyTarget ? bestOf(mine.court.filter((p) => !p.out)) : null;
+  const bestBench = denyTarget ? bestOf(mine.bench.filter((p) => !p.out)) : null;
+  const benchPick = !!bestBench && bestBench.power >= (bestCourt?.power ?? 0) + 10;
+  const recommend = benchPick ? bestBench : bestCourt;
+  const SOLID_MARK = 80; // 이보다 낮으면 대상을 확실히 묶지 못해 집중 마크가 손해가 되기 쉽다 (scripts/deny-check.ts)
+  const markerLabel = (p: PlayerView, benched: boolean) => {
+    const o = outlookOf(p);
     const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : '', o.weaker ? '힘 부족' : ''].filter(Boolean).join('·') : '';
-    return `${p.name}${o ? ` · 마크 효과 ${Math.round(o.power * 100)}${miss ? ` (${miss})` : ''}` : ''}${benched ? ' [벤치]' : ''}`;
+    return `${recommend?.p.id === p.id ? '★ ' : ''}${p.name}${o ? ` · 마크 효과 ${Math.round(o.power * 100)}${miss ? ` (${miss})` : ''}` : ''}${benched ? ' [벤치]' : ''}`;
   };
   const markers = Object.fromEntries([
     ...mine.court.map((p) => [p.id, markerLabel(p, false)]),
@@ -429,6 +441,16 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 <label className="hint" title="마크 효과는 담당의 능력치를 대상의 능력치와 견줘 정합니다(수비 지능 대 공격 지능·주무기, 스피드, 키, 힘). 100이 대등한 수준이고, 확실히 앞서는 수비수가 아니면 큰 효과가 없습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
                   <Select options={markers} value={t.denyDefenderId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">같은 자리 선수</option></Select>
                 </label>
+              )}
+              {denyTarget && recommend && (
+                <div className="hint deny-pick">
+                  {recommend.power >= SOLID_MARK
+                    ? <>추천 담당: <b>{recommend.p.name}</b> (마크 효과 {recommend.power}){benchPick && ' · 벤치에 있어 교체로 넣어야 합니다'}</>
+                    : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.p.name}</b> (마크 효과 {recommend.power}) · 집중 마크가 손해일 수 있습니다</>}
+                  {t.denyDefenderId !== recommend.p.id && (
+                    <button className="btn ghost small" onClick={() => act('matchTactic', 'denyDefenderId', recommend.p.id)}>{recommend.p.name}에게 맡기기</button>
+                  )}
+                </div>
               )}
             </div>
           </div>
