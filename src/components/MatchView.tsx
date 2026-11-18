@@ -38,11 +38,24 @@ function Side({ team: t, mine, away = false, prep = 0 }: { team: TeamView; mine:
 
 // 교체 대상 줄. onClick이 없으면 상대 팀처럼 누를 수 없는 줄이 된다
 // 선수 한 명의 개인 지시: 공격 역할 · 수비 지시
-function RoleRow({ role, onChange }: { role?: PlayerRole; onChange: (kind: 'offense' | 'defense', value: string) => void }) {
+// 평소에는 내린 지시만 꼬리표로 보여 주고, 선수를 고르면(open) 버튼으로 펼친다
+const OFFENSE_CHOICES: [string, string][] = [['', '기본'], ...OFFENSE_ROLE];
+const DEFENSE_CHOICES: [string, string][] = [['', '기본'], ...DEFENSE_ROLE];
+const roleName = (list: [string, string][], key?: string) => list.find(([k]) => k === key)?.[1];
+function RoleRow({ role, open, onChange }: { role?: PlayerRole; open: boolean; onChange: (kind: 'offense' | 'defense', value: string) => void }) {
+  if (!open) {
+    if (!role) return null;
+    return (
+      <div className="role-tags">
+        {role.offense && <span className="pill club">공격 · {roleName(OFFENSE_ROLE, role.offense)}</span>}
+        {role.defense && <span className="pill club">수비 · {roleName(DEFENSE_ROLE, role.defense)}</span>}
+      </div>
+    );
+  }
   return (
-    <div className={`role-row ${role ? 'set' : ''}`}>
-      <Select options={OFFENSE_ROLE} value={role?.offense} onChange={(v) => onChange('offense', v)}><option value="">공격: 기본</option></Select>
-      <Select options={DEFENSE_ROLE} value={role?.defense} onChange={(v) => onChange('defense', v)}><option value="">수비: 기본</option></Select>
+    <div className="role-edit">
+      <div><span className="hint">공격 지시</span><Seg options={OFFENSE_CHOICES} value={role?.offense ?? ''} onChange={(v) => onChange('offense', v)} /></div>
+      <div><span className="hint">수비 지시</span><Seg options={DEFENSE_CHOICES} value={role?.defense ?? ''} onChange={(v) => onChange('defense', v)} /></div>
     </div>
   );
 }
@@ -403,12 +416,21 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       )}
       </div>
 
-      {m.pause && m.breakInfo && !v.finished && (
-        <BreakPanel info={m.breakInfo} mine={mine} opp={opp} side={m.side} tiredAt={prefs.tiredAt} onResume={() => act('play')} />
+      {/* 쿼터 사이 휴식: 휴대폰에서는 여기(코트 위쪽)에 끼워 넣고, 넓은 화면에서는 코트 위에 겹쳐 띄운다 (아래 break-over) */}
+      {onBreak && !v.finished && (
+        <div className="break-flow">
+          <BreakPanel info={m.breakInfo!} mine={mine} opp={opp} side={m.side} tiredAt={prefs.tiredAt} onResume={() => act('play')} />
+        </div>
       )}
 
       <div className="match-main">
         <Panel title="코트" flush className="court-panel" action={<span className="hint">{SPEEDS[prefs.speed].perSecond ? (SPEEDS[prefs.speed].keyOnly ? '주요 장면만 움직임으로 보여 줍니다' : '모든 공격권을 움직임으로 보여 줍니다') : '움직임 없이 빠르게 진행합니다'}</span>}>
+          {/* 넓은 화면: 휴식 요약을 코트 위에 겹쳐서, 코트와 그 아래가 밀려 내려가지 않게 한다 */}
+          {onBreak && !v.finished && (
+            <div className="break-over">
+              <BreakPanel info={m.breakInfo!} mine={mine} opp={opp} side={m.side} tiredAt={prefs.tiredAt} onResume={() => act('play')} />
+            </div>
+          )}
           <div className="court-stick">
           <FullCourt
             anim={m.anim}
@@ -523,20 +545,20 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       <div className="match-grid">
         <Panel title="벤치 · 개인 지시" flush className="mt mt-squad">
           <div className="sub-hint">
-            {m.selected ? '들어갈 벤치 선수를 누르세요. 경기가 흐르는 중에도 다음 공격권부터 바로 바뀝니다.' : '코트 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다. 코트 위 선수에게는 공격·수비 지시를 줄 수 있습니다.'}
+            {m.selected ? '고른 선수에게 지시를 내리거나, 대신 들어갈 벤치 선수를 누르세요. 다음 공격권부터 바로 적용됩니다.' : '선수를 누르면 개인 지시가 펼쳐집니다. 코트 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다.'}
           </div>
           {mine.court.map((p) => (
             <div key={p.id}>
               <PlayerRow faces={faces} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />
-              <RoleRow role={t.roles?.[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
+              <RoleRow role={t.roles?.[p.id]} open={m.selected === p.id && !v.finished} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
             </div>
           ))}
           <div className="sub-hint">벤치</div>
           {mine.bench.map((p) => (
             <div key={p.id}>
               <PlayerRow faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} />
-              {/* 벤치 선수의 지시는 미리 정해 둔 것만 보여 줘 목록을 짧게 유지한다 */}
-              {t.roles?.[p.id] && <RoleRow role={t.roles[p.id]} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />}
+              {/* 벤치 선수의 지시는 미리 정해 둔 것만 꼬리표로 보여 준다 */}
+              <RoleRow role={t.roles?.[p.id]} open={false} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
             </div>
           ))}
         </Panel>

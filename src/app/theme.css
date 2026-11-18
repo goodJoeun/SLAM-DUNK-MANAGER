@@ -188,3 +188,25 @@ input[type='checkbox'] { accent-color: var(--club); }
   .court-tactics .deny-pick { flex-wrap: wrap; }
   .deny-pick .dp-text { white-space: normal; }
 }
+
+/* 쿼터 사이 휴식 요약: 넓은 화면에서는 코트 위에 겹쳐 띄워 화면이 밀리지 않게 한다 */
+.break-over { display: none; }
+@media (min-width: 861px) {
+  .break-flow { display: none; }
+  .court-panel { position: relative; }
+  .break-over { display: block; position: absolute; left: 10px; right: 10px; top: 50px; z-index: 6; }
+  .break-over .break-panel { border-color: var(--gold); background: rgb(12 16 26 / 0.96); box-shadow: 0 0 0 1px var(--gold), 0 18px 40px rgb(0 0 0 / 0.65); }
+}
+.break-head h2 { font-style: italic; font-weight: 900; }
+
+/* 개인 지시: 내린 지시는 꼬리표로, 고른 선수는 버튼으로 펼친다 */
+.role-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 14px 7px 54px; }
+.role-edit { display: grid; gap: 6px; padding: 6px 14px 10px 54px; background: color-mix(in srgb, var(--club) 9%, transparent); border-bottom: 1px solid var(--line-soft); }
+.role-edit > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center; gap: 8px; }
+.role-edit > div > .hint { font-weight: 700; }
+.role-edit .seg button { padding: 4px 9px; font-size: 12px; }
+@media (max-width: 860px) {
+  .role-tags, .role-edit { padding-left: 14px; }
+  .role-edit > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .role-edit .seg button { min-height: 36px; font-size: 13px; }
+}

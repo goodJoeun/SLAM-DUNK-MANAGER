@@ -541,7 +541,7 @@ const actions = {
   denyPlan({ S }: Ctx, key: 'denyPlayerId' | 'denyDefenderId', value: string) {
     const tactics = userTeam(S).tactics;
     tactics[key] = value || null;
-    if (key === 'denyPlayerId' && !value) tactics.denyDefenderId = null;
+    if (key === 'denyPlayerId') tactics.denyDefenderId = null; // 대상이 바뀌면 담당을 다시 고른다 (앞 대상에 맞춘 선수가 남지 않게)
     save(S);
   },
   // 선발 자리(slot 0~4)에 선수를 세운다. 이미 다른 자리의 선발이면 두 선수가 자리를 바꾼다.
@@ -718,7 +718,9 @@ const actions = {
   },
   matchTactic({ S }: Ctx, key: keyof Tactics, value: string) {
     const m = matchOf(S);
-    m.game.setTactics(m.side, { [key]: key === 'pace' ? Number(value) : value || null } as Partial<Tactics>);
+    const next = { [key]: key === 'pace' ? Number(value) : value || null } as Partial<Tactics>;
+    if (key === 'denyPlayerId') next.denyDefenderId = null; // 대상이 바뀌면 담당을 다시 고른다
+    m.game.setTactics(m.side, next);
   },
   finish({ S }: Ctx) {
     const m = matchOf(S);
