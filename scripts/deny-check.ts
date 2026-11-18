@@ -3,7 +3,7 @@
 //   대상은 상대 팀에서 평소 가장 많이 넣는 선수. 담당 수비수를 선발 다섯 명으로 바꿔 가며 승률, 대상의 득점,
 //   담당 수비수 본인의 득점·출전 시간을 본다. 교체는 양 팀 모두 자동이다.
 import { createCareer } from '../src/game/season.ts';
-import { composites, simulateGame } from '../src/game/engine.ts';
+import { denyOutlook, simulateGame } from '../src/game/engine.ts';
 import type { Tactics, Team } from '../src/game/types.ts';
 
 const N = Number(process.argv[2] ?? 600);
@@ -45,8 +45,8 @@ function study(aName: string, bName: string) {
   line('집중 마크 없음', base);
   line('담당 미지정(같은 자리)', run(a, b, { denyPlayerId: target.id }));
   for (const p of a.players.slice(0, 5)) {
-    const c = composites(p);
-    const label = `${p.name} (외곽${Math.round(c.defPerimeter * 100)}·골밑${Math.round(c.defInterior * 100)})`;
+    const o = denyOutlook(p, target);
+    const label = `${p.name} (효과${Math.round(o.power * 100)}${o.slower ? '·느림' : ''}${o.smaller ? '·작음' : ''})`;
     line(label, run(a, b, { denyPlayerId: target.id, denyDefenderId: p.id } as Partial<Tactics>), p.id);
   }
 }

@@ -252,8 +252,9 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const myRoster = S.career.teams[mine.id ?? '']?.players ?? [];
   const markerLabel = (p: PlayerView, benched: boolean) => {
     const src = myRoster.find((x) => x.id === p.id);
-    const skill = src && denyTarget ? ` · 수비 ${Math.round(denyOutlook(src, denyTarget).skill * 100)}` : '';
-    return `${p.name}${skill}${benched ? ' (벤치)' : ''}`;
+    const o = src && denyTarget ? denyOutlook(src, denyTarget) : null;
+    const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : ''].filter(Boolean).join('·') : '';
+    return `${p.name}${o ? ` · 마크 효과 ${Math.round(o.power * 100)}${miss ? ` (${miss})` : ''}` : ''}${benched ? ' [벤치]' : ''}`;
   };
   const markers = Object.fromEntries([
     ...mine.court.map((p) => [p.id, markerLabel(p, false)]),
@@ -425,7 +426,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
               </label>
               {t.denyPlayerId && (
-                <label className="hint" title="수비력이 높을수록 대상을 더 잘 묶습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
+                <label className="hint" title="마크 효과는 담당의 수비력과 대상의 공격력, 스피드·키 차이로 정해집니다. 대상보다 느리거나 작으면 수비력이 좋아도 잘 못 막습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
                   <Select options={markers} value={t.denyDefenderId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">같은 자리 선수</option></Select>
                 </label>
               )}
