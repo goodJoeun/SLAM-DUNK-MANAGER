@@ -46,7 +46,7 @@ function study(aName: string, bName: string) {
   line('담당 미지정(같은 자리)', run(a, b, { denyPlayerId: target.id }));
   for (const p of a.players.slice(0, 5)) {
     const o = denyOutlook(p, target);
-    const label = `${p.name} (효과${Math.round(o.power * 100)}${o.slower ? '·느림' : ''}${o.smaller ? '·작음' : ''})`;
+    const label = `${p.name} (효과${Math.round(o.power * 100)}${o.slower ? '·느림' : ''}${o.smaller ? '·작음' : ''}${o.weaker ? '·힘' : ''})`;
     line(label, run(a, b, { denyPlayerId: target.id, denyDefenderId: p.id } as Partial<Tactics>), p.id);
   }
 }
@@ -54,3 +54,5 @@ function study(aName: string, bName: string) {
 study('북산고', '능남고');
 study('북산고', '해남대부속고');
 study('능남고', '상양고');
+study('능남고', '북산고');
+study('해남대부속고', '북산고');

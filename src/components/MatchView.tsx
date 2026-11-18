@@ -253,7 +253,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const markerLabel = (p: PlayerView, benched: boolean) => {
     const src = myRoster.find((x) => x.id === p.id);
     const o = src && denyTarget ? denyOutlook(src, denyTarget) : null;
-    const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : ''].filter(Boolean).join('·') : '';
+    const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : '', o.weaker ? '힘 부족' : ''].filter(Boolean).join('·') : '';
     return `${p.name}${o ? ` · 마크 효과 ${Math.round(o.power * 100)}${miss ? ` (${miss})` : ''}` : ''}${benched ? ' [벤치]' : ''}`;
   };
   const markers = Object.fromEntries([
@@ -426,7 +426,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                 <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
               </label>
               {t.denyPlayerId && (
-                <label className="hint" title="마크 효과는 담당의 수비력과 대상의 공격력, 스피드·키 차이로 정해집니다. 대상보다 느리거나 작으면 수비력이 좋아도 잘 못 막습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
+                <label className="hint" title="마크 효과는 담당의 능력치를 대상의 능력치와 견줘 정합니다(수비 지능 대 공격 지능·주무기, 스피드, 키, 힘). 100이 대등한 수준이고, 확실히 앞서는 수비수가 아니면 큰 효과가 없습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
                   <Select options={markers} value={t.denyDefenderId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">같은 자리 선수</option></Select>
                 </label>
               )}

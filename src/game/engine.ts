@@ -14,7 +14,7 @@ import { makeRng } from './rng.ts';
 import type { Rng } from './rng.ts';
 import type {
   BasePlayer, Composites, Defense, EngineTeam, EventInfo, GameOptions, GameResult, GameView, LogEvent, PlayerView,
-  RatingKey, ShotType, StatLine, StepResult, Tactics,
+  RatingKey, Ratings, ShotType, StatLine, StepResult, Tactics,
 } from './types.ts';
 
 // ---- 조정 계수: 밸런스는 여기서만 만진다 ----
@@ -105,14 +105,20 @@ export const TUNING = {
   paceDrain: 0.18, // 우리 선수 체력 소모 배율 변화
   paceDrainOpp: 0.07, // 따라 뛰는 상대의 체력 소모 배율 변화
   // 집중 마크: 담당 수비수가 대상을 따라다닌다. 대상은 묶이지만 나머지가 조금 편해진다.
-  //   usage·make는 효과 배율(power)이 1일 때의 값. 배율은 담당과 대상의 상성으로 정해진다:
-  //     1 + skillSlope × (담당 수비력 - 대상 공격력 + skillEdge) - speedGap × (대상이 더 빠른 만큼) - sizeGap × (대상이 더 큰 만큼)
-  //   그래서 수비 능력치가 좋아도 느린 빅맨은 빠른 포워드를 못 따라가고, 작은 선수는 큰 선수를 못 막는다. 에이스일수록 묶기도 어렵다.
+  //   usage·make는 효과 배율(power)이 1일 때의 값. 배율은 담당의 능력치를 대상의 능력치와 항목별로 견줘 정한다 (denyPower):
+  //     수비 지능 대 공격 지능(iq), 수비 지능 대 주무기(skill), 스피드, 키, 힘. 대상이 골밑형이냐 외곽형이냐에 따라 항목의 무게가 다르다.
+  //     골밑형 = 포스트업이 중거리·3점보다 나은 선수 (돌파·덩크가 좋은 포워드는 외곽형으로 본다).
+  //     담당이 뒤지는 항목은 차이만큼 그대로 깎고, 앞서는 항목은 일부만 더한다: 지능·주무기는 surplus, 신체는 bodySurplus (크다고 스피드 차이가 메워지지는 않는다).
+  //   모든 항목이 같으면 배율은 even. 확실히 앞서는 수비수가 아니면 대상은 별로 묶이지 않고, 도우러 가는 동료 때문에 손해만 본다.
   //   담당은 수비에 힘을 쏟는 만큼 체력이 빨리 닳고(drain), 공격에서는 덜 쏘고(markerUsage) 덜 들어간다(markerMake).
   deny: {
     usage: 0.45, make: -0.11, othersMake: 0,
     othersHelp: 0.025, // 담당이 혼자 못 막으면 동료가 도우러 가야 해서 나머지가 더 편해진다 (효과 배율 1.0 부족당 성공률)
-    skillSlope: 2.5, skillEdge: 0.1, speedGap: 3, sizeGap: 1.6, powerMax: 1.4,
+    even: 1.1, surplus: 0.5, bodySurplus: 0.25, powerMax: 1.4,
+    // 항목별 무게 (능력치 100 차이당 배율 변화)
+    outside: { iq: 0.7, skill: 0.5, spd: 4.0, hgt: 1.6, str: 0.4 },
+    inside: { iq: 0.7, skill: 0.5, spd: 1.0, hgt: 2.5, str: 1.5 },
+    tired: 2, // 담당의 몸 상태(체력·컨디션)가 1.0 떨어질 때 깎이는 배율
     drain: 1.3, markerUsage: 0.9, markerMake: -0.015,
   },
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
@@ -161,23 +167,42 @@ export const startEnergy = (condition: number | null | undefined) => (condition 
 export const conditionPlay = (condition: number | null | undefined) => (condition == null ? 1 : 1 - TUNING.conditionPlay * (1 - condition / 100));
 
 // 집중 마크에 쓰는 수비력 (0~1): 대상이 골밑형이면 골밑 수비, 외곽형이면 외곽 수비로 막는다
-const insideLean = (c: Composites) => Math.max(c.rim, c.post) - Math.max(c.mid, c.three);
-type Body = { hgt: number; spd: number };
-// 집중 마크 효과 배율 (0 = 전혀 못 막음, 1 = 기준). sharp는 담당의 그 순간 몸 상태(체력·컨디션)에 따른 수비력 배율
-function denyPower(mc: Composites, mb: Body, tc: Composites, tb: Body, sharp = 1) {
-  const D = TUNING.deny;
-  const skill = (insideLean(tc) > 0 ? mc.defInterior : mc.defPerimeter) * sharp;
-  const threat = Math.max(tc.rim, tc.post, tc.mid, tc.three);
-  const faster = Math.max(0, tb.spd - mb.spd) / 100;
-  const bigger = Math.max(0, tb.hgt - mb.hgt) / 100;
-  return Math.max(0, Math.min(D.powerMax, 1 + D.skillSlope * (skill - threat + D.skillEdge) - D.speedGap * faster - D.sizeGap * bigger));
-}
-// 화면 안내용: 이 선수가 저 선수를 집중 마크할 때의 효과 배율과 미스매치 (체력·당일 컨디션은 빼고 본다)
-export function denyOutlook(marker: BasePlayer, target: BasePlayer) {
+// 집중 마크의 항목별 비교: 담당의 능력치 - 대상의 능력치 (+면 담당이 앞선다)
+function denyCompare(m: Ratings, t: Ratings, tc: Composites) {
+  const inside = tc.post > Math.max(tc.mid, tc.three); // 대상이 골밑형인가
   return {
-    power: denyPower(composites(marker), marker.ratings, composites(target), target.ratings),
-    slower: target.ratings.spd - marker.ratings.spd >= 15,
-    smaller: target.ratings.hgt - marker.ratings.hgt >= 15,
+    inside,
+    gaps: {
+      iq: m.diq - t.oiq,
+      skill: m.diq - Math.max(t.ins, t.dnk, t.mid, t.tp),
+      spd: m.spd - t.spd,
+      hgt: m.hgt - t.hgt,
+      str: m.str - t.str,
+    },
+  };
+}
+// 집중 마크 효과 배율 (0 = 전혀 못 막음, even = 모든 항목이 대등). sharp는 담당의 그 순간 몸 상태(체력·컨디션)에 따른 수비력 배율
+function denyPower(m: Ratings, t: Ratings, tc: Composites, sharp = 1) {
+  const D = TUNING.deny;
+  const { inside, gaps } = denyCompare(m, t, tc);
+  const w = inside ? D.inside : D.outside;
+  let power = D.even - D.tired * (1 - sharp);
+  for (const k of Object.keys(gaps) as (keyof typeof gaps)[]) {
+    const g = gaps[k] / 100;
+    power += w[k] * (g > 0 ? g * (k === 'iq' || k === 'skill' ? D.surplus : D.bodySurplus) : g);
+  }
+  return Math.max(0, Math.min(D.powerMax, power));
+}
+// 화면 안내용: 이 선수가 저 선수를 집중 마크할 때의 효과 배율과 항목별 차이 (체력·당일 컨디션은 빼고 본다)
+export function denyOutlook(marker: BasePlayer, target: BasePlayer) {
+  const tc = composites(target);
+  const { inside, gaps } = denyCompare(marker.ratings, target.ratings, tc);
+  return {
+    power: denyPower(marker.ratings, target.ratings, tc),
+    inside, gaps,
+    slower: gaps.spd <= -15,
+    smaller: gaps.hgt <= -15,
+    weaker: inside && gaps.str <= -15,
   };
 }
 
@@ -223,7 +248,7 @@ interface GamePlayer {
   name: string;
   pos: number;
   c: Composites;
-  body: Body; // 키·스피드 원본 능력치 (집중 마크의 미스매치 판단)
+  raw: Ratings; // 원본 능력치 (집중 마크에서 상대와 항목별로 견준다)
   ovr: number;
   rank: number; // 교체 판단에 쓰는 가치. 선발은 감독이 고른 선수이므로 벤치보다 낮게 보지 않는다
   form: number; // 당일 컨디션 보정 (일관성에 따른 기복 + 사기)
@@ -269,7 +294,7 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
     // 숨겨진 능력치: 일관성이 낮을수록 그날 컨디션이 크게 흔들린다
     const consistency = (p.hidden?.consistency ?? 50) / 100;
     return {
-      id: p.id, name: p.name, pos: p.pos, c: composites(prepared(p, prep)), body: { hgt: p.ratings.hgt, spd: p.ratings.spd }, ovr: overall(p),
+      id: p.id, name: p.name, pos: p.pos, c: composites(prepared(p, prep)), raw: p.ratings, ovr: overall(p),
       rank: i < 5 ? Math.max(overall(p), benchBest * 1.05) : overall(p),
       form: rng.gauss(0, T.formSd + T.formInconsistency * (1 - consistency)) + (T.moraleForm * ((p.morale ?? 60) - 60)) / 40,
       clutch: p.trait === 'clutch',
@@ -324,7 +349,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   // 집중 마크 상황. 대상이 코트에 있을 때만 성립한다.
   //   담당(marker): 감독이 지정한 선수가 코트에 있으면 그 선수, 아니면 대상과 같은 자리의 선수.
   //   지정한 담당이 다른 자리에 있으면 대상과 같은 자리의 선수와 맡을 상대를 서로 바꾼다.
-  //   power: 담당과 대상의 상성(수비력 대 공격력, 스피드·키 차이, 담당의 체력)에 따른 효과 배율
+  //   power: 담당과 대상의 능력치를 항목별로 견준 효과 배율 (담당이 지치면 떨어진다)
   function denyOf(off: GameTeam, def: GameTeam) {
     const id = def.tactics.denyPlayerId;
     if (!id) return null;
@@ -335,7 +360,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     const target = off.court[targetSlot];
     const marker = def.court[markerSlot];
     const sharp = eff(marker, 'defPerimeter') / (marker.c.defPerimeter || 1); // 지치거나 컨디션이 나쁘면 덜 막는다
-    const power = denyPower(marker.c, marker.body, target.c, target.body, sharp);
+    const power = denyPower(marker.raw, target.raw, target.c, sharp);
     return { target, marker, targetSlot, markerSlot, power };
   }
   type Deny = ReturnType<typeof denyOf>;
