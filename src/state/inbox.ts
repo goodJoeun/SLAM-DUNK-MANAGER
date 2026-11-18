@@ -83,7 +83,7 @@ export function welcomeMessage(career: Career): MessageDraft {
       `${team.name} 농구부를 맡아 주셔서 감사합니다. 학교의 기대 수준은 ${team.prestige}입니다.`,
       '매일 훈련 메뉴를 정하고, 경기 날에는 벤치에서 직접 지휘하거나 코치진에게 맡길 수 있습니다.',
       '한 해에 인터하이, 국민체육대회, 윈터컵 세 대회가 열립니다.',
-      `올해 목표는 "${seasonGoal(career).label}"입니다. 세 대회 중 한 번이라도 이루면 됩니다. 연말에 달성 여부에 따라 학교의 지원(학교 수준)이 달라지고, 학교 수준은 신입생의 질을 좌우합니다.`,
+      `올해 목표는 "${seasonGoal(career).label}"입니다. ${seasonGoal(career).times > 1 ? '한 번의 호성적으로는 부족하고, 세 대회 중 두 번은 이 성적을 내야 합니다.' : '세 대회 중 한 번이라도 이루면 됩니다.'} 연말에 달성 여부에 따라 학교의 지원(학교 수준)이 달라지고, 학교 수준은 신입생의 질을 좌우합니다.`,
     ],
   };
 }
@@ -251,10 +251,10 @@ export function buildMessages(
       out.push({
         ...when, kind: 'season', from: '교장',
         title: `${y.year + 1}년차 목표: ${seasonGoal(career).label}`,
-        summary: '세 대회 중 한 번이라도 이루면 달성입니다.',
+        summary: seasonGoal(career).times > 1 ? '세 대회 중 두 번 이상 이뤄야 달성입니다.' : '세 대회 중 한 번이라도 이루면 달성입니다.',
         body: [
-          `새 학년의 목표는 "${seasonGoal(career).label}"입니다. 지금 학교 수준(${career.teams[me].prestige})과 현 내 순위를 보고 정했습니다.`,
-          '인터하이, 국민체육대회, 윈터컵 중 한 번이라도 이 성적에 닿으면 됩니다. 연말에 달성 여부로 학교의 지원과 신임이 달라집니다.',
+          `새 학년의 목표는 "${seasonGoal(career).label}"입니다. 지금 선수단의 전력과 학교 수준(${career.teams[me].prestige})을 현 내 다른 학교와 견주어 정했습니다.`,
+          `인터하이, 국민체육대회, 윈터컵 중 ${seasonGoal(career).times > 1 ? '두 번 이상' : '한 번이라도'} 이 성적에 닿으면 됩니다. 연말에 달성 여부로 학교의 지원과 신임이 달라집니다.`,
         ],
       });
     }

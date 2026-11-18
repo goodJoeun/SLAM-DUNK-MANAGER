@@ -254,7 +254,7 @@ export default function HomeView({ S, act }: ViewProps) {
           <div className="notice" style={{ marginTop: 8 }}>
             <b>올해 목표</b> · {goal.label}<br />
             <span className="muted">
-              {goal.achieved ? <span className="good">달성 ({goal.bestLabel})</span> : goal.bestLabel ? `아직 미달 · 올해 최고 성적: ${goal.bestLabel}` : '아직 끝난 대회가 없습니다'}
+              {goal.achieved ? <span className="good">달성 ({goal.bestLabel})</span> : goal.bestLabel ? `아직 미달${goal.times > 1 ? ` (${goal.hits}/${goal.times}번)` : ''} · 올해 최고 성적: ${goal.bestLabel}` : '아직 끝난 대회가 없습니다'}
               {' · '}교장의 신임 {goal.trust}
             </span>
           </div>

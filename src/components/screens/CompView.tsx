@@ -1,6 +1,6 @@
 import { standings } from '@/game/career/competition';
-import { SEASON } from '@/game/career/season';
-import type { Career, Competition, Match, Stage } from '@/game/types';
+import { SEASON, qualifiersFor } from '@/game/career/season';
+import type { Career, Competition, CompetitionKey, Match, Stage } from '@/game/types';
 import { CalendarStrip, PageTitle, Panel, ResultList, SchoolName, isUser, linesOf, teamName } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
@@ -51,8 +51,8 @@ export default function CompView({ S, act }: ViewProps) {
         <Panel title={`${career.year}년차 일정`}><CalendarStrip career={career} /></Panel>
         <Panel title="대회 방식">
           <ul className="lines">
-            {Object.values(SEASON.competitions).map((x) => (
-              <li key={x.name}><b>{x.name}</b><span className="muted">{x.format.map((f) => STAGE[f]).join(' → ')} → 전국 대회 · 현 대표 {x.qualifiers}곳</span></li>
+            {(Object.keys(SEASON.competitions) as CompetitionKey[]).map((key) => ({ key, ...SEASON.competitions[key] })).map((x) => (
+              <li key={x.name}><b>{x.name}</b><span className="muted">{x.format.map((f) => STAGE[f]).join(' → ')} → 전국 대회 · 현 대표 {qualifiersFor(career, x.key)}곳</span></li>
             ))}
           </ul>
         </Panel>

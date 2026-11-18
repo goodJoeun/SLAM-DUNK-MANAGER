@@ -55,6 +55,7 @@ export interface GameState {
   lastSlot: number; // 표지의 "이어하기"가 여는 칸 (없으면 0)
   screen: ScreenKey;
   startSeed: number;
+  startPrefecture: string | null; // 학교 선택 화면에서 고른 현 (null이면 기본 현)
   nameStyle: NameStyle;
   program: ProgramKey;
   intensity: IntensityKey;
@@ -190,6 +191,7 @@ const initialState = (): GameState => {
     slots,
     screen: 'home',
     startSeed: randomSeed(),
+    startPrefecture: null,
     nameStyle: 'kr',
     program: 'shooting',
     intensity: 'normal',
@@ -405,9 +407,11 @@ const actions = {
   namestyle({ S }: Ctx) { S.nameStyle = S.nameStyle === 'kr' ? 'jp' : 'kr'; },
   // 학교 선택 화면: 무명 학교의 선수 구성을 새로 뽑는다
   reroll({ S }: Ctx) { if (!S.career) S.startSeed = randomSeed(); },
+  // 학교 선택 화면: 다른 현의 학교 목록으로 바꾼다
+  prefecture({ S }: Ctx, name: string) { if (!S.career) S.startPrefecture = name; },
   start({ S }: Ctx, index: number) {
     if (!S.slot || slotInfo(S.slot)) return; // 빈 칸이 있어야 시작한다 (다른 게임을 덮어쓰지 않는다)
-    const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle });
+    const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle, prefecture: S.startPrefecture });
     Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
     deliver(S, [welcomeMessage(career), recruitMessage(career)]);
     removeKey(matchKey(S.slot));

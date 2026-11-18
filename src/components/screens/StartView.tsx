@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GOAL_LABEL, createCareer, goalTierFor } from '@/game/career/season';
+import { createCareer, goalFor, goalLabel, nationalRivalOveralls, playablePrefectures, qualifiersFor } from '@/game/career/season';
 import { teamOverall } from '@/game/team/school';
 import { overall } from '@/game/match/engine';
 import { SLOTS } from '@/state/useGame';
@@ -7,41 +7,62 @@ import type { Act, GameState } from '@/state/useGame';
 import { Attr, Crest, NAME_STYLE, PosBadge, Seg, Stars, clubVars } from '@/components/shared/ui';
 import type { Career } from '@/game/types';
 
-// 카드에 적는 짧은 목표 (자세한 문장은 GOAL_LABEL)
+// 카드에 적는 짧은 목표 (자세한 문장은 goalLabel)
 const GOAL_SHORT = ['', '현 예선 8강', '현 예선 최종 단계', '전국 대회 진출', '전국 8강', '전국 우승'];
 // 목표를 이루려면 현 안에서 대략 몇 위 안에 들어야 하는가
 const GOAL_NEEDS = [16, 8, 4, 2, 2, 1];
+const PREFECTURES = Object.fromEntries(playablePrefectures('original').map((name) => [name, name]));
 const DIFFICULTY = ['쉬움', '보통', '어려움', '매우 어려움'];
 const SORTS = { base: '기본', ovr: '전력순', easy: '쉬운 순', hard: '어려운 순' };
 type Sort = keyof typeof SORTS;
 
-// 학교를 고를 때 보여 줄 정보. 난이도는 "지금 전력 순위가 올해 목표에 얼마나 못 미치는가"로 정한다.
-function schoolInfo(p: Career, id: string) {
+// 목표 순위 밖의 가장 강한 학교보다 전력이 이만큼 앞서면, 순위에 여유가 없어도(현 내 1위라 더 올라갈 데가 없어도) 쉬운 것으로 본다
+const SAFE_MARGIN = 5;
+// 전국 무대가 목표일 때: 전국에서의 전력 순위가 이 안이면 쉬움 / 보통 / 어려움
+const NATIONAL_RANKS = [4, 8, 16];
+
+// 학교를 고를 때 보여 줄 정보. 난이도는 "지금 전력이 올해 목표에 얼마나 못 미치는가"로 정한다.
+//   현 안에서  목표를 이루는 데 필요한 순위와 지금 전력 순위의 차이. 필요한 순위 밖의 학교를 크게 앞서면 쉬움
+//   전국에서   목표가 전국 8강 이상이면 다른 현 대표들 사이에서의 전력 순위도 본다. 둘 중 어려운 쪽이 난이도다
+function schoolInfo(p: Career, id: string, rivals: number[]) {
   const t = p.teams[id];
   const ovr = teamOverall(t);
-  const rank = p.regionIds.filter((x) => teamOverall(p.teams[x]) > ovr).length + 1;
-  const tier = goalTierFor(p, id);
-  const short = rank - GOAL_NEEDS[tier]; // 목표 순위까지 올라가야 할 계단 수
-  let level = short <= -2 ? 0 : short <= 1 ? 1 : short <= 4 ? 2 : 3;
-  if (tier >= 4) level = Math.max(level, 1); // 전국 무대가 목표면 현 내 1위라도 쉽지 않다
+  const local = p.regionIds.map((x) => teamOverall(p.teams[x])).sort((a, b) => b - a);
+  const rank = local.filter((x) => x > ovr).length + 1;
+  const goal = goalFor(p, id);
+  const tier = goal.tier;
+  const goalShort = GOAL_SHORT[tier] + (goal.times > 1 ? ' 2회' : ''); // 세 대회 중 두 번 이뤄야 하는 목표
+  const needs = tier >= 3 ? qualifiersFor(p, 'interhigh') : GOAL_NEEDS[tier]; // 전국에 나가려면 현 대표 자리 안에 들어야 한다
+  const short = rank - needs; // 목표 순위까지 올라가야 할 계단 수
+  const margin = ovr - (local[needs] ?? 0); // 목표 순위 바로 밖의 학교보다 얼마나 앞서는가
+  const safe = short <= -2 || (short <= 0 && margin >= SAFE_MARGIN);
+  let level = safe ? 0 : short <= 1 ? 1 : short <= 4 ? 2 : 3;
+  const nationalRank = rivals.filter((x) => x > ovr).length + 1;
+  const nationalLevel = tier >= 4 ? NATIONAL_RANKS.filter((r) => nationalRank > r).length : 0;
+  level = Math.max(level, nationalLevel, goal.times > 1 ? 1 : 0); // 두 번 이뤄야 하는 목표는 전력에 여유가 있어도 쉽지 않다
   const ace = [...t.players].sort((a, b) => overall(b) - overall(a))[0];
   const top5 = [...t.players].sort((a, b) => overall(b) - overall(a)).slice(0, 5);
-  const why = short <= -2
-    ? `전력이 현 내 ${rank}위로, 올해 목표(${GOAL_SHORT[tier]})에 여유가 있습니다.`
-    : short <= 0
-    ? `전력이 현 내 ${rank}위로, 올해 목표(${GOAL_SHORT[tier]})에 닿을 만한 수준입니다.`
-    : `전력은 현 내 ${rank}위인데, 올해 목표(${GOAL_SHORT[tier]})는 ${GOAL_NEEDS[tier]}위 안에 들어야 이룰 수 있습니다.`;
-  return { t, ovr, rank, tier, level, ace, why, seniors: top5.filter((x) => x.year === 3).length }; // 상위 5명 중 내년에 졸업하는 선수
+  const national = tier >= 4 ? ` 전국에서는 전력 ${nationalRank}위입니다.` : '';
+  const why = (short > 0
+    ? `전력은 현 내 ${rank}위인데, 올해 목표(${goalShort})는 ${needs}위 안에 들어야 이룰 수 있습니다.`
+    : safe
+    ? `전력이 현 내 ${rank}위로, 올해 목표(${goalShort})에 여유가 있습니다.`
+    : `전력이 현 내 ${rank}위로, 올해 목표(${goalShort})에 닿을 만한 수준입니다.`) + national;
+  return { t, ovr, rank, tier, goal, goalShort, level, ace, why, seniors: top5.filter((x) => x.year === 3).length }; // 상위 5명 중 내년에 졸업하는 선수
 }
 const prestigeStars = (prestige: number) => Math.max(0.5, Math.min(5, Math.round(((prestige - 35) / 7) * 2) / 2));
 
 export default function StartView({ S, act }: { S: GameState; act: Act }) {
-  const { startSeed, nameStyle } = S;
-  const p = useMemo(() => createCareer({ seed: startSeed, dataset: 'original', nameStyle }), [startSeed, nameStyle]);
+  const { startSeed, nameStyle, startPrefecture } = S;
+  const p = useMemo(() => createCareer({ seed: startSeed, dataset: 'original', nameStyle, prefecture: startPrefecture }), [startSeed, nameStyle, startPrefecture]);
+  const spots = qualifiersFor(p, 'interhigh');
   // 학교를 누르면 바로 시작하지 않고, 한 번 확인한다
   const [picked, setPicked] = useState<number | null>(null);
   const chosen = picked == null ? null : p.teams[p.regionIds[picked]];
-  const info = useMemo(() => Object.fromEntries(p.regionIds.map((id) => [id, schoolInfo(p, id)])), [p]);
+  const info = useMemo(() => {
+    const rivals = nationalRivalOveralls(p);
+    return Object.fromEntries(p.regionIds.map((id) => [id, schoolInfo(p, id, rivals)]));
+  }, [p]);
   const ci = chosen ? info[chosen.id] : null;
   // 학교를 고르면 확인 창의 시작 버튼으로 초점을 옮긴다 (키보드로 이어서 누를 수 있게)
   const startRef = useRef<HTMLButtonElement>(null);
@@ -66,6 +87,11 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
           <span className="muted">이름 표기</span>
           <Seg options={NAME_STYLE} value={nameStyle} onChange={(v) => { if (v !== nameStyle) act('namestyle'); }} />
           <span className="hint">학교와 선수 이름을 한국어판 또는 일본 원작 이름으로 보여 줍니다. 같은 학교·같은 선수이고, 시작한 뒤에는 바꿀 수 없습니다.</span>
+        </div>
+        <div className="row">
+          <span className="muted">현</span>
+          <Seg options={PREFECTURES} value={p.prefecture} onChange={(v) => { if (v !== p.prefecture) { setPicked(null); act('prefecture', v); } }} />
+          <span className="hint">원작에 나오는 학교가 있는 현입니다. {p.prefecture}에서는 인터하이에 {spots}곳, 국민체육대회와 윈터컵에 1곳이 전국 대회에 나갑니다.</span>
         </div>
       </div>
       {S.slots.some(Boolean) && (
@@ -105,7 +131,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
               난이도 <b>{DIFFICULTY[ci.level]}</b> · {ci.why}
             </p>
             <p className="muted" style={{ margin: '2px 0 0' }}>
-              <span className="hide-phone">올해 목표: {GOAL_LABEL[ci.tier]}. </span>시작한 뒤에는 학교를 바꿀 수 없습니다.
+              <span className="hide-phone">올해 목표: {goalLabel(ci.goal)}. </span>시작한 뒤에는 학교를 바꿀 수 없습니다.
             </p>
           </div>
           <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
@@ -115,7 +141,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
       <div className="school-grid">
         {order.map((i) => {
           const id = p.regionIds[i];
-          const { t, ovr, rank, tier, level, ace, why, seniors } = info[id];
+          const { t, ovr, rank, goalShort, level, ace, why, seniors } = info[id];
           const stars = t.players.filter((x) => x.fixed).sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((x) => x.name).join(', ');
           return (
             <button key={id} className={`school-card ${picked === i ? 'on' : ''}`} aria-pressed={picked === i} style={clubVars(t.name)} onClick={() => setPicked(i)}>
@@ -132,7 +158,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
                 <span><small>학교 수준</small><Stars value={prestigeStars(t.prestige)} /></span>
                 <span title={why}><small>난이도</small><b className={`diff d${level}`}>{DIFFICULTY[level]}</b></span>
               </div>
-              <div className="sc-goal"><span><small>올해 목표</small>{GOAL_SHORT[tier]}</span><span title="능력치 상위 5명 중 올해를 끝으로 졸업하는 선수"><small>주축 중 3학년</small>{seniors}명</span></div>
+              <div className="sc-goal"><span><small>올해 목표</small>{goalShort}</span><span title="능력치 상위 5명 중 올해를 끝으로 졸업하는 선수"><small>주축 중 3학년</small>{seniors}명</span></div>
             </button>
           );
         })}

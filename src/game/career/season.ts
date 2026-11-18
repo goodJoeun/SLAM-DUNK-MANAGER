@@ -123,25 +123,29 @@ const rngFor = (state: Career) => makeRng((state.seed + Math.imul(++state.counte
 
 // dataset: 'original'이면 src/game/data/original.ts의 학교·선수로 시작한다. 생략하면 전부 무작위 생성.
 // nameStyle: 'kr'(한국어판 이름) | 'jp'(원작 이름)
-export function createCareer({ seed = 1, userTeamIndex = 0, dataset = null, nameStyle = null }: {
+// prefecture: 내 학교가 속한 현 (playablePrefectures 중 하나). 생략하면 데이터의 기본 현. userTeamIndex는 그 현 안에서의 순번이다.
+export function createCareer({ seed = 1, userTeamIndex = 0, dataset = null, nameStyle = null, prefecture = null }: {
   seed?: number;
   userTeamIndex?: number;
   dataset?: DatasetKey | null;
   nameStyle?: NameStyle | null;
+  prefecture?: string | null;
 } = {}): Career {
   const data = (dataset ? DATASETS[dataset] : null) ?? null;
+  const region = data?.regions?.find((r) => r.prefecture === prefecture) ?? null;
+  const specs = region?.schools ?? data?.schools;
   const state: Career = {
     seed, counter: 0, nextId: 1, year: 1, finished: false,
     dataset: data ? dataset : null, nameStyle: data ? (nameStyle ?? 'kr') : nameStyle,
-    prefecture: data?.prefecture ?? SEASON.prefecture,
+    prefecture: region?.prefecture ?? data?.prefecture ?? SEASON.prefecture,
     teams: {}, regionIds: [], guestIds: [], userTeamId: '', prep: {},
     results: [], // 지금까지 끝난 대회 기록
     comp: null, stats: {}, yearPoints: {}, calendar: [], dayIndex: 0, // startSeason이 채운다
   };
   const rng = rngFor(state);
   for (let i = 0; i < SEASON.regionSize; i++) {
-    const team = data
-      ? buildSchool(rng, state, data.schools[i])
+    const team = specs
+      ? buildSchool(rng, state, specs[i])
       : createSchool(rng, state, `제${i + 1}고교`, Math.round(clamp(rng.gauss(50, 5), 35, 65)));
     state.teams[team.id] = team;
     state.regionIds.push(team.id);
@@ -151,8 +155,40 @@ export function createCareer({ seed = 1, userTeamIndex = 0, dataset = null, name
   return state;
 }
 
+// 내 학교를 고를 수 있는 현 (데이터의 기본 현이 맨 앞)
+export function playablePrefectures(dataset: DatasetKey): string[] {
+  const data = DATASETS[dataset];
+  return [data.prefecture, ...(data.regions ?? []).map((r) => r.prefecture)];
+}
+
+// 전국 대회에서 만나는 다른 현 대표의 명세와, 인터하이 본선 대진표에서 우리 현 대표가 들어갈 자리(현 1위부터).
+// 가나가와현 밖의 학교를 맡으면 가나가와현 대표(해남·북산)도 다른 현 대표로 나온다.
+function nationalField(state: Career) {
+  const data = state.dataset ? DATASETS[state.dataset] : null;
+  if (!data) return { guests: [], slots: [] as number[] };
+  const mine = (spec: { prefecture?: string }) => (spec.prefecture ?? data.prefecture) === state.prefecture;
+  const all = [...data.schools.filter((spec) => spec.draw), ...data.nationals];
+  const slots = all.filter((spec) => mine(spec) && spec.draw).sort((a, b) => b.prestige - a.prestige).map((spec) => spec.draw!);
+  return { guests: all.filter((spec) => !mine(spec)), slots };
+}
+
+// 이 대회에서 우리 현이 전국 대회에 내보내는 학교 수.
+// 원작 데이터의 인터하이는 원작 대진표를 따른다: 가나가와·오사카·아이치처럼 자리가 둘인 현은 2곳, 아키타처럼 하나인 현은 1곳.
+export function qualifiersFor(state: Career, key: CompetitionKey) {
+  const slots = nationalField(state).slots.length;
+  return key === 'interhigh' && slots ? Math.min(slots, 2) : SEASON.competitions[key].qualifiers;
+}
+
+// 전국 대회에서 만날 다른 현 대표들의 전력 (학교 선택 화면에서 난이도를 가늠할 때 쓴다). state는 건드리지 않는다
+export function nationalRivalOveralls(state: Career): number[] {
+  const copy = structuredClone(state);
+  const rng = rngFor(copy);
+  return nationalField(copy).guests.map((spec) => teamOverall(buildSchool(rng, copy, spec)));
+}
+
 // ---------- 시즌 목표 ----------
-// 교장은 학교 수준 순위에 맞춰 올해 목표를 준다. 세 대회 중 한 번이라도 그 성적에 닿으면 달성이다.
+// 교장은 지금 팀 전력(과 학교 수준)의 현 내 순위에 맞춰 올해 목표를 준다: 세 대회 중 times번 이상 tier 등급의 성적.
+// 강한 학교일수록 한 번의 호성적이 아니라 꾸준한 성적을 요구받는다 (한 번이면 되는 목표는 손을 놓고 있어도 이뤄진다).
 // 연말에 달성 여부로 학교 수준(다음 신입생의 질)과 교장의 신임이 달라진다.
 export const TIER_LABEL = ['조별 리그·초반 탈락', '조 2위 또는 8강', '현 예선 최종 단계', '전국 대회 진출', '전국 8강 이상', '전국 우승'];
 export const GOAL_LABEL = ['', '현 예선에서 조 2위 이내 또는 8강', '현 예선 최종 단계(결승 리그·결승) 진출', '전국 대회 진출', '전국 8강 이상', '전국 우승'];
@@ -163,30 +199,49 @@ const GOAL_EFFECT: Record<number, { verdict: string; prestige: number; trust: nu
   [-2]: { verdict: '목표에 크게 못 미쳤습니다. 농구부 지원이 줄어듭니다.', prestige: -2, trust: -20 },
 };
 
+// 기대치: 지금 선수단의 전력이 대부분이고, 학교 수준(명성)이 조금 더해진다
+export const GOAL = { strength: 0.7, prestige: 0.3, eliteOverall: 64 };
+export interface Goal { tier: number; times: number }
+export const goalLabel = (g: { tier: number; times?: number }) => ((g.times ?? 1) >= 2 ? `세 대회 중 두 번 이상 ${GOAL_LABEL[g.tier]}` : GOAL_LABEL[g.tier]);
+
 // id를 주면 그 학교를 맡았을 때의 목표를 미리 알려 준다 (학교 선택 화면)
-export function goalTierFor(state: Career, id: string = state.userTeamId) {
-  const rank = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige).indexOf(id) + 1;
-  if (rank === 1 && state.teams[id].prestige >= 64) return 4; // 현 내 최강의 명문은 전국에서의 성적을 요구받는다
-  return rank <= 2 ? 3 : rank <= 5 ? 2 : 1;
+// 감독 수준별 3년 캠페인(scripts/balance/difficulty.ts)에서 손을 놓으면 4~5할, 잘 준비하면 7~8할쯤 이루는 선으로 잡았다.
+export function goalFor(state: Career, id: string = state.userTeamId): Goal {
+  const expect = (t: Team) => GOAL.strength * teamOverall(t) + GOAL.prestige * t.prestige;
+  const mine = expect(state.teams[id]);
+  const rank = state.regionIds.filter((x) => expect(state.teams[x]) > mine).length + 1;
+  if (rank === 1) return { tier: teamOverall(state.teams[id]) >= GOAL.eliteOverall ? 4 : 3, times: 2 }; // 현 내 최강: 전국급 전력이면 전국에서의 성적까지
+  if (rank === 2) return qualifiersFor(state, 'interhigh') >= 2 ? { tier: 3, times: 1 } : { tier: 2, times: 2 }; // 전국 대회 자리가 하나뿐인 현의 2인자에게 전국 진출을 요구하지는 않는다
+  if (rank <= 5) return { tier: 2, times: 2 };
+  if (rank <= 8) return { tier: 1, times: 2 };
+  return { tier: 1, times: 1 };
 }
+export const goalTierFor = (state: Career, id: string = state.userTeamId) => goalFor(state, id).tier;
 
 // 올해 목표와 지금까지의 진행 (예전 저장에는 목표가 없으므로 그 자리에서 정한다)
 export function seasonGoal(state: Career) {
-  state.goal ??= { tier: goalTierFor(state) };
+  state.goal ??= goalFor(state);
   const best = state.bestTier ?? null;
+  const times = state.goal.times ?? 1;
+  const tiers = yearTiers(state);
+  const hits = tiers.filter((t) => t >= state.goal!.tier).length; // 목표 성적에 닿은 대회 수
   return {
-    tier: state.goal.tier, label: GOAL_LABEL[state.goal.tier],
+    tier: state.goal.tier, times, hits, label: goalLabel(state.goal),
     best, bestLabel: best == null ? null : state.bestFinish ?? TIER_LABEL[best], // 실제 결과를 그대로 보여 준다 (예전 저장에는 없다)
-    achieved: best != null && best >= state.goal.tier,
+    achieved: hits >= times,
+    reached: [...tiers].sort((a, b) => b - a)[times - 1] ?? 0, // times번째로 좋은 성적: 이 등급까지는 요구한 횟수만큼 해냈다
     trust: state.trust ?? 50,
   };
 }
+// 올해 끝난 대회들의 성적 등급 (예전 저장에는 가장 좋은 성적만 남아 있다)
+const yearTiers = (state: Career) => state.yearTiers ?? (state.bestTier != null ? [state.bestTier] : []);
 
 function reviewYear(state: Career): YearReview {
   const goal = seasonGoal(state);
   const best = goal.best ?? 0;
-  const diff = best - goal.tier;
-  const grade = diff >= 1 ? 2 : diff === 0 ? 1 : diff === -1 ? -1 : -2;
+  const diff = goal.reached - goal.tier;
+  // 요구한 횟수를 못 채웠어도 한 번은 목표 성적에 닿았으면 '조금 못 미침'으로 본다
+  const grade = diff >= 1 ? 2 : diff === 0 ? 1 : diff === -1 || best >= goal.tier ? -1 : -2;
   const effect = GOAL_EFFECT[grade];
   state.trust = clamp((state.trust ?? 50) + effect.trust, 0, 100);
   return { goal: goal.label, best: goal.bestLabel ?? TIER_LABEL[best], grade, verdict: effect.verdict, prestigeBonus: effect.prestige, trust: state.trust };
@@ -242,7 +297,8 @@ function resolveRecruiting(state: Career, rng: Rng) {
 
 function startSeason(state: Career) {
   const rng = rngFor(state);
-  state.goal = { tier: goalTierFor(state) };
+  state.goal = goalFor(state);
+  state.yearTiers = [];
   delete state.bestTier;
   delete state.bestFinish;
   state.prospects = makeProspects(state, rng);
@@ -304,7 +360,7 @@ function startCompetition(state: Career, key: CompetitionKey, rng: Rng) {
   state.guestIds = [];
   const C = SEASON.competitions[key];
   const c: Competition = {
-    key, name: C.name, format: C.format, qualifiers: C.qualifiers,
+    key, name: C.name, format: C.format, qualifiers: qualifiersFor(state, key),
     stage: C.format[0], formatIndex: 0,
     groups: null, groupPlayed: 0, league: null, bracket: [], runnerUp: null,
     rounds: [], // 치른 라운드 기록
@@ -532,12 +588,12 @@ function playRound(state: Career, ctx: DayContext): Round | null {
 }
 
 // 전국 대회: 우리 현 대표 + 다른 현 대표들.
-//   원작 데이터의 인터하이  원작 대진표 그대로 59개교. 현 1위·2위가 해남·북산의 자리에 들어간다.
+//   원작 데이터의 인터하이  원작 대진표 그대로 59개교. 우리 현 대표가 원작에서 그 현 대표가 있던 자리에 들어간다.
 //   그 밖의 대회           16개교를 추첨한다. 같은 현의 두 팀은 결승에서만 만난다.
 function setupNational(state: Career, rng: Rng, reps: string[]) {
   const c = state.comp!;
   const data = state.dataset ? DATASETS[state.dataset] : null;
-  const named = data?.nationals ?? [];
+  const { guests: named, slots } = nationalField(state);
   const addGuest = (team: Team) => {
     team.tactics = pickTactics(rng, team);
     state.teams[team.id] = team;
@@ -548,9 +604,9 @@ function setupNational(state: Career, rng: Rng, reps: string[]) {
   c.stage = 'national';
 
   const draw = data?.draw;
-  if (draw && c.key === 'interhigh' && reps.length === draw.home.length) {
+  if (draw && c.key === 'interhigh' && reps.length === slots.length) {
     const slot: Record<number, string> = {};
-    draw.home.forEach((no, i) => { slot[no] = reps[i]; });
+    slots.forEach((no, i) => { slot[no] = reps[i]; });
     for (const spec of named) if (spec.draw) slot[spec.draw] = addGuest(buildSchool(rng, state, spec));
     c.bracket = [];
     for (let no = 1; no <= draw.size; no++) {
@@ -580,6 +636,7 @@ function finishCompetition(state: Career) {
   const c = state.comp!;
   c.stage = 'done';
   const tier = c.tier[state.userTeamId] ?? 0;
+  state.yearTiers = [...yearTiers(state), tier];
   if (state.bestTier == null || tier > state.bestTier) {
     state.bestTier = tier;
     state.bestFinish = c.finish[state.userTeamId];

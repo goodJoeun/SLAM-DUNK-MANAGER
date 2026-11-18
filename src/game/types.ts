@@ -369,7 +369,8 @@ export interface Career {
   calendar: CalendarDay[];
   dayIndex: number;
   prep?: Record<string, number>; // 다음 공식전 상대별 분석 일수 (대회가 바뀌면 비운다)
-  goal?: { tier: number }; // 교장이 정한 올해 목표 (대회 성적 등급). 세 대회 중 한 번이라도 이루면 달성
+  goal?: { tier: number; times?: number }; // 교장이 정한 올해 목표: 세 대회 중 times번(없으면 1) 이상 tier 등급의 성적
+  yearTiers?: number[]; // 올해 끝난 대회들에서 우리 학교의 성적 등급 (끝난 순서)
   bestTier?: number; // 올해 끝난 대회 중 우리 학교의 가장 좋은 성적 등급
   bestFinish?: string; // 그 성적을 낸 대회의 실제 결과 (예: "인터하이 현 예선 C조 2위")
   trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
@@ -498,7 +499,7 @@ export interface SchoolSpec {
   prestige: number;
   players: PlayerSpec[];
   benchLevel?: number;
-  prefecture?: string;
+  prefecture?: string; // 없으면 데이터의 기본 현 (Dataset.prefecture)
   draw?: number; // 전국 대회 대진표의 추첨 번호 (Dataset.draw 참고)
 }
 
@@ -506,6 +507,13 @@ export interface Dataset {
   prefecture: string;
   schools: SchoolSpec[];
   nationals: SchoolSpec[];
-  // 인터하이 본선의 고정 대진표. size 참가 학교 수, home 우리 현 1위·2위의 추첨 번호, byes 1회전을 쉬는 번호
-  draw?: { size: number; home: [number, number]; byes: number[] };
+  // 인터하이 본선의 고정 대진표. size 참가 학교 수, byes 1회전을 쉬는 번호. 각 학교의 자리는 SchoolSpec.draw
+  draw?: { size: number; byes: number[] };
+  regions?: RegionSpec[]; // prefecture 말고도 내 학교를 고를 수 있는 현
+}
+
+// 내가 맡을 수 있는 현 하나: 현 예선에 나오는 16개교
+export interface RegionSpec {
+  prefecture: string;
+  schools: SchoolSpec[];
 }
