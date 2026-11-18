@@ -114,7 +114,7 @@ export const TUNING = {
   deny: {
     usage: 0.45, make: -0.11, othersMake: 0,
     othersHelp: 0.025, // 담당이 혼자 못 막으면 동료가 도우러 가야 해서 나머지가 더 편해진다 (효과 배율 1.0 부족당 성공률)
-    even: 1.1, surplus: 0.5, bodySurplus: 0.25, slack: 5, powerMax: 1.4,
+    even: 1.1, surplus: 0.5, bodySurplus: 0.25, slack: 5, powerMin: 0, powerMax: 1.4, // powerMin: 아무리 밀려도 따라다니는 것만으로 생기는 최소 효과
     // 항목별 무게 (능력치 100 차이당 배율 변화)
     outside: { iq: 0.5, skill: 0.9, spd: 5.0, hgt: 1.6, str: 0.4 },
     inside: { iq: 0.5, skill: 0.9, spd: 1.0, hgt: 2.5, str: 1.5 },
@@ -195,7 +195,7 @@ function denyPower(m: Ratings, t: Ratings, tc: Composites, sharp = 1) {
     const g = gap / 100;
     power += w[k] * (g > 0 ? g * (mind ? D.surplus : D.bodySurplus) : g);
   }
-  return Math.max(0, Math.min(D.powerMax, power));
+  return Math.max(D.powerMin, Math.min(D.powerMax, power));
 }
 // 화면 안내용: 이 선수가 저 선수를 집중 마크할 때의 효과 배율과 항목별 차이 (체력·당일 컨디션은 빼고 본다)
 export function denyOutlook(marker: BasePlayer, target: BasePlayer) {
