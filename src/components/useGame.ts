@@ -537,6 +537,13 @@ const actions = {
     else tactics.defense = value as Defense;
     save(S);
   },
+  // 다음 경기의 집중 마크 계획: 대상(상대 선수)과 담당(우리 선수). 그 경기가 끝나면 풀린다 (season.ts playMatch)
+  denyPlan({ S }: Ctx, key: 'denyPlayerId' | 'denyDefenderId', value: string) {
+    const tactics = userTeam(S).tactics;
+    tactics[key] = value || null;
+    if (key === 'denyPlayerId' && !value) tactics.denyDefenderId = null;
+    save(S);
+  },
   // 선발 자리(slot 0~4)에 선수를 세운다. 이미 다른 자리의 선발이면 두 선수가 자리를 바꾼다.
   starter({ S }: Ctx, slot: number, id: string) {
     const team = userTeam(S);

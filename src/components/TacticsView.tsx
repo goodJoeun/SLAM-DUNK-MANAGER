@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { composites, energyPerSecond, overall, startEnergy, tacticLoad } from '@/game/engine';
+import { composites, denyOutlook, energyPerSecond, overall, startEnergy, tacticLoad } from '@/game/engine';
 import { teamOverall } from '@/game/school';
-import type { Composites, Defense, Focus } from '@/game/types';
+import type { Composites, Defense, Focus, Player } from '@/game/types';
 import Court from './Court';
-import { today } from '@/game/season';
+import { today, userMatchDays } from '@/game/season';
 import { scoutReport } from '@/game/scouting';
 import { adviseTactics, mockWins } from '@/game/advice';
 import type { TacticsAdvice } from '@/game/advice';
-import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, mean, userTeam } from './ui';
+import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, Select, mean, userTeam } from './ui';
 import type { ViewProps } from './ui';
 
 const FOCUS_INFO: Record<Focus, string> = {
@@ -113,7 +113,7 @@ export default function TacticsView({ S, act }: ViewProps) {
   const nextId = day?.userMatch?.opponentId ?? prep?.opponentId;
   const sparring = (nextId ? S.career.teams[nextId] : undefined) ?? rivals[Math.floor(rivals.length / 2)];
   const scoutDays = prep && prep.opponentId === sparring.id ? prep.days : 0;
-  const adviceKey = `${S.career.year}-${S.career.dayIndex}-${sparring.id}-${scoutDays}-${starters.map((p) => p.id).join(',')}-${t.keyPlayerId ?? ''}-${t.denyPlayerId ?? ''}`;
+  const adviceKey = `${S.career.year}-${S.career.dayIndex}-${sparring.id}-${scoutDays}-${starters.map((p) => p.id).join(',')}-${t.keyPlayerId ?? ''}-${t.denyPlayerId ?? ''}-${t.denyDefenderId ?? ''}`;
   const [advice, setAdvice] = useState<{ key: string; tip: TacticsAdvice } | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => setAdvice({ key: adviceKey, tip: adviseTactics(team, sparring, scoutDays, S.career.seed + S.career.dayIndex * 1000, prep?.bonus ?? 0) }), 30);
@@ -137,6 +137,27 @@ export default function TacticsView({ S, act }: ViewProps) {
   }, [mineKey, !!tip, follows]);
   const current = follows ? tip!.wins : mineWins?.key === mineKey ? mineWins.wins : null;
   const edge = tip && current != null ? tip.wins - current : null;
+  // 집중 마크 계획: 다음에 실제로 만날 상대의 선수 중에서 대상을 고르고, 우리 선수 중에서 담당을 정한다
+  const nextDay = S.career.calendar[userMatchDays(S.career)[0]];
+  const denyOppId = nextId ?? (nextDay?.type === 'practice' ? nextDay.opponentId : undefined);
+  const denyOpp = denyOppId ? S.career.teams[denyOppId] : undefined;
+  const denyTarget = denyOpp?.players.find((p) => p.id === t.denyPlayerId);
+  const fit = (p: Player) => p.injuredDays === 0;
+  const power = (p: Player) => (denyTarget ? Math.round(denyOutlook(p, denyTarget).power * 100) : 0);
+  const top = (ps: Player[]) => ps.filter(fit).reduce<Player | null>((a, b) => (!a || power(b) > power(a) ? b : a), null);
+  // 추천 담당: 선발 중 마크 효과가 가장 큰 선수. 벤치에 훨씬 나은 선수(10 이상)가 있으면 그 선수를 권한다
+  const bestStarter = denyTarget ? top(starters) : null;
+  const bestBench = denyTarget ? top(bench) : null;
+  const benchPick = !!bestBench && power(bestBench) >= (bestStarter ? power(bestStarter) : 0) + 10;
+  const recommend = benchPick ? bestBench : bestStarter;
+  const SOLID_MARK = 80; // 이보다 낮으면 대상을 확실히 묶지 못해 집중 마크가 손해가 되기 쉽다 (scripts/deny-check.ts)
+  const markerLabel = (p: Player, benched: boolean) => {
+    const o = denyTarget ? denyOutlook(p, denyTarget) : null;
+    const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : '', o.weaker ? '힘 부족' : ''].filter(Boolean).join('·') : '';
+    return `${recommend?.id === p.id ? '★ ' : ''}${p.name}${o ? ` · 마크 효과 ${Math.round(o.power * 100)}${miss ? ` (${miss})` : ''}` : ''}${benched ? ' [벤치]' : ''}`;
+  };
+  const denyTargets: [string, string][] = (denyOpp?.players ?? []).map((p, i) => [p.id, `${POS[p.pos]} ${p.name} · 종합 ${overall(p)}${i < 5 ? '' : ' [벤치]'}`]);
+  const denyMarkers: [string, string][] = [...starters.map((p) => [p.id, markerLabel(p, false)] as [string, string]), ...bench.filter(fit).map((p) => [p.id, markerLabel(p, true)] as [string, string])];
   // 지금 고른 수비·템포의 부담: 체력 소모 배율과, 선발이 체력 저하 알림 기준까지 버티는 시간(쉬지 않고 뛸 때)
   const load = tacticLoad(defense, Number(pace));
   const tiredAt = S.prefs.tiredAt;
@@ -205,6 +226,36 @@ export default function TacticsView({ S, act }: ViewProps) {
           </Panel>
           <Panel title="템포">
             <Choice options={PACE} short={PACE_SHORT} info={PACE_INFO} tags={PACE_TAGS} value={pace} onChange={(v) => act('tactic', 'pace', v)} />
+          </Panel>
+          <Panel title="집중 마크" action={<span className="hint">{denyOpp ? `다음 상대 · ${denyOpp.name}` : '다음 상대 미정'}</span>}>
+            {denyOpp ? (
+              <div className="stack" style={{ gap: 8 }}>
+                <div className="controls">
+                  <label className="hint">막을 상대 선수
+                    <Select options={denyTargets} value={denyTarget ? t.denyPlayerId : ''} onChange={(v) => act('denyPlan', 'denyPlayerId', v)}><option value="">없음</option></Select>
+                  </label>
+                  {denyTarget && (
+                    <label className="hint">마크 담당
+                      <Select options={denyMarkers} value={t.denyDefenderId} onChange={(v) => act('denyPlan', 'denyDefenderId', v)}><option value="">같은 자리 선수</option></Select>
+                    </label>
+                  )}
+                </div>
+                {denyTarget && recommend && (
+                  <p className="hint" style={{ margin: 0 }}>
+                    {power(recommend) >= SOLID_MARK
+                      ? <>추천 담당: <b>{recommend.name}</b> (마크 효과 {power(recommend)}){benchPick && ' · 벤치 선수라 선발로 세우거나 경기 중 교체로 넣어야 합니다'}</>
+                      : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.name}</b> (마크 효과 {power(recommend)}) · 집중 마크가 손해일 수 있습니다</>}
+                    {t.denyDefenderId !== recommend.id && <>{' '}<button className="btn small" onClick={() => act('denyPlan', 'denyDefenderId', recommend.id)}>{recommend.name}에게 맡기기</button></>}
+                  </p>
+                )}
+                <p className="hint" style={{ margin: 0 }}>
+                  담당이 대상을 따라다니며 슛 기회와 성공률을 줄입니다. 마크 효과는 담당의 대인 수비·수비IQ·스피드·키·힘을 대상과 견준 값(100이 대등)이고, 확실히 앞서는 수비수가 아니면 큰 효과가 없습니다.
+                  담당은 체력이 빨리 닳고 공격이 조금 무뎌지며, 못 막는 만큼 상대의 다른 선수들이 편해집니다. 이 경기가 끝나면 풀립니다.
+                </p>
+              </div>
+            ) : (
+              <p className="hint" style={{ margin: 0 }}>다음 상대가 정해지면 그 팀 선수 중에서 집중 마크할 선수와 담당을 고를 수 있습니다. 경기 중에도 바꿀 수 있습니다.</p>
+            )}
           </Panel>
           <Panel title="이 전술의 부담" action={<span className="hint">{DEFENSE[defense]} · {PACE.find(([k]) => k === pace)?.[1]} 템포</span>}>
             <div className="load">
