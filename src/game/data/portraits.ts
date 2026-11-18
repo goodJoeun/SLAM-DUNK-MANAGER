@@ -42,12 +42,13 @@ export const PORTRAIT_SLUGS: Record<string, string> = {
   신현철: 'kawata-masashi',
   이명헌: 'fukatsu-kazunari',
   최동오: 'matsumoto-minoru',
-  정성구: 'ichinokura-satoshi',
-  김낙수: 'nobe-masahiro',
+  김낙수: 'ichinokura-satoshi',
+  정성구: 'nobe-masahiro',
   신현필: 'kawata-mikio',
   // 풍전고
   남훈: 'minami-tsuyoshi',
   강동준: 'kishimoto-minori',
+  나대룡: 'itakura-daijiro',
   // 대영학원
   이현수: 'tsuchiya-atsushi',
   // 지학고

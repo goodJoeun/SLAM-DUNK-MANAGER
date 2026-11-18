@@ -66,11 +66,12 @@
 | 신현철 | 카와타 마사시 | `kawata-masashi` |
 | 이명헌 | 후카츠 카즈나리 | `fukatsu-kazunari` |
 | 최동오 | 마츠모토 미노루 | `matsumoto-minoru` |
-| 정성구 | 이치노쿠라 사토시 | `ichinokura-satoshi` |
-| 김낙수 | 노베 마사히로 | `nobe-masahiro` |
+| 김낙수 | 이치노쿠라 사토시 | `ichinokura-satoshi` |
+| 정성구 | 노베 마사히로 | `nobe-masahiro` |
 | 신현필 | 카와타 미키오 | `kawata-mikio` |
 | 남훈 | 미나미 츠요시 | `minami-tsuyoshi` |
 | 강동준 | 키시모토 미노리 | `kishimoto-minori` |
+| 나대룡 | 이타쿠라 다이지로 | `itakura-daijiro` |
 | 이현수 | 츠치야 아츠시 | `tsuchiya-atsushi` |
 | 마성지 | 모로보시 다이 | `morohoshi-dai` |
 | 김판석 | 모리시게 히로시 | `morishige-hiroshi` |
