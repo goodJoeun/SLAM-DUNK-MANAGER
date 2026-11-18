@@ -232,6 +232,8 @@ function deliver(S: GameState, drafts: MessageDraft[]): Message[] {
     const d = old && draft.kind === 'training' ? mergeTraining(old, draft) : draft;
     const m: Message = { ...d, id: ++id, unread: !quiet(d) };
     fresh.push(m);
+    // 새 훈련 보고가 오면 지난 훈련 보고는 읽은 것으로 친다 (결정할 것이 없는 소식이 읽지 않은 수로 쌓이지 않게)
+    if (m.kind === 'training') for (const prev of S.inbox) if (prev.kind === 'training') prev.unread = false;
     S.inbox = [m, ...S.inbox];
   }
   S.inbox = S.inbox.slice(0, INBOX_LIMIT);
