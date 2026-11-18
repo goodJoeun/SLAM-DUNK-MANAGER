@@ -6,10 +6,10 @@
     "dev": "next dev -p 5173",
     "build": "next build",
     "typecheck": "tsc --noEmit",
-    "portraits": "node scripts/portraits.ts",
+    "portraits": "node scripts/assets/portraits.ts",
     "start": "next start -p 5173",
-    "sim": "node scripts/simulate.ts",
-    "game": "node scripts/simulate.ts game"
+    "sim": "node scripts/sim/simulate.ts",
+    "game": "node scripts/sim/simulate.ts game"
   },
   "dependencies": {
     "next": "^16.4.6",

@@ -1,22 +1,22 @@
 'use client';
 
 import type { ComponentType } from 'react';
-import { useGame } from './useGame';
-import type { GameState, PlayingState, ScreenKey } from './useGame';
-import type { ViewProps } from './ui';
-import Shell from './Shell';
-import StartView from './StartView';
-import TitleView from './TitleView';
-import HomeView from './HomeView';
-import InboxView from './InboxView';
-import SquadView from './SquadView';
-import TacticsView from './TacticsView';
-import TrainingView from './TrainingView';
-import CompView from './CompView';
-import RecordsView from './RecordsView';
-import MatchView from './MatchView';
-import SchoolView from './SchoolView';
-import TouchTips from './TouchTips';
+import { useGame } from '@/state/useGame';
+import type { GameState, PlayingState, ScreenKey } from '@/state/useGame';
+import type { ViewProps } from './shared/ui';
+import Shell from './layout/Shell';
+import StartView from './screens/StartView';
+import TitleView from './screens/TitleView';
+import HomeView from './screens/HomeView';
+import InboxView from './screens/InboxView';
+import SquadView from './screens/SquadView';
+import TacticsView from './screens/TacticsView';
+import TrainingView from './screens/TrainingView';
+import CompView from './screens/CompView';
+import RecordsView from './screens/RecordsView';
+import MatchView from './screens/MatchView';
+import SchoolView from './screens/SchoolView';
+import TouchTips from './layout/TouchTips';
 
 const SCREENS: Record<ScreenKey, ComponentType<ViewProps>> = {
   home: HomeView,

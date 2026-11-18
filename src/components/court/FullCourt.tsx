@@ -1,8 +1,8 @@
 // 풀코트 화면. 장면(Scene) 하나를 그리거나, 타임라인(Timeline)을 받아 키 사이를 부드럽게 이어 그린다.
 // 장면을 누가 만들었는지(연출형이든 공간 시뮬레이션이든)는 상관하지 않는다.
 import { memo, useEffect, useState } from 'react';
-import { COURT } from '@/game/court';
-import type { Scene, ScenePlayer, Timeline } from '@/game/court';
+import { COURT } from '@/game/match/court';
+import type { Scene, ScenePlayer, Timeline } from '@/game/match/court';
 
 export interface CourtAnimation {
   timeline: Timeline;

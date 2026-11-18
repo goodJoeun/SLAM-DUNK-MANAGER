@@ -4,8 +4,8 @@
 //
 // 공격 패턴은 기록에 맞는 것을 고른다. 예를 들어 빅맨의 골밑 득점에 가드의 어시스트가 붙어 있으면 픽앤롤,
 // 포스트업 득점이면 포스트업, 윙의 3점이면 스크린을 받고 나오거나 돌파 후 빼 주는 패스로 보여 준다.
-import { COURT, attacksRight, fromCourt, toCourt } from '@/game/court';
-import type { AttackPoint, Point, Scene, ScenePlayer, Timeline } from '@/game/court';
+import { COURT, attacksRight, fromCourt, toCourt } from '@/game/match/court';
+import type { AttackPoint, Point, Scene, ScenePlayer, Timeline } from '@/game/match/court';
 import type { Defense, Focus, GameView, LogEvent, ShotType, StepResult } from '@/game/types';
 
 // 공격권이 어떻게 끝났는지 (다음 공격권의 시작 모양을 정한다)
