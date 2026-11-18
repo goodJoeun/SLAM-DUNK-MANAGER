@@ -236,3 +236,10 @@ input[type='checkbox'] { accent-color: var(--club); }
 .sched-day.now { background: color-mix(in srgb, var(--club) 22%, transparent); opacity: 1; }
 .sched-result { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sched-past > .panel-h { box-shadow: inset 4px 0 0 var(--line); background: none; }
+
+/* 경기 종료 창: 이름표가 두 줄로 꺾이지 않게 한다. 좁은 화면에서는 이름표를 값 위에 올린다 */
+.modal .lines li > .muted { flex: none; white-space: nowrap; }
+@media (max-width: 860px) {
+  .modal .lines li { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .modal .lines li > .muted { font-size: 12px; }
+}
