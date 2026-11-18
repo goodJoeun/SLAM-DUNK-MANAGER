@@ -150,7 +150,7 @@ export default function TacticsView({ S, act }: ViewProps) {
   const bestBench = denyTarget ? top(bench) : null;
   const benchPick = !!bestBench && power(bestBench) >= (bestStarter ? power(bestStarter) : 0) + 10;
   const recommend = benchPick ? bestBench : bestStarter;
-  const SOLID_MARK = 80; // 이보다 낮으면 대상을 확실히 묶지 못해 집중 마크가 손해가 되기 쉽다 (scripts/deny-check.ts)
+  const SOLID_MARK = 80; // 이보다 낮으면 대상을 확실히 묶지 못해 효과가 작다 (scripts/deny-check.ts, deny-matchups.ts)
   const markerLabel = (p: Player, benched: boolean) => {
     const o = denyTarget ? denyOutlook(p, denyTarget) : null;
     const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : '', o.weaker ? '힘 부족' : ''].filter(Boolean).join('·') : '';
@@ -244,7 +244,7 @@ export default function TacticsView({ S, act }: ViewProps) {
                   <p className="hint" style={{ margin: 0 }}>
                     {power(recommend) >= SOLID_MARK
                       ? <>추천 담당: <b>{recommend.name}</b> (마크 효과 {power(recommend)}){benchPick && ' · 벤치 선수라 선발로 세우거나 경기 중 교체로 넣어야 합니다'}</>
-                      : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.name}</b> (마크 효과 {power(recommend)}) · 집중 마크가 손해일 수 있습니다</>}
+                      : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.name}</b> (마크 효과 {power(recommend)}) · 대상을 조금만 묶습니다</>}
                     {t.denyDefenderId !== recommend.id && <>{' '}<button className="btn small" onClick={() => act('denyPlan', 'denyDefenderId', recommend.id)}>{recommend.name}에게 맡기기</button></>}
                   </p>
                 )}
