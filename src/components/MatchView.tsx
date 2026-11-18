@@ -346,7 +346,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <div className="ctl-more">
             <button className="btn" onClick={() => act('autosub')}>교체: {mine.auto ? 'AI 코치' : '직접'}</button>
             <span className="spacer" />
-            {!m.playing && <button className="btn ghost" disabled={Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>}
+            {/* 진행 중에도 자리를 지켜 옆 버튼이 밀리지 않게 한다 */}
+            <button className="btn ghost" disabled={m.playing || Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>
             {confirmSkip ? (
               <span className="skip-confirm">
                 <span>남은 경기를 바로 끝낼까요? 되돌릴 수 없습니다.</span>
@@ -430,28 +431,34 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
           </div>
           <div className="court-tactics mt mt-tactics" title="경기 중에도 바로 적용됩니다">
             <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
-            <div className="controls">
-              <label className="hint">에이스 지정
+            <div className="tac-picks">
+              <label className="hint">에이스
                 <Select options={everyone} value={t.keyPlayerId} onChange={(value) => act('matchTactic', 'keyPlayerId', value)}><option value="">없음</option></Select>
               </label>
               <label className="hint">집중 마크
                 <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
               </label>
-              {t.denyPlayerId && (
+              {/* 집중 마크를 고르기 전에도 자리를 잡아 둔다 (고를 때 줄이 늘어나지 않게) */}
+              {(
                 <label className="hint" title="마크 효과는 담당의 능력치를 대상의 능력치와 견줘 정합니다(수비 지능 대 공격 지능·주무기, 스피드, 키, 힘). 100이 대등한 수준이고, 확실히 앞서는 수비수가 아니면 큰 효과가 없습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
-                  <Select options={markers} value={t.denyDefenderId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">같은 자리 선수</option></Select>
+                  <Select options={t.denyPlayerId ? markers : {}} value={t.denyPlayerId ? t.denyDefenderId : ''} disabled={!t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">{t.denyPlayerId ? '같은 자리 선수' : '-'}</option></Select>
                 </label>
               )}
-              {denyTarget && recommend && (
-                <div className="hint deny-pick">
-                  {recommend.power >= SOLID_MARK
-                    ? <>추천 담당: <b>{recommend.p.name}</b> (마크 효과 {recommend.power}){benchPick && ' · 벤치에 있어 교체로 넣어야 합니다'}</>
-                    : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.p.name}</b> (마크 효과 {recommend.power}) · 대상을 조금만 묶습니다</>}
+            </div>
+            {/* 담당 추천: 늘 한 줄을 차지한다 */}
+            <div className="hint deny-pick">
+              {denyTarget && recommend ? (
+                <>
+                  <span className="dp-text">
+                    {recommend.power >= SOLID_MARK
+                      ? <>추천 담당: <b>{recommend.p.name}</b> (마크 효과 {recommend.power}){benchPick && ' · 벤치에 있어 교체로 넣어야 합니다'}</>
+                      : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.p.name}</b> (마크 효과 {recommend.power}) · 대상을 조금만 묶습니다</>}
+                  </span>
                   {t.denyDefenderId !== recommend.p.id && (
                     <button className="btn ghost small" onClick={() => act('matchTactic', 'denyDefenderId', recommend.p.id)}>{recommend.p.name}에게 맡기기</button>
                   )}
-                </div>
-              )}
+                </>
+              ) : <span className="dp-text faint">집중 마크할 상대를 고르면, 맡기기 좋은 선수를 여기에 추천합니다.</span>}
             </div>
           </div>
         </Panel>

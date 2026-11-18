@@ -26,30 +26,6 @@
   --radius: 8px;
   --header-h: 62px;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg: #eef1f5;
-    --panel: #ffffff;
-    --panel-2: #f5f7fa;
-    --panel-3: #e8ecf1;
-    --line: #d7dde5;
-    --line-soft: #e8ecf0;
-    --text: #18202a;
-    --muted: #5b6676;
-    --faint: #8a95a3;
-    --good: #23894b;
-    --bad: #c7392e;
-    --warn: #b97a0e;
-    --info: #2a78c2;
-    --gold: #d49a12;
-    --a1: #c8423b;
-    --a2: #c27416;
-    --a3: #8f8410;
-    --a4: #2f8f36;
-    --a5: #0f7f98;
-  }
-}
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -598,12 +574,6 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .fullcourt .dot.sel .ring { stroke: var(--gold); stroke-width: 0.14; }
 .fullcourt .ball { fill: #e8792b; stroke: #7a3410; stroke-width: 0.04; }
 .fullcourt .ball-shadow { fill: #000; }
-@media (prefers-color-scheme: light) {
-  .fullcourt .floor { fill: #e8c79c; }
-  .fullcourt .ln, .fullcourt .paint { stroke: rgb(255 255 255 / 0.95); }
-  .fullcourt .nm { fill: #1d232b; stroke: rgb(255 255 255 / 0.7); }
-  .fullcourt .nm.mine { fill: #000; }
-}
 /* 코트 옆에 코트 위 다섯 명과 중계를 붙인다. 옆 칸은 코트 높이에 맞춰 늘어나고 중계만 안에서 스크롤한다 */
 .match-main { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .match-main > .panel > .panel-b { flex: 1 1 auto; align-content: space-between; }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import './theme.css'; // 게임풍 겉모습 (globals.css 위에 덧입힌다)
 
 export const metadata: Metadata = {
   title: '고교 농구 매니저',

@@ -160,15 +160,16 @@ export function Panel({ title, action, flush = false, className = '', children }
 // ---------- 입력 ----------
 
 // { 값: 라벨 } 맵으로 만드는 선택 상자
-export function Select({ options, value, onChange, style, children }: {
+export function Select({ options, value, onChange, style, disabled, children }: {
   options: Options;
   value: string | number | null | undefined;
   onChange: (value: string) => void;
   style?: CSSProperties;
+  disabled?: boolean;
   children?: ReactNode;
 }) {
   return (
-    <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} style={style}>
+    <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} style={style} disabled={disabled}>
       {children}
       {entries(options).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
     </select>
@@ -195,10 +196,11 @@ export function TacticSelects({ tactics, onChange }: {
   onChange: (key: 'focus' | 'defense' | 'pace', value: string) => void;
 }) {
   return (
-    <div className="controls">
-      <label className="hint">공격 중심<Select options={FOCUS} value={tactics.focus} onChange={(v) => onChange('focus', v)} /></label>
-      <label className="hint">수비<Select options={DEFENSE} value={tactics.defense} onChange={(v) => onChange('defense', v)} /></label>
-      <label className="hint">템포<Select options={PACE} value={Math.round(tactics.pace ?? 0)} onChange={(v) => onChange('pace', v)} /></label>
+    // 경기 중에 한 번 눌러 바꾸도록 선택 상자 대신 묶음 버튼으로 둔다
+    <div className="tac-rows">
+      <div className="tac-row"><span className="hint">공격</span><Seg options={FOCUS} value={tactics.focus} onChange={(v) => onChange('focus', v)} /></div>
+      <div className="tac-row"><span className="hint">수비</span><Seg options={DEFENSE} value={tactics.defense} onChange={(v) => onChange('defense', v)} /></div>
+      <div className="tac-row"><span className="hint">템포</span><Seg options={PACE} value={Math.round(tactics.pace ?? 0)} onChange={(v) => onChange('pace', v)} /></div>
     </div>
   );
 }
