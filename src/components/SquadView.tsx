@@ -23,7 +23,41 @@ type View = keyof typeof VIEWS;
 function RecruitPanel({ c, act }: { c: Career; act: Act }) {
   const team = userTeam(c);
   if (c.year >= SEASON.campaignYears) {
-    return <Panel title="신입생 스카우트"><p className="muted">임기 마지막 해라 내년 신입생은 뽑지 않습니다.</p></Panel>;
+    // 마지막 해에는 뽑을 신입생이 없으므로, 임기 중에 들어온 선수들이 얼마나 컸는지 돌아본다
+    const mine = team.players.filter((p) => p.joined).sort((a, b) => b.year - a.year || overall(b) - overall(a));
+    return (
+      <>
+        <Panel title="내가 뽑은 선수들" flush={mine.length > 0} action={mine.length > 0 && <span className="hint">선수를 누르면 상세</span>}>
+          {mine.length ? (
+            <div className="table-wrap"><table className="data">
+              <thead><tr>
+                <th className="l">포지션</th><th className="l name">이름</th><th className="c">학년</th><th className="l">들어온 경위</th><th>입학 때</th><th>지금</th><th>성장</th>
+              </tr></thead>
+              <tbody>
+                {mine.map((p) => {
+                  const now = overall(p);
+                  const diff = now - p.joined!.ovr;
+                  return (
+                    <tr key={p.id} className="click" onClick={() => act('player', p.id)}>
+                      <td className="l"><PosBadge pos={p.pos} /></td>
+                      <td className="l name">{p.name}</td>
+                      <td className="c">{p.year}</td>
+                      <td className="l">
+                        {p.joined!.scouted ? <span className="pill good">영입 성공</span> : p.joined!.star ? <span className="pill warn">특급 신입생</span> : <span className="muted">일반 입학</span>}
+                      </td>
+                      <td><Attr v={p.joined!.ovr} /></td>
+                      <td><Attr v={now} /></td>
+                      <td><b className={diff > 0 ? 'good' : ''}>{diff > 0 ? `+${diff}` : diff}</b></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table></div>
+          ) : <p className="muted">임기 중에 입학한 선수의 기록이 없습니다.</p>}
+        </Panel>
+        <p className="hint">임기 마지막 해라 내년 신입생은 뽑지 않습니다.</p>
+      </>
+    );
   }
   const targets = c.recruitTargets ?? [];
   const prospects = [...prospectsOf(c)].sort((a, b) => overall(b.player) - overall(a.player));

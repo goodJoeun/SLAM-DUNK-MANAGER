@@ -846,6 +846,8 @@ function endYear(state: Career, rng: Rng): YearSummary {
     if (mine) {
       summary.graduates = leaving; summary.recruits = recruits; summary.scouted = joined.map((p) => p.id); summary.missed = scouting.missed;
       summary.stars = stars; summary.starChance = starChance;
+      // 임기 마지막 해에 돌아볼 수 있게, 입학 때의 모습을 선수에게 적어 둔다
+      for (const p of recruits) p.joined = { ovr: overall(p), scouted: joined.includes(p) || undefined, star: stars.includes(p.id) || undefined };
     }
   }
   for (const id of state.guestIds) delete state.teams[id];

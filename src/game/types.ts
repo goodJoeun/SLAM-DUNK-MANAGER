@@ -54,6 +54,7 @@ export interface Player extends BasePlayer {
   fixed?: boolean; // 데이터 파일에 명시된 선수
   trait?: TraitKey; // 성격 (people.ts). 없으면 처음 읽을 때 정한다
   morale?: number; // 사기 0~100, 60이 보통. 내 학교 선수만 변한다
+  joined?: { ovr: number; scouted?: boolean; star?: boolean }; // 내 임기 중에 입학한 선수: 입학 때의 종합 능력치와 들어온 경위
 }
 
 export type TraitKey = 'steady' | 'worker' | 'genius' | 'clutch' | 'moody' | 'leader' | 'lazy' | 'ironman';
