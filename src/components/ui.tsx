@@ -30,11 +30,11 @@ const entries = (options: Options) => (Array.isArray(options) ? options : Object
 
 export const RATING_SHORT: Record<RatingKey, string> = {
   hgt: '키', str: '힘', spd: '스피드', jmp: '점프', end: '지구력', ins: '골밑', dnk: '마무리', ft: '자유투',
-  mid: '미들', tp: '3점', oiq: '공격IQ', diq: '수비IQ', drb: '드리블', pss: '패스', reb: '리바',
+  mid: '미들', tp: '3점', oiq: '공격IQ', diq: '수비IQ', mdf: '대인수비', tdf: '팀수비', drb: '드리블', pss: '패스', reb: '리바',
 };
 export const ATTR_GROUPS: { title: string; keys: RatingKey[] }[] = [
   { title: '공격', keys: ['ins', 'dnk', 'mid', 'tp', 'ft', 'drb', 'pss', 'oiq'] },
-  { title: '수비', keys: ['diq', 'reb'] },
+  { title: '수비', keys: ['mdf', 'tdf', 'diq', 'reb'] },
   { title: '신체', keys: ['hgt', 'str', 'spd', 'jmp', 'end'] },
 ];
 

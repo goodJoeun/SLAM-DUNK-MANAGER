@@ -5,7 +5,7 @@
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
 import { createCareer, today, playDay, prepareUserMatch, toggleRecruitTarget } from '@/game/season';
-import { setLineup } from '@/game/school';
+import { setLineup, upgradeCareer } from '@/game/school';
 import { resolveEvent } from '@/game/people';
 import type { DayDecision } from '@/game/season';
 import { INTENSITY, PROGRAMS } from '@/game/school';
@@ -429,7 +429,7 @@ const actions = {
   },
   // 세이브 칸의 게임을 이어서 한다
   load({ S }: Ctx, slot: number) {
-    const career = readJson<Career | null>(saveKey(slot), null);
+    const career = upgradeCareer(readJson<Career | null>(saveKey(slot), null));
     if (S.career || !career) return;
     Object.assign(S, {
       career, slot, inbox: readJson<Message[]>(inboxKey(slot), []), screen: 'home', messageId: null, playerId: null, dayNote: null,

@@ -6,7 +6,7 @@ import { injuryRisk, matchLearning, staminaCost, trainingFactor } from './people
 import type { Rng } from './rng.ts';
 import type {
   BasePlayer, BoxTeam, Career, Composites, Defense, Focus, GrowthEvent, InjuryEvent, IntensityKey,
-  Player, ProgramKey, RatingKey, Team, TrainingChoice,
+  Player, ProgramKey, RatingKey, Ratings, Team, TrainingChoice,
 } from './types.ts';
 
 export const SCHOOL = {
@@ -20,9 +20,9 @@ export const PROGRAMS: Record<ProgramKey, { label: string; keys: RatingKey[] }> 
   shooting: { label: '슈팅', keys: ['mid', 'tp', 'ft'] },
   inside: { label: '골밑', keys: ['ins', 'dnk', 'reb'] },
   ballwork: { label: '볼 핸들링·패스', keys: ['drb', 'pss'] },
-  defense: { label: '수비', keys: ['diq', 'reb', 'str'] },
+  defense: { label: '수비', keys: ['mdf', 'tdf', 'reb', 'str'] },
   physical: { label: '체력', keys: ['spd', 'jmp', 'end', 'str'] },
-  tactics: { label: '전술 이해', keys: ['oiq', 'diq'] },
+  tactics: { label: '전술 이해', keys: ['oiq', 'diq', 'tdf'] },
   rest: { label: '휴식', keys: [] },
   scout: { label: '상대 분석', keys: [] }, // 다음 공식전 상대를 분석해 그 경기에서만 보너스를 얻는다 (season.ts)
 };
@@ -56,8 +56,24 @@ const ratingKeys = (p: BasePlayer) => Object.keys(p.ratings) as RatingKey[];
 const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
 export const RATING_LABEL: Record<RatingKey, string> = {
   hgt: '키', str: '힘', spd: '스피드', jmp: '점프', end: '지구력', ins: '골밑 기술', dnk: '마무리', ft: '자유투',
-  mid: '미들슛', tp: '3점슛', oiq: '공격 이해', diq: '수비 이해', drb: '드리블', pss: '패스', reb: '리바운드',
+  mid: '미들슛', tp: '3점슛', oiq: '공격 이해', diq: '수비IQ', mdf: '대인 수비', tdf: '팀 수비', drb: '드리블', pss: '패스', reb: '리바운드',
 };
+
+// 예전 세이브 올리기: 수비 능력치가 하나(diq)뿐이던 때의 선수에게 대인 수비·팀 수비를 같은 값으로 채운다.
+// 세이브 안의 모든 선수(팀, 졸업생, 신입생, 유망주 명단)를 찾아 고친다.
+export function upgradeCareer<T>(career: T): T {
+  const walk = (x: unknown) => {
+    if (!x || typeof x !== 'object') return;
+    const r = (x as { ratings?: Partial<Ratings> }).ratings;
+    if (r && typeof r === 'object' && typeof r.diq === 'number') {
+      r.mdf ??= r.diq;
+      r.tdf ??= r.diq;
+    }
+    for (const v of Object.values(x)) walk(v);
+  };
+  walk(career);
+  return career;
+}
 
 // ---------- 선수 생성 ----------
 
@@ -273,6 +289,8 @@ export function applyMatch(rng: Rng, team: Team, boxTeam: BoxTeam, opponentOvera
     // 경기에서 실제로 한 플레이가 해당 능력치를 더 올린다
     gain(p, 'oiq', xp, report.growth);
     gain(p, 'diq', xp, report.growth);
+    gain(p, 'mdf', xp * 0.5, report.growth);
+    gain(p, 'tdf', xp * 0.5, report.growth);
     gain(p, 'tp', xp * Math.min(1, line.tpa / 5), report.growth);
     gain(p, 'mid', xp * Math.min(1, (line.fga - line.tpa) / 10), report.growth);
     gain(p, 'ins', xp * Math.min(1, (line.fga - line.tpa) / 10), report.growth);

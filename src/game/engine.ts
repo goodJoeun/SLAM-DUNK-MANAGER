@@ -106,7 +106,7 @@ export const TUNING = {
   paceDrainOpp: 0.07, // 따라 뛰는 상대의 체력 소모 배율 변화
   // 집중 마크: 담당 수비수가 대상을 따라다닌다. 대상은 묶이지만 나머지가 조금 편해진다.
   //   usage·make는 효과 배율(power)이 1일 때의 값. 배율은 담당의 능력치를 대상의 능력치와 항목별로 견줘 정한다 (denyPower):
-  //     수비 지능 대 공격 지능(iq), 수비 지능 대 주무기(skill), 스피드, 키, 힘. 대상이 골밑형이냐 외곽형이냐에 따라 항목의 무게가 다르다.
+  //     수비IQ 대 공격IQ(iq), 대인 수비 대 주무기(skill), 스피드, 키, 힘. 신체 차이는 slack 이하면 없는 것으로 본다. 대상이 골밑형이냐 외곽형이냐에 따라 항목의 무게가 다르다.
   //     골밑형 = 포스트업이 중거리·3점보다 나은 선수 (돌파·덩크가 좋은 포워드는 외곽형으로 본다).
   //     담당이 뒤지는 항목은 차이만큼 그대로 깎고, 앞서는 항목은 일부만 더한다: 지능·주무기는 surplus, 신체는 bodySurplus (크다고 스피드 차이가 메워지지는 않는다).
   //   모든 항목이 같으면 배율은 even. 확실히 앞서는 수비수가 아니면 대상은 별로 묶이지 않고, 도우러 가는 동료 때문에 손해만 본다.
@@ -114,15 +114,16 @@ export const TUNING = {
   deny: {
     usage: 0.45, make: -0.11, othersMake: 0,
     othersHelp: 0.025, // 담당이 혼자 못 막으면 동료가 도우러 가야 해서 나머지가 더 편해진다 (효과 배율 1.0 부족당 성공률)
-    even: 1.1, surplus: 0.5, bodySurplus: 0.25, powerMax: 1.4,
+    even: 1.1, surplus: 0.5, bodySurplus: 0.25, slack: 5, powerMax: 1.4,
     // 항목별 무게 (능력치 100 차이당 배율 변화)
-    outside: { iq: 0.7, skill: 0.5, spd: 4.0, hgt: 1.6, str: 0.4 },
-    inside: { iq: 0.7, skill: 0.5, spd: 1.0, hgt: 2.5, str: 1.5 },
+    outside: { iq: 0.5, skill: 0.9, spd: 5.0, hgt: 1.6, str: 0.4 },
+    inside: { iq: 0.5, skill: 0.9, spd: 1.0, hgt: 2.5, str: 1.5 },
     tired: 2, // 담당의 몸 상태(체력·컨디션)가 1.0 떨어질 때 깎이는 배율
     drain: 1.3, markerUsage: 0.9, markerMake: -0.015,
   },
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
-  zone: { shooterBurn: 0.7, insideMake: -0.055, outsideMake: 0.05, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
+  ownDefenseShare: 0.5, // 슛 수비에서 맡은 선수 개인(대인 수비)의 몫. 나머지는 팀 평균 도움 수비(팀 수비)
+  zone: { ownShare: 0.25, shooterBurn: 0.7, insideMake: -0.055, outsideMake: 0.05, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
   press: { tovBase: 0.02, tovSkill: 0.45, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1 },
   // 5아웃: 골밑과 3점 위주로 쏘고 중거리·포스트업은 줄인다. 슈터가 많을수록 돌파 공간이 열린다
   spread: { threeMix: 1.45, rimMix: 1.25, midMix: 0.45, postMix: 0.5, rimSpacing: 0.45, spacingPivot: 0.56, read: -0.018 }, // read: 슛이 두 종류뿐이라 수비가 읽는다 (전체 슛 성공률 보정)
@@ -141,7 +142,8 @@ export const TUNING = {
   },
 };
 
-const r = (p: BasePlayer, k: RatingKey) => p.ratings[k] / 100;
+// 대인 수비·팀 수비가 없는 예전 데이터는 수비IQ로 읽는다
+const r = (p: BasePlayer, k: RatingKey) => (p.ratings[k] ?? p.ratings.diq) / 100;
 
 // 원본 능력치 -> 엔진이 쓰는 합성 능력치 (0~1)
 // 수비 방식이 체력 소모에 주는 배율
@@ -174,7 +176,7 @@ function denyCompare(m: Ratings, t: Ratings, tc: Composites) {
     inside,
     gaps: {
       iq: m.diq - t.oiq,
-      skill: m.diq - Math.max(t.ins, t.dnk, t.mid, t.tp),
+      skill: (m.mdf ?? m.diq) - Math.max(t.ins, t.dnk, t.mid, t.tp),
       spd: m.spd - t.spd,
       hgt: m.hgt - t.hgt,
       str: m.str - t.str,
@@ -188,8 +190,10 @@ function denyPower(m: Ratings, t: Ratings, tc: Composites, sharp = 1) {
   const w = inside ? D.inside : D.outside;
   let power = D.even - D.tired * (1 - sharp);
   for (const k of Object.keys(gaps) as (keyof typeof gaps)[]) {
-    const g = gaps[k] / 100;
-    power += w[k] * (g > 0 ? g * (k === 'iq' || k === 'skill' ? D.surplus : D.bodySurplus) : g);
+    const mind = k === 'iq' || k === 'skill';
+    const gap = mind ? gaps[k] : Math.sign(gaps[k]) * Math.max(0, Math.abs(gaps[k]) - D.slack); // 신체는 조금 차이 나는 정도로는 티가 안 난다
+    const g = gap / 100;
+    power += w[k] * (g > 0 ? g * (mind ? D.surplus : D.bodySurplus) : g);
   }
   return Math.max(0, Math.min(D.powerMax, power));
 }
@@ -216,10 +220,14 @@ export function composites(p: BasePlayer): Composites {
     three: 0.85 * r(p, 'tp') + 0.15 * r(p, 'oiq'),
     ft: r(p, 'ft'),
     rebounding: 0.4 * r(p, 'hgt') + 0.2 * r(p, 'jmp') + 0.15 * r(p, 'str') + 0.25 * r(p, 'reb'),
-    defInterior: 0.35 * r(p, 'hgt') + 0.2 * r(p, 'str') + 0.15 * r(p, 'jmp') + 0.3 * r(p, 'diq'),
-    defPerimeter: 0.4 * r(p, 'spd') + 0.4 * r(p, 'diq') + 0.1 * r(p, 'hgt') + 0.1 * r(p, 'str'),
-    stealing: 0.45 * r(p, 'spd') + 0.55 * r(p, 'diq'),
-    blocking: 0.5 * r(p, 'hgt') + 0.3 * r(p, 'jmp') + 0.2 * r(p, 'diq'),
+    // 1대1 수비: 맡은 상대를 막는 힘 (대인 수비)
+    defInterior: 0.35 * r(p, 'hgt') + 0.2 * r(p, 'str') + 0.15 * r(p, 'jmp') + 0.3 * r(p, 'mdf'),
+    defPerimeter: 0.4 * r(p, 'spd') + 0.4 * r(p, 'mdf') + 0.1 * r(p, 'hgt') + 0.1 * r(p, 'str'),
+    // 도움 수비: 동료가 맡은 상대의 슛을 함께 막는 힘 (팀 수비 + 수비IQ)
+    helpInterior: 0.35 * r(p, 'hgt') + 0.15 * r(p, 'jmp') + 0.1 * r(p, 'str') + 0.3 * r(p, 'tdf') + 0.1 * r(p, 'diq'),
+    helpPerimeter: 0.35 * r(p, 'spd') + 0.45 * r(p, 'tdf') + 0.2 * r(p, 'diq'),
+    stealing: 0.45 * r(p, 'spd') + 0.35 * r(p, 'diq') + 0.2 * r(p, 'mdf'),
+    blocking: 0.5 * r(p, 'hgt') + 0.3 * r(p, 'jmp') + 0.1 * r(p, 'diq') + 0.1 * r(p, 'tdf'),
     endurance: r(p, 'end'),
     usage: 0, // 아래에서 계산한다
   };
@@ -231,7 +239,7 @@ export function composites(p: BasePlayer): Composites {
 export function overall(p: BasePlayer) {
   const c = composites(p);
   const offense = Math.max(c.rim, c.post, c.mid, c.three) * 0.6 + (c.ballHandling + c.passing) * 0.2;
-  const defense = Math.max(c.defInterior, c.defPerimeter) * 0.7 + c.rebounding * 0.3;
+  const defense = Math.max(c.defInterior, c.defPerimeter) * 0.45 + Math.max(c.helpInterior, c.helpPerimeter) * 0.25 + c.rebounding * 0.3;
   return Math.round((offense * 0.55 + defense * 0.45) * 100);
 }
 
@@ -637,7 +645,10 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const inside = type === 'rim' || type === 'post';
       const zone = def.tactics.defense === 'zone';
       const defKey = inside ? 'defInterior' : 'defPerimeter';
-      const defense = 0.5 * eff(defender, defKey) + 0.5 * avg(def, defKey);
+      // 수비 = 맡은 선수의 1대1 수비 + 팀 전체의 도움 수비. 존은 지역을 나눠 막으므로 팀 수비의 몫이 더 크다
+      const helpKey = inside ? 'helpInterior' : 'helpPerimeter';
+      const own = zone ? T.zone.ownShare : T.ownDefenseShare;
+      const defense = own * eff(defender, defKey) + (1 - own) * avg(def, helpKey);
 
       let pMake = S.make + T.makeSkill * (eff(shooter, type) - defense);
       pMake += 0.04 * (avg(off, 'passing') - 0.5); // 팀 패스 시너지

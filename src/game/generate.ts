@@ -2,7 +2,7 @@
 import type { Rng } from './rng.ts';
 import type { BasePlayer, EngineTeam, RatingKey, Ratings, Tactics } from './types.ts';
 
-export const RATING_KEYS: RatingKey[] = ['hgt', 'str', 'spd', 'jmp', 'end', 'ins', 'dnk', 'ft', 'mid', 'tp', 'oiq', 'diq', 'drb', 'pss', 'reb'];
+export const RATING_KEYS: RatingKey[] = ['hgt', 'str', 'spd', 'jmp', 'end', 'ins', 'dnk', 'ft', 'mid', 'tp', 'oiq', 'diq', 'mdf', 'tdf', 'drb', 'pss', 'reb'];
 
 // 포지션별 능력치 보정 (1=PG ... 5=C)
 export const ARCHETYPE: Record<number, Partial<Ratings>> = {

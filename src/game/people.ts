@@ -144,7 +144,7 @@ function grow(c: EventCtx, p: Player, keys: RatingKey[], amount: number) {
   if (up.length) c.out.push(`${p.name}의 능력치가 올랐습니다 (${up.length}건).`);
 }
 const weakest = (p: Player, keys: RatingKey[]) => [...keys].sort((x, y) => p.ratings[x] - p.ratings[y]).slice(0, 2);
-const SKILLS: RatingKey[] = ['ins', 'dnk', 'ft', 'mid', 'tp', 'oiq', 'diq', 'drb', 'pss', 'reb'];
+const SKILLS: RatingKey[] = ['ins', 'dnk', 'ft', 'mid', 'tp', 'oiq', 'diq', 'mdf', 'tdf', 'drb', 'pss', 'reb'];
 
 const EVENTS: Record<EventKey, EventDef> = {
   benchTalk: {

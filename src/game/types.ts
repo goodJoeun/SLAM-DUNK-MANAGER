@@ -5,7 +5,9 @@
 
 export type RatingKey =
   | 'hgt' | 'str' | 'spd' | 'jmp' | 'end' | 'ins' | 'dnk' | 'ft'
-  | 'mid' | 'tp' | 'oiq' | 'diq' | 'drb' | 'pss' | 'reb';
+  | 'mid' | 'tp' | 'oiq' | 'diq' | 'mdf' | 'tdf' | 'drb' | 'pss' | 'reb';
+// 수비 능력치는 셋으로 나뉜다. mdf 대인 수비: 맡은 상대를 1대1로 막는 힘 / tdf 팀 수비: 도움 수비·로테이션 /
+// diq 수비IQ: 읽고 예측하는 힘 (스틸·블록 타이밍, 도움 수비 판단). 예전 세이브에는 diq만 있어 불러올 때 채운다 (school.ts upgradeCareer)
 export type Ratings = Record<RatingKey, number>;
 
 export type ProgramKey = 'shooting' | 'inside' | 'ballwork' | 'defense' | 'physical' | 'tactics' | 'rest' | 'scout';
@@ -98,6 +100,8 @@ export interface Composites {
   rebounding: number;
   defInterior: number;
   defPerimeter: number;
+  helpInterior: number; // 팀 수비: 동료가 뚫렸을 때 골밑을 메우는 힘
+  helpPerimeter: number; // 팀 수비: 외곽 로테이션
   stealing: number;
   blocking: number;
   endurance: number;

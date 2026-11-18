@@ -15,7 +15,9 @@ function fixedPlayer(state: Career, spec: PlayerSpec, grade: number): Player {
   const level = spec.level + SCHOOL.growthPerYear * (grade - spec.year);
   const ratings = {} as Ratings; // 아래에서 전 능력치를 채운다
   for (const k of RATING_KEYS) {
-    const base = level + (k === 'ft' ? 8 : 0) + (ARCHETYPE[spec.pos][k] ?? 0) + (spec.tweaks[k] ?? 0);
+    // 대인 수비·팀 수비 보정을 따로 적지 않은 선수는 수비IQ 보정을 그대로 따른다
+    const tweak = spec.tweaks[k] ?? (k === 'mdf' || k === 'tdf' ? spec.tweaks.diq : undefined) ?? 0;
+    const base = level + (k === 'ft' ? 8 : 0) + (ARCHETYPE[spec.pos][k] ?? 0) + tweak;
     ratings[k] = Math.round(clamp(base, 5, 99));
   }
   return {
