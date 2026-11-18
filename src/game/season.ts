@@ -250,7 +250,10 @@ function startSeason(state: Career) {
   for (const id of state.regionIds) {
     const team = state.teams[id];
     setLineup(team);
-    if (id !== state.userTeamId || !team.tactics.focus) team.tactics = pickTactics(rng, team);
+    if (id !== state.userTeamId) team.tactics = pickTactics(rng, team);
+    // 부임 첫날의 내 팀: 공격 방향만 주전 구성에 맞추고, 수비와 템포는 무난한 기본값으로 둔다.
+    // (프레스나 빠른 템포는 체력 소모가 커서, 모르고 물려받으면 이유도 모른 채 후반에 무너진다)
+    else if (!team.tactics.focus) team.tactics = { focus: pickTactics(rng, team).focus, defense: 'man', pace: 0 };
   }
   state.comp = null; // 진행 중인 대회
   state.stats = {}; // 선수별 공식전 누적 기록 (한 해)
