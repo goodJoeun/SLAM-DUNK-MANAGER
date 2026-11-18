@@ -394,6 +394,7 @@ function playMatch(state: Career, ctx: DayContext, home: string, away: string, o
     const opp = home === state.userTeamId ? away : home;
     delete state.prep?.[opp];
     delete state.teams[state.userTeamId].tactics.denyPlayerId;
+    delete state.teams[state.userTeamId].tactics.denyDefenderId;
   }
   if (official) recordStats(state, g.box);
   const match: Match = { home, away, homeScore: g.score.home, awayScore: g.score.away, winner: g.winner === 'home' ? home : away, overtime: g.periods > 4 };

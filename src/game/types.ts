@@ -30,6 +30,7 @@ export interface Tactics {
   defense: Defense;
   keyPlayerId: string | null; // 에이스 지정
   denyPlayerId: string | null; // 집중 마크
+  denyDefenderId?: string | null; // 집중 마크를 맡길 우리 선수. 없거나 코트에 없으면 대상과 같은 자리의 선수가 맡는다
   roles?: Record<string, PlayerRole>; // 선수 id -> 개인 지시
 }
 

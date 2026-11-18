@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { denyOutlook } from '@/game/engine';
 import { today } from '@/game/season';
 import { keyMoments, playerRating } from '@/game/review';
 import type { BoxTeam, LogEvent, PlayerRole, PlayerView, TeamView } from '@/game/types';
@@ -246,6 +247,18 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const everyone = Object.fromEntries([...mine.court, ...mine.bench].map((p) => [p.id, p.name]));
   const rivals = Object.fromEntries([...opp.court, ...opp.bench].map((p) => [p.id, `${p.name} (${p.pts}점)`]));
   const t = mine.tactics;
+  // 집중 마크 담당 후보: 코트 위 선수를 먼저, 대상을 막을 때의 수비력과 함께 보여 준다
+  const denyTarget = t.denyPlayerId ? S.career.teams[opp.id ?? '']?.players.find((p) => p.id === t.denyPlayerId) : undefined;
+  const myRoster = S.career.teams[mine.id ?? '']?.players ?? [];
+  const markerLabel = (p: PlayerView, benched: boolean) => {
+    const src = myRoster.find((x) => x.id === p.id);
+    const skill = src && denyTarget ? ` · 수비 ${Math.round(denyOutlook(src, denyTarget).skill * 100)}` : '';
+    return `${p.name}${skill}${benched ? ' (벤치)' : ''}`;
+  };
+  const markers = Object.fromEntries([
+    ...mine.court.map((p) => [p.id, markerLabel(p, false)]),
+    ...mine.bench.filter((p) => !p.out).map((p) => [p.id, markerLabel(p, true)]),
+  ]);
   const prefs = S.prefs;
   const upcoming = today(S.career)?.prep;
   const prepBonus = upcoming && upcoming.daysUntil === 0 && (upcoming.opponentId === m.home || upcoming.opponentId === m.away) ? upcoming.bonus : 0;
@@ -411,6 +424,11 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
               <label className="hint">집중 마크
                 <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
               </label>
+              {t.denyPlayerId && (
+                <label className="hint" title="수비력이 높을수록 대상을 더 잘 묶습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
+                  <Select options={markers} value={t.denyDefenderId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">같은 자리 선수</option></Select>
+                </label>
+              )}
             </div>
           </div>
         </Panel>

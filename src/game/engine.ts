@@ -104,7 +104,15 @@ export const TUNING = {
   paceTovSkill: 0.25, // (상대 스틸 - 우리 볼 핸들링) 1.0당 턴오버 추가분
   paceDrain: 0.18, // 우리 선수 체력 소모 배율 변화
   paceDrainOpp: 0.07, // 따라 뛰는 상대의 체력 소모 배율 변화
-  deny: { usage: 0.35, make: -0.12, othersMake: 0.02 }, // 집중 마크: 대상은 묶이지만 나머지가 조금 편해진다
+  // 집중 마크: 담당 수비수가 대상을 따라다닌다. 대상은 묶이지만 나머지가 조금 편해진다.
+  //   usage·make는 담당의 수비력이 skillPivot일 때의 값이고, 수비력이 좋을수록 효과가 커진다 (배율 = 1 + skillSlope × (수비력 - skillPivot)).
+  //   담당은 수비에 힘을 쏟는 만큼 체력이 빨리 닳고(drain), 공격에서는 덜 쏘고(markerUsage) 덜 들어간다(markerMake).
+  deny: {
+    usage: 0.35, make: -0.12, othersMake: 0.02,
+    othersHelp: 0.03, // 담당이 혼자 못 막으면 동료가 도우러 가야 해서 나머지가 더 편해진다 (효과 배율 1.0 부족당 성공률)
+    skillPivot: 0.6, skillSlope: 3, skillMin: 0.4, skillMax: 1.6,
+    drain: 1.3, markerUsage: 0.9, markerMake: -0.015,
+  },
   // 존: 골밑은 막히고 외곽은 내준다. 외곽 보정은 상대 슈터 실력에 따라 달라져, 평범한 팀에겐 중립·슈터 없는 팀에겐 강하고·슈터 팀에겐 뚫린다
   zone: { shooterBurn: 0.7, insideMake: -0.055, outsideMake: 0.05, threeMix: 1.25, rimMix: 0.8, defReb: 0.92, shootingFoul: 0.8, drain: 0.92 },
   press: { tovBase: 0.02, tovSkill: 0.45, rimMake: 0.03, rimMix: 1.2, foul: 1.12, drain: 1.25, paceSec: 1 },
@@ -149,6 +157,20 @@ export const energyPerSecond = (endurance: number, style = 1) => TUNING.energyDr
 export const startEnergy = (condition: number | null | undefined) => (condition == null ? 1 : 0.7 + 0.3 * (condition / 100));
 // 컨디션이 나쁘면 경기 내내 몸이 무겁다: 컨디션 100에서 1, 0에서 1 - conditionPlay (벤치에서 쉬어도 돌아오지 않는다)
 export const conditionPlay = (condition: number | null | undefined) => (condition == null ? 1 : 1 - TUNING.conditionPlay * (1 - condition / 100));
+
+// 집중 마크에 쓰는 수비력 (0~1): 대상이 골밑형이면 골밑 수비, 외곽형이면 외곽 수비로 막는다
+const insideLean = (c: Composites) => Math.max(c.rim, c.post) - Math.max(c.mid, c.three);
+const denySkillOf = (marker: Composites, target: Composites) => (insideLean(target) > 0 ? marker.defInterior : marker.defPerimeter);
+// 수비력에 따른 집중 마크 효과 배율 (1 = 기준)
+export const denyPower = (skill: number) => {
+  const D = TUNING.deny;
+  return Math.max(D.skillMin, Math.min(D.skillMax, 1 + D.skillSlope * (skill - D.skillPivot)));
+};
+// 화면 안내용: 이 선수가 저 선수를 집중 마크할 때의 수비력과 효과 배율 (체력·당일 컨디션은 빼고 본다)
+export function denyOutlook(marker: BasePlayer, target: BasePlayer) {
+  const skill = denySkillOf(composites(marker), composites(target));
+  return { skill, power: denyPower(skill) };
+}
 
 export function composites(p: BasePlayer): Composites {
   const c: Composites = {
@@ -249,7 +271,7 @@ function setupTeam(team: EngineTeam, rng: Rng, auto: boolean, prep = 0): GameTea
   return {
     id: team.id,
     name: team.name,
-    tactics: { pace: 0, focus: 'balanced', defense: 'man', keyPlayerId: null, denyPlayerId: null, ...team.tactics },
+    tactics: { pace: 0, focus: 'balanced', defense: 'man', keyPlayerId: null, denyPlayerId: null, denyDefenderId: null, ...team.tactics },
     players,
     court: players.slice(0, 5), // 슬롯 순서 = 포지션 1~5
     auto, score: 0, teamFouls: 0, possessions: 0, subs: 0, run: 0,
@@ -289,6 +311,28 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
   const isFinal = () => period >= 4;
   const gone = (p: GamePlayer) => p.injured || p.stat.pf >= T.foulOutLimit; // 더는 뛸 수 없는 선수
 
+  // 집중 마크 상황. 대상이 코트에 있을 때만 성립한다.
+  //   담당(marker): 감독이 지정한 선수가 코트에 있으면 그 선수, 아니면 대상과 같은 자리의 선수.
+  //   지정한 담당이 다른 자리에 있으면 대상과 같은 자리의 선수와 맡을 상대를 서로 바꾼다.
+  //   power: 담당의 수비력(체력·컨디션 반영)에 따른 효과 배율
+  function denyOf(off: GameTeam, def: GameTeam) {
+    const id = def.tactics.denyPlayerId;
+    if (!id) return null;
+    const targetSlot = off.court.findIndex((p) => p.id === id);
+    if (targetSlot < 0) return null;
+    const chosen = def.tactics.denyDefenderId ? def.court.findIndex((p) => p.id === def.tactics.denyDefenderId) : -1;
+    const markerSlot = chosen >= 0 ? chosen : targetSlot;
+    const target = off.court[targetSlot];
+    const marker = def.court[markerSlot];
+    const lean = Math.max(target.c.rim, target.c.post) - Math.max(target.c.mid, target.c.three);
+    const power = denyPower(eff(marker, lean > 0 ? 'defInterior' : 'defPerimeter'));
+    return { target, marker, targetSlot, markerSlot, power };
+  }
+  type Deny = ReturnType<typeof denyOf>;
+  // slot 자리의 공격수를 맡는 수비수
+  const guardOf = (def: GameTeam, slot: number, deny: Deny) =>
+    def.court[deny ? (slot === deny.targetSlot ? deny.markerSlot : slot === deny.markerSlot ? deny.targetSlot : slot) : slot];
+
   function addPoints(off: GameTeam, def: GameTeam, player: GamePlayer, pts: number) {
     player.stat.pts += pts;
     off.score += pts;
@@ -302,10 +346,11 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const opp = teams[1 - teams.indexOf(team)];
       const tempo = 1 + T.paceDrain * team.tactics.pace + T.paceDrainOpp * opp.tactics.pace;
       const style = defenseDrain(d) * tempo;
+      const marker = denyOf(opp, team)?.marker; // 집중 마크 담당은 수비에 힘을 더 쏟는다
       for (const p of team.players) {
         if (team.court.includes(p)) {
           p.stat.sec += sec;
-          p.energy = Math.max(0, p.energy - sec * energyPerSecond(p.c.endurance, style));
+          p.energy = Math.max(0, p.energy - sec * energyPerSecond(p.c.endurance, p === marker ? style * T.deny.drain : style));
         } else {
           p.energy = Math.min(1, p.energy + sec * T.energyRecover);
         }
@@ -405,7 +450,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     return (r === 'tight' ? T.roles.tightFoul : r === 'safe' ? T.roles.safeFoul : 1) * care;
   };
 
-  function chooseShooter(off: GameTeam, def: GameTeam) {
+  function chooseShooter(off: GameTeam, def: GameTeam, deny: Deny, marker: GamePlayer | undefined) {
     const focus = off.tactics.focus;
     const weights = off.court.map((p) => {
         let w = p.c.usage ** 3 * (0.5 + 0.5 * p.energy);
@@ -417,7 +462,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
         if (focus === 'inside') w *= clamp(1 + T.focusUsageBias * lean, 0.5, 1.8);
         if (focus === 'outside') w *= clamp(1 - T.focusUsageBias * lean, 0.5, 1.8);
         if (p.id === off.tactics.keyPlayerId) w *= T.keyPlayerUsage;
-        if (p.id === def.tactics.denyPlayerId) w *= T.deny.usage;
+        if (p === deny?.target) w *= T.deny.usage ** deny.power; // 담당의 수비가 좋을수록 공을 못 잡는다
+        if (p === marker) w *= T.deny.markerUsage; // 상대 에이스를 따라다니느라 공격에 덜 가담한다
         return w;
     });
     // 상한: 가장 몰리는 선수의 비중이 상한을 넘으면 깎는다 (나머지 넷의 비율은 그대로)
@@ -540,12 +586,14 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       }
 
       // 3) 슛
+      const deny = denyOf(off, def); // 상대(수비 팀)가 우리 선수에게 건 집중 마크
+      const marker = denyOf(def, off)?.marker; // 우리 팀에서 상대 선수를 집중 마크하고 있는 선수
       const { slot, share, topShare, isTop } = tip
         ? { slot: off.court.indexOf(tip), share: 0, topShare: 0, isTop: false }
-        : chooseShooter(off, def);
+        : chooseShooter(off, def, deny, marker);
       const shooter = off.court[slot];
       shooter.energy = Math.max(0, shooter.energy - T.shotEnergy);
-      const defender = def.court[slot];
+      const defender = guardOf(def, slot, deny);
       let threeUrgency = 1;
       if (hurry) threeUrgency = diff <= -6 ? 2.5 : 1.5;
       if (isFinal() && clock <= 30 && diff === -3) threeUrgency = 5;
@@ -585,7 +633,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       if (guardRole === 'tight') pMake += T.roles.tightMake;
       else if (guardRole === 'safe') pMake += T.roles.safeMake;
       if (pressing && type === 'rim') pMake += T.press.rimMake; // 프레스가 뚫리면 쉬운 득점
-      if (def.tactics.denyPlayerId) pMake += shooter.id === def.tactics.denyPlayerId ? T.deny.make * def.plan : T.deny.othersMake;
+      if (deny) pMake += shooter === deny.target ? T.deny.make * deny.power * def.plan : Math.max(0, T.deny.othersMake + T.deny.othersHelp * (1 - deny.power));
+      if (shooter === marker) pMake += T.deny.markerMake; // 수비에 힘을 쏟은 만큼 슛이 무뎌진다
       if (off.run >= T.runThreshold) pMake += Math.min(T.runBoostMax, off.run * T.runBoostPerPoint); // 기세
       if (tip) pMake += T.putbackMake;
       if (period >= 3 && diff >= T.coastMargin) pMake += T.coastMake; // 크게 앞서면 무리하지 않는다
