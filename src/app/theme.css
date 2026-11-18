@@ -210,3 +210,15 @@ input[type='checkbox'] { accent-color: var(--club); }
   .role-edit > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
   .role-edit .seg button { min-height: 36px; font-size: 13px; }
 }
+
+/* 지시와 교체 창 안의 개인 지시 */
+.sub-sheet .role-edit { padding-left: 14px; }
+@media (max-width: 860px) {
+  /* 좁은 화면: 전술 묶음 버튼의 글자가 잘리지 않게 이름표 칸을 줄이고 글자를 조금 좁힌다 */
+  .tac-row { grid-template-columns: 34px minmax(0, 1fr); gap: 6px; }
+  .tac-picks label { grid-template-columns: 68px minmax(0, 1fr); gap: 6px; white-space: nowrap; }
+  .tac-row .seg button { padding: 5px 0; font-size: 13px; letter-spacing: -0.03em; }
+  /* 개인 지시 버튼은 네 칸 격자로 가지런히 */
+  .role-edit .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .role-edit .seg button { padding: 4px 0; letter-spacing: -0.03em; white-space: nowrap; }
+}

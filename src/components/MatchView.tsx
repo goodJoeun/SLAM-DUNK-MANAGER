@@ -495,11 +495,14 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
 
           {outgoing ? (
             <Panel
-              title={`${outgoing.name} 대신 들어갈 선수`}
+              title={`${outgoing.name} · 지시와 교체`}
               flush
               className="side-live sub-sheet"
-              action={<button className="btn ghost small" onClick={() => act('pick', 'court', outgoing.id)}>취소</button>}
+              action={<button className="btn ghost small" onClick={() => act('pick', 'court', outgoing.id)}>닫기</button>}
             >
+              {/* 고른 선수의 개인 지시를 교체 목록과 한자리에서 다룬다 (어디서 선수를 눌러도 이 창이 뜬다) */}
+              <RoleRow role={t.roles?.[outgoing.id]} open onChange={(kind, value) => act('playerRole', outgoing.id, kind, value)} />
+              <div className="sub-hint">대신 들어갈 선수 · 누르면 교체</div>
               {mine.bench.map((p) => (
                 <PlayerRow key={p.id} faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} />
               ))}
@@ -545,12 +548,12 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       <div className="match-grid">
         <Panel title="벤치 · 개인 지시" flush className="mt mt-squad">
           <div className="sub-hint">
-            {m.selected ? '고른 선수에게 지시를 내리거나, 대신 들어갈 벤치 선수를 누르세요. 다음 공격권부터 바로 적용됩니다.' : '선수를 누르면 개인 지시가 펼쳐집니다. 코트 선수를 고른 뒤 벤치 선수를 누르면 교체됩니다.'}
+            {m.selected ? '뜬 창에서 지시를 내리거나, 대신 들어갈 벤치 선수를 누르세요. 다음 공격권부터 바로 적용됩니다.' : '코트 선수를 누르면 개인 지시와 교체 창이 뜹니다. 내린 지시는 이름 아래에 꼬리표로 남습니다.'}
           </div>
           {mine.court.map((p) => (
             <div key={p.id}>
               <PlayerRow faces={faces} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} />
-              <RoleRow role={t.roles?.[p.id]} open={m.selected === p.id && !v.finished} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
+              <RoleRow role={t.roles?.[p.id]} open={false} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
             </div>
           ))}
           <div className="sub-hint">벤치</div>
