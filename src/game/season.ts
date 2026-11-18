@@ -176,7 +176,7 @@ export function seasonGoal(state: Career) {
   const best = state.bestTier ?? null;
   return {
     tier: state.goal.tier, label: GOAL_LABEL[state.goal.tier],
-    best, bestLabel: best == null ? null : TIER_LABEL[best],
+    best, bestLabel: best == null ? null : state.bestFinish ?? TIER_LABEL[best], // 실제 결과를 그대로 보여 준다 (예전 저장에는 없다)
     achieved: best != null && best >= state.goal.tier,
     trust: state.trust ?? 50,
   };
@@ -189,7 +189,7 @@ function reviewYear(state: Career): YearReview {
   const grade = diff >= 1 ? 2 : diff === 0 ? 1 : diff === -1 ? -1 : -2;
   const effect = GOAL_EFFECT[grade];
   state.trust = clamp((state.trust ?? 50) + effect.trust, 0, 100);
-  return { goal: goal.label, best: TIER_LABEL[best], grade, verdict: effect.verdict, prestigeBonus: effect.prestige, trust: state.trust };
+  return { goal: goal.label, best: goal.bestLabel ?? TIER_LABEL[best], grade, verdict: effect.verdict, prestigeBonus: effect.prestige, trust: state.trust };
 }
 
 // ---------- 신입생 스카우트 ----------
@@ -244,6 +244,7 @@ function startSeason(state: Career) {
   const rng = rngFor(state);
   state.goal = { tier: goalTierFor(state) };
   delete state.bestTier;
+  delete state.bestFinish;
   state.prospects = makeProspects(state, rng);
   state.recruitTargets = [];
   for (const id of state.regionIds) {
@@ -575,7 +576,11 @@ function setupNational(state: Career, rng: Rng, reps: string[]) {
 function finishCompetition(state: Career) {
   const c = state.comp!;
   c.stage = 'done';
-  state.bestTier = Math.max(state.bestTier ?? 0, c.tier[state.userTeamId] ?? 0);
+  const tier = c.tier[state.userTeamId] ?? 0;
+  if (state.bestTier == null || tier > state.bestTier) {
+    state.bestTier = tier;
+    state.bestFinish = c.finish[state.userTeamId];
+  }
   for (const id of state.regionIds) {
     state.yearPoints[id] = (state.yearPoints[id] ?? 0) + SEASON.prestigeByTier[c.tier[id] ?? 0];
   }
@@ -646,6 +651,36 @@ export function userMatchDays(state: Career): number[] {
     if (d.type === 'practice' || (d.type === 'official' && (alive || newCompetition))) days.push(i);
   }
   return days;
+}
+
+// 지금 대회에서 상대가 이미 정해진 내 팀의 공식전: 달력 위치 → 상대 학교 id.
+// 조별 리그와 결승 리그는 남은 경기의 상대를 모두 알고, 토너먼트는 다음 경기만 안다.
+export function knownOpponents(state: Career): Record<number, string> {
+  const out: Record<number, string> = {};
+  const me = state.userTeamId;
+  const c = state.comp;
+  if (!c || c.stage === 'done') return out;
+  const other = (pair?: string[]) => (pair ? (pair[0] === me ? pair[1] : pair[0]) : null);
+  let rounds: (string | null)[] = [];
+  if (c.stage === 'group') {
+    const group = c.groups!.find((g) => g.ids.includes(me))!;
+    rounds = group.schedule.slice(c.groupPlayed).map((r) => other(r.find((p) => p.includes(me))));
+  } else if (c.stage === 'finalLeague') {
+    rounds = c.league!.schedule.slice(c.league!.played).map((r) => other(r.find((p) => p.includes(me))));
+  } else {
+    const pairing = officialPairing(state);
+    rounds = [pairing ? other([pairing.home, pairing.away]) : null];
+  }
+  // 대진이 미리 발표된 대회는 아직 시작 전이므로, 그 대회의 시작일 하나는 지나가도 된다
+  let starts = c.rounds.length ? 0 : 1;
+  for (let i = state.dayIndex; i < state.calendar.length && rounds.length; i++) {
+    const d = state.calendar[i];
+    if (i > state.dayIndex && d.start && starts-- <= 0) break;
+    if (d.type !== 'official') continue;
+    const id = rounds.shift();
+    if (id) out[i] = id;
+  }
+  return out;
 }
 
 // 다음 경기일까지 남은 날 (0이면 오늘). 남은 경기가 없으면 null

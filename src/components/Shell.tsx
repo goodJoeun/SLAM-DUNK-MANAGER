@@ -93,6 +93,9 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
       {!d.userMatch && (
         <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
       )}
+      {restAdvice && (
+        <button className="btn rest-today" onClick={() => act('restDay')} title="정해 둔 훈련 메뉴는 그대로 두고 오늘 하루만 쉽니다">오늘은 휴식</button>
+      )}
       <button
         className={`btn continue ${decision || restAdvice ? 'alert' : ''}`}
         onClick={() => act('proceed')}

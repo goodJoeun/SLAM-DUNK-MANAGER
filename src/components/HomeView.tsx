@@ -1,4 +1,4 @@
-import { PREPARATION, SEASON, seasonGoal, today, upcomingOfficial, userHasBye, userMatchDays, RECRUITING } from '@/game/season';
+import { PREPARATION, SEASON, knownOpponents, seasonGoal, today, userHasBye, userMatchDays, RECRUITING } from '@/game/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from './useGame';
@@ -223,9 +223,7 @@ export default function HomeView({ S, act }: ViewProps) {
   const tired = fit.filter((p) => p.condition < 60);
   const matches = S.inbox.filter((m) => m.kind === 'match');
   const upcoming = c.calendar.slice(c.dayIndex, c.dayIndex + 8).map((day, i) => ({ day, n: c.dayIndex + i + 1 }));
-  // 공식전은 대진이 정해진 바로 다음 경기만 상대를 안다
-  const official = upcomingOfficial(c);
-  const officialDay = official ? c.dayIndex + official.daysUntil + 1 : null;
+  const opponents = knownOpponents(c); // 상대가 정해진 공식전 (조별 리그는 남은 경기 모두, 토너먼트는 다음 경기만)
   const ours = new Set(userMatchDays(c).map((i) => i + 1)); // 우리 팀이 뛰는 날
   const targets = c.recruitTargets?.length ?? 0;
 
@@ -304,7 +302,7 @@ export default function HomeView({ S, act }: ViewProps) {
                   : day.type === 'practice'
                     ? <span className="pill club">연습 · {teamName(c, day.opponentId ?? '')}</span>
                     : !ours.has(n) ? <span className="pill">다른 학교 경기 · 훈련</span>
-                      : <span className="pill warn">{n === officialDay && official ? `공식전 · ${official.opponent}` : '공식전'}</span>}
+                      : <span className="pill warn">{opponents[n - 1] ? `공식전 · ${teamName(c, opponents[n - 1])}` : '공식전 · 상대 미정'}</span>}
               </li>
             ))}
           </ul>

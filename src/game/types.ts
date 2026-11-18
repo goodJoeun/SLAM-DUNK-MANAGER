@@ -366,6 +366,7 @@ export interface Career {
   prep?: Record<string, number>; // 다음 공식전 상대별 분석 일수 (대회가 바뀌면 비운다)
   goal?: { tier: number }; // 교장이 정한 올해 목표 (대회 성적 등급). 세 대회 중 한 번이라도 이루면 달성
   bestTier?: number; // 올해 끝난 대회 중 우리 학교의 가장 좋은 성적 등급
+  bestFinish?: string; // 그 성적을 낸 대회의 실제 결과 (예: "인터하이 현 예선 C조 2위")
   trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
   prospects?: Prospect[]; // 올해 눈여겨볼 중학 유망주 (우리 학교가 영입을 시도할 수 있는 후보)
   recruitTargets?: string[]; // 영입 목표로 정한 유망주의 선수 id

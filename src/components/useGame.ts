@@ -365,10 +365,11 @@ function blockedByEvent(S: GameState) {
   return true;
 }
 
-function trainDay(S: GameState) {
+// program을 주면 정해 둔 훈련 메뉴는 그대로 두고 오늘 하루만 그 메뉴로 보낸다
+function trainDay(S: GameState, program: ProgramKey = S.program) {
   if (blockedByEvent(S)) return;
   const condBefore = teamCondition(S);
-  const { report } = advance(S, { program: S.program, intensity: S.intensity });
+  const { report } = advance(S, { program, intensity: S.intensity });
   // 한 해가 끝난 날은 연말 평가가 뜨므로 따로 알리지 않는다
   if (report && !report.yearEnd) {
     const done = report.training;
@@ -486,6 +487,8 @@ const actions = {
   },
   intensity({ S }: Ctx, key: IntensityKey) { S.intensity = key; },
   train({ S }: Ctx) { trainDay(S); },
+  // 훈련 설정은 건드리지 않고 오늘 하루만 쉰다 (컨디션이 낮을 때 계속 버튼 옆에 뜬다)
+  restDay({ S }: Ctx) { if (!today(careerOf(S))?.userMatch) trainDay(S, 'rest'); },
   // 상단의 계속 버튼: 경기일이면 경기장으로, 아니면 정해 둔 훈련으로 하루를 보낸다
   proceed({ S }: Ctx) {
     const d = today(careerOf(S));
