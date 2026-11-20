@@ -75,7 +75,7 @@ export default function TrainingView({ S, act }: ViewProps) {
                 return (
                   <button key={k} className={`opt ${S.program === k ? 'on' : ''}`} onClick={() => act('program', k)}>
                     <b>{p.label}</b>
-                    <span>{p.keys.length ? p.keys.map((x) => RATING_LABEL[x]).join(' · ') : `컨디션 회복`}</span>
+                    <span>{p.keys.length ? p.keys.map((x) => RATING_LABEL[x]).join(' · ') : `컨디션 회복`}{k === 'physical' && ' (스피드·점프는 천천히 오릅니다)'}</span>
                   </button>
                 );
               })}

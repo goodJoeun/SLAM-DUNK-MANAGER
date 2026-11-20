@@ -39,6 +39,9 @@ export const GROWTH = {
   individualShare: 0.35, // 개인 훈련 지정 시 추가로 받는 비율
   passivePerDay: 0.01, // 훈련과 무관한 자연 성장 (전 능력치)
   heightPerDay: 0.006, // 키는 자연 성장만
+  // 능력치별 성장 속도. 스피드와 점프는 타고나는 몫이 커서 훈련해도 천천히 오른다.
+  // (둘은 공격·수비·리바운드에 두루 쓰여, 다른 능력치만큼 빨리 오르면 체력 훈련만 하는 것이 정답이 된다. scripts/balance/training-effect.ts)
+  keyRate: { spd: 0.5, jmp: 0.5 } as Partial<Record<RatingKey, number>>,
   campBonus: 1.4, // 합숙 중 성장 배율
   campCost: 1.2,
   yearFactor: { 1: 1.15, 2: 1.0, 3: 0.9 } as Record<number, number>, // 저학년일수록 빨리 큰다
@@ -231,7 +234,7 @@ export function pickTactics(rng: Rng, team: Team) {
 function gain(p: Player, key: RatingKey, amount: number, events?: GrowthEvent[]) {
   const r = p.ratings[key];
   const slowdown = 1 - Math.max(0, r - 60) / 45; // 높은 능력치일수록 올리기 어렵다
-  p.progress[key] = (p.progress[key] ?? 0) + amount * Math.max(0.1, slowdown);
+  p.progress[key] = (p.progress[key] ?? 0) + amount * (GROWTH.keyRate[key] ?? 1) * Math.max(0.1, slowdown);
   while (p.progress[key]! >= 1 && p.ratings[key] < 99) {
     p.progress[key]! -= 1;
     p.ratings[key]++;

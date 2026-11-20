@@ -55,6 +55,14 @@ export const TUNING = {
   conditionPlay: 0.12, // 컨디션 0인 선수의 경기력 감소 폭 (컨디션 60이면 약 5%)
   energyDrain: 0.00045,
   energyRecover: 0.0012,
+  // 아래 세 묶음은 능력치를 올려도 승률이 거의 변하지 않던 지구력·골밑 기술·패스에 값어치를 준다 (scripts/balance/training-effect.ts)
+  // 지구력(0~1, 0.5가 기준)이 체력에 주는 영향: 코트에서 덜 지치고, 벤치에서 더 빨리 회복한다
+  enduranceDrain: 2.0, // 지구력 1.0 차이당 체력 소모 배율 변화
+  enduranceRecover: 1.5, // 지구력 1.0 차이당 벤치 회복 배율 변화
+  fatigue: 0.25, // 체력이 바닥났을 때 능력이 떨어지는 비율
+  // 골밑 기술(insidePivot이 기준) 1.0 차이당 골밑슛·포스트업 성공률 변화. 포스트업은 비효율적인 슛이라, 시도만 늘어서는 팀에 도움이 되지 않는다
+  insideTouch: 0.18, insidePivot: 0.6,
+  passMake: 0.10, // 팀 패스 능력(0.5가 기준) 1.0 차이당 슛 성공률 변화: 패스가 좋은 팀은 더 좋은 슛 기회를 만든다
 
   // 교체
   tiredEnergy: 0.6, // 이 아래로 떨어지면 벤치로
@@ -64,11 +72,11 @@ export const TUNING = {
   posMismatchPenalty: 0.06, // 포지션 1칸 어긋날 때마다 가치 감소
   crunchSeconds: 180, // 4쿼터 막판 접전: 베스트 5 고정
   crunchMargin: 8,
-  garbageMargin: 20, // 4쿼터에 이 점수 차 이상이면 양 팀 모두 벤치 가동
-  garbageMarginEarly: 25, // 2쿼터 후반·3쿼터부터 이만큼 벌어지면 일찍 주전을 뺀다
-  coastMargin: 18, // 후반에 이만큼 앞선 팀은 공격 시간을 더 쓴다
+  garbageMargin: 17, // 4쿼터에 이 점수 차 이상이면 양 팀 모두 벤치 가동
+  garbageMarginEarly: 21, // 2쿼터 후반·3쿼터부터 이만큼 벌어지면 일찍 주전을 뺀다
+  coastMargin: 15, // 후반에 이만큼 앞선 팀은 공격 시간을 더 쓴다
   coastSeconds: 4,
-  coastMake: -0.03, // 크게 앞선 팀은 무리하지 않는다 (슛 성공률 보정)
+  coastMake: -0.04, // 크게 앞선 팀은 무리하지 않는다 (슛 성공률 보정)
   formSd: 0.015, // 당일 컨디션 편차 (일관성이 낮을수록 커진다)
   formInconsistency: 0.05,
   moraleForm: 0.02, // 사기 40 차이당 경기력 변화 (사기 100이면 +2%, 20이면 -2%). 사기가 없는 팀은 보통(60)으로 본다
@@ -170,7 +178,7 @@ export function tacticLoad(defense: Defense | null | undefined, pace: number) {
 }
 
 // 코트 위에서 1초 뛸 때 줄어드는 체력 (0~1 기준). style은 전술 배율.
-export const energyPerSecond = (endurance: number, style = 1) => TUNING.energyDrain * style * (1.3 - 0.6 * endurance);
+export const energyPerSecond = (endurance: number, style = 1) => TUNING.energyDrain * style * Math.max(0.4, 1 + TUNING.enduranceDrain * (0.5 - endurance));
 
 // 경기 시작 때의 체력 (0~1): 지친 채로 경기에 나오면 체력이 덜 찬 상태로 시작한다
 export const startEnergy = (condition: number | null | undefined) => (condition == null ? 1 : 0.7 + 0.3 * (condition / 100));
@@ -356,7 +364,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
 
   // 피로·컨디션 반영 능력치
   const clutchTime = () => period >= 4 && clock <= T.crunchSeconds && Math.abs(teams[0].score - teams[1].score) <= T.crunchMargin;
-  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (0.8 + 0.2 * p.energy) * p.fit * (1 + p.form + (p.clutch && clutchTime() ? T.clutchBoost : 0));
+  const eff = (p: GamePlayer, key: keyof Composites) => p.c[key] * (1 - T.fatigue * (1 - p.energy)) * p.fit * (1 + p.form + (p.clutch && clutchTime() ? T.clutchBoost : 0));
   const avg = (team: GameTeam, key: keyof Composites) => team.court.reduce((s, p) => s + eff(p, key), 0) / 5;
   const avgEnergy = (team: GameTeam) => team.court.reduce((s, p) => s + p.energy, 0) / 5;
   const pick = (players: GamePlayer[], weightFn: (p: GamePlayer) => number) => players[rng.weighted(players.map(weightFn))];
@@ -404,7 +412,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
           p.stat.sec += sec;
           p.energy = Math.max(0, p.energy - sec * energyPerSecond(p.c.endurance, p === marker ? style * T.deny.drain : style));
         } else {
-          p.energy = Math.min(1, p.energy + sec * T.energyRecover);
+          p.energy = Math.min(1, p.energy + sec * T.energyRecover * Math.max(0.4, 1 + T.enduranceRecover * (p.c.endurance - 0.5)));
         }
       }
     }
@@ -662,7 +670,8 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const defense = own * eff(defender, defKey) + (1 - own) * avg(def, helpKey);
 
       let pMake = S.make + T.makeSkill * T.shotSkill[type] * (eff(shooter, type) - defense);
-      pMake += 0.04 * (avg(off, 'passing') - 0.5); // 팀 패스 시너지
+      pMake += T.passMake * (avg(off, 'passing') - 0.5); // 팀 패스 시너지
+      if (inside) pMake += T.insideTouch * (shooter.raw.ins / 100 - T.insidePivot); // 골밑 기술: 몸싸움 속에서도 마무리한다
       if (zone) pMake += inside ? T.zone.insideMake : T.zone.outsideMake + T.zone.shooterBurn * (avg(off, 'three') - 0.5); // 슈터가 좋으면 존이 뚫린다
       // 공격 중심이 상대 수비의 약한 쪽을 노리면 더 잘 들어간다 (반대로 강한 쪽을 노리면 손해)
       if (off.tactics.focus === 'inside' && inside) pMake += T.focusRead.inside;
