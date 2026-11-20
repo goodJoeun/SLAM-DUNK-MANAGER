@@ -1,5 +1,6 @@
 // 여러 화면이 함께 쓰는 작은 부품과 표기 규칙.
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { ORIGINAL } from '@/game/data/original';
 import { playerRating } from '@/game/match/review';
 import type { BoxTeam, Career, Defense, Focus, GrowthEvent, Match, NameStyle, RatingKey, Tactics } from '@/game/types';
 import type { MatchLine } from '@/state/inbox';
@@ -68,7 +69,26 @@ export function matchColors(names: [string, string], mySide: number): [string, s
 }
 export const clubVars = (name: string) => ({ '--club': clubColor(name) }) as CSSProperties;
 
+// 도에이 공식 상품의 팀 마크와 유니폼 글자. 나머지 학교는 게임용 문장을 사용한다.
+// https://store.toei-anim.co.jp/shop/g/gSLD00034P1/ (북산)
+// https://store.toei-anim.co.jp/shop/g/gSLD00201P1/ (산왕)
+// https://www.toei-anim.co.jp/dvd/slamdunk/ (능남·해남)
+const uniformMarks = new Set(['북산고', '산왕공고', '능남고', '해남대부속고']);
+const crestFiles = new Map<string, string>();
+for (const { name } of [...ORIGINAL.schools, ...ORIGINAL.nationals]) {
+  const extension = uniformMarks.has(name.kr) ? 'webp' : 'svg';
+  const file = `/crests/${encodeURIComponent(name.kr)}.${extension}`;
+  crestFiles.set(name.kr, file);
+  crestFiles.set(name.jp, file);
+}
+
 export function Crest({ name, size = 32 }: { name: string; size?: number }) {
+  const file = crestFiles.get(name);
+  const [failedFile, setFailedFile] = useState<string>();
+  if (file && file !== failedFile) {
+    return <img src={file} alt="" width={size} height={(size * 36) / 32}
+      style={{ flex: 'none', objectFit: 'contain' }} onError={() => setFailedFile(file)} />;
+  }
   const hue = clubHue(name);
   return (
     <svg width={size} height={(size * 36) / 32} viewBox="0 0 32 36" aria-hidden="true" style={{ flex: 'none' }}>
