@@ -37,8 +37,15 @@ export const TUNING = {
     mid: { make: 0.39, block: 0.03, foul: 0.05, assist: 0.45, pts: 2, orb: 0.95 },
     three: { make: 0.335, block: 0.01, foul: 0.02, assist: 0.75, pts: 3, orb: 0.92 },
   },
-  shotMixWeight: { rim: 1.05, post: 0.55, mid: 0.9, three: 0.85 },
+  shotMixWeight: { rim: 1.05, post: 0.55, mid: 1.1, three: 0.85 },
   shotComfort: 3, // 자기 주무기보다 못하는 슛은 잘 안 쏜다 (센터가 3점을 남발하지 않게). 클수록 주무기에 몰린다
+  // 미들슛은 일정 수준을 넘으면 더 자주 쏘지 않고 더 잘 넣는다: 슛 선택에서는 미들슛 능력을 midVolumeCap까지만 쳐 준다
+  // (넘는 부분은 midVolumeSoft 제곱으로 조금만 반영). 미들슛은 가장 비효율적인 슛이라, 실력만큼 시도가 늘면
+  // 골밑슛·3점슛을 밀어내 미들슛을 훈련할수록 팀이 약해진다 (scripts/balance/training-effect.ts)
+  midVolumeCap: 0.52,
+  midVolumeSoft: 0.3,
+  // 슛 종류별 makeSkill 배율: 점프슛은 슈터의 실력이 성공률에 더 크게 드러난다
+  shotSkill: { rim: 1, post: 1, mid: 1.8, three: 1 },
   putbackChance: 0.4, // 공격 리바운드를 잡은 선수가 곧바로 골밑슛을 올려놓을 확률
   putbackMake: -0.04, // 풋백은 수비 틈에서 쏘는 슛이라 조금 어렵다
   foulCare: 0.12, // 파울이 쌓인 선수는 조심한다: 파울 1개당 파울 가능성 감소
@@ -536,8 +543,10 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
     else if (role === 'post') w.post *= T.roles.specialtyMix;
     w.three *= threeUrgency;
     const types: ShotType[] = ['rim', 'post', 'mid', 'three'];
-    const best = Math.max(...types.map((t) => shooter.c[t]));
-    return types[rng.weighted(types.map((t) => w[t] * shooter.c[t] ** 2.5 * (shooter.c[t] / best) ** T.shotComfort))];
+    const cap = T.midVolumeCap;
+    const c = { ...shooter.c, mid: shooter.c.mid <= cap ? shooter.c.mid : cap * (shooter.c.mid / cap) ** T.midVolumeSoft };
+    const best = Math.max(...types.map((t) => c[t]));
+    return types[rng.weighted(types.map((t) => w[t] * c[t] ** 2.5 * (c[t] / best) ** T.shotComfort))];
   }
 
   // 한 번의 공격권. 공격 리바운드가 나오는 동안 계속된다.
@@ -652,7 +661,7 @@ export function createGame(homeTeam: EngineTeam, awayTeam: EngineTeam, opts: Gam
       const own = zone ? T.zone.ownShare : T.ownDefenseShare;
       const defense = own * eff(defender, defKey) + (1 - own) * avg(def, helpKey);
 
-      let pMake = S.make + T.makeSkill * (eff(shooter, type) - defense);
+      let pMake = S.make + T.makeSkill * T.shotSkill[type] * (eff(shooter, type) - defense);
       pMake += 0.04 * (avg(off, 'passing') - 0.5); // 팀 패스 시너지
       if (zone) pMake += inside ? T.zone.insideMake : T.zone.outsideMake + T.zone.shooterBurn * (avg(off, 'three') - 0.5); // 슈터가 좋으면 존이 뚫린다
       // 공격 중심이 상대 수비의 약한 쪽을 노리면 더 잘 들어간다 (반대로 강한 쪽을 노리면 손해)
