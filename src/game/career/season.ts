@@ -23,7 +23,7 @@ import {
   trainTeam, applyMatch, overnight, aiTraining,
 } from '../team/school.ts';
 import { bracketOrder, roundRobin, standings, roundName, BYE } from './competition.ts';
-import { DATASETS, buildSchool } from '../team/dataset.ts';
+import { DATASETS, SUCCESSION, buildSchool } from '../team/dataset.ts';
 import { keyMoments, playerRating } from '../match/review.ts';
 import { moraleAfterMatch, moraleAfterTraining, moraleOvernight, rollEvent } from '../team/people.ts';
 import type { Rng } from '../rng.ts';
@@ -623,7 +623,7 @@ function setupNational(state: Career, rng: Rng, reps: string[]) {
   for (let i = 0; i < count; i++) {
     addGuest(invited[i]
       ? buildSchool(rng, state, invited[i].spec)
-      : createSchool(rng, state, `${prefectures[i % prefectures.length]} 대표`, Math.round(clamp(rng.gauss(SEASON.guestPrestige, 5), 45, 75))));
+      : createSchool(rng, state, `${prefectures[i % prefectures.length]} 대표`, Math.round(clamp(rng.gauss(SEASON.guestPrestige + SUCCESSION.growth * (state.year - 1), 5), 45, 75))));
   }
   const guests = shuffle(rng, [...state.guestIds]); // 대진 추첨
   const half = SEASON.nationalSize / 2;

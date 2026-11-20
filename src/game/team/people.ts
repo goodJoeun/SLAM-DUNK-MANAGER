@@ -15,8 +15,8 @@ export const MORALE = {
   base: 60, // 보통 사기. 이 값일 때 경기력·훈련 효율 보정이 0이다
   drift: 0.04, // 하루에 보통 사기 쪽으로 돌아가는 비율
   win: 3, loss: -3, officialMult: 1.7, // 승패 (공식전은 더 크게)
-  upset: 3, // 전력이 5 이상 높은 상대를 이겼을 때 추가 (반대로 약한 상대에게 지면 그만큼 감소)
-  played: 1, // 10분 이상 뛰었다
+  expectGap: 8, // 전력 차가 이만큼이면 결과가 뻔한 경기로 본다 (이길 만한 승리·질 만한 패배는 사기를 움직이지 않는다)
+  played: 0.5, // 10분 이상 뛰었다
   benched: -2, benchedSenior: -4, // 공식전에서 한 번도 못 뛰었다 (3학년은 더 속상하다)
   hard: -1.5, light: 0.5, rest: 2, // 훈련 강도
   growth: 0.2, // 사기 40 차이당 훈련 성장 배율 변화 (사기 100이면 ×1.2, 20이면 ×0.8)
@@ -98,9 +98,11 @@ export function moraleAfterTraining(team: Team, program: string, intensity: stri
 export function moraleAfterMatch(team: Team, minutes: Record<string, number>, won: boolean, official: boolean, gap: number) {
   const mult = official ? MORALE.officialMult : 1;
   const leader = team.players.slice(0, 5).some((p) => traitOf(p) === 'leader');
-  let result = (won ? MORALE.win : MORALE.loss) * mult;
-  if (won && gap >= 5) result += MORALE.upset * mult;
-  if (!won && gap <= -5) result -= MORALE.upset * mult;
+  // 기대와 견준 결과만 사기를 움직인다: 이길 만한 상대를 이긴 것, 질 만한 상대에게 진 것은 거의 영향이 없고,
+  // 강한 상대를 잡으면 두 배로 오르고 약한 상대에게 지면 두 배로 떨어진다.
+  // (승패를 그대로 반영하면 강팀은 늘 사기가 최고라 가만히 있어도 더 강해지고, 약팀은 지면서 더 약해진다)
+  const surprise = clamp(gap / MORALE.expectGap, -1, 1); // +1: 훨씬 강한 상대, -1: 훨씬 약한 상대
+  let result = (won ? MORALE.win * (1 + surprise) : MORALE.loss * (1 - surprise)) * mult;
   if (!won && leader) result /= 2;
   for (const p of team.players) {
     if (p.injuredDays) continue;
