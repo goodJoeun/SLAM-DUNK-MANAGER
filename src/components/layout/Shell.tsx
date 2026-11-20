@@ -6,6 +6,7 @@ import { PROGRAMS, INTENSITY, teamOverall } from '@/game/team/school';
 import type { Today } from '@/game/types';
 import type { ScreenKey } from '@/state/useGame';
 import { Attr, CondBar, Crest, Icon, clubVars, mean, userTeam } from '@/components/shared/ui';
+import EventModal, { eventKey, resultKey } from './EventModal';
 import type { IconName, ViewProps } from '@/components/shared/ui';
 
 const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
@@ -52,11 +53,18 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   // 화면을 바꾸면 맨 위에서 시작한다 (이전 화면의 스크롤 위치가 남아 제목이 가려지지 않게)
   useEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, S.schoolId, inMatchNow(S)]);
 
+  // 오늘의 결정 팝업: 닫은 사건·결과의 이름을 기억해 둔다 (새 사건이 생기면 다시 뜬다)
+  const [closed, setClosed] = useState<string | null>(null);
+  const popupKey = eventKey(S) ?? resultKey(S);
+  const popup = !inMatchNow(S) && popupKey != null && popupKey !== closed;
+
   // 스페이스: 평소에는 '계속', 경기 중에는 진행/일시정지. 입력 칸이나 버튼에 초점이 있으면 건드리지 않는다.
   const onSpace = useRef<() => void>(() => {});
   onSpace.current = () => {
     if (S.match) {
       if (!S.match.game.finished) act(S.match.playing ? 'pause' : 'play');
+    } else if (S.career.event && !today(S.career)?.userMatch) {
+      setClosed(null); // 결정을 미뤄 둔 사건이 있으면 하루를 넘기는 대신 창을 다시 연다
     } else if (today(S.career)) act('proceed');
   };
   useEffect(() => {
@@ -100,8 +108,8 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
       )}
       <button
         className={`btn continue ${decision || restAdvice ? 'alert' : ''}`}
-        onClick={() => act('proceed')}
-        title={decision ? '홈의 "오늘의 결정"을 먼저 골라야 하루가 넘어갑니다' : restAdvice ? '컨디션이 낮으면 훈련 효율이 떨어지고 다치기 쉬우며, 경기력도 떨어집니다. 훈련 화면에서 휴식을 고를 수 있습니다. (단축키: 스페이스)' : '단축키: 스페이스'}
+        onClick={() => (decision ? setClosed(null) : act('proceed'))}
+        title={decision ? '"오늘의 결정"을 먼저 골라야 하루가 넘어갑니다. 누르면 결정 창을 다시 엽니다' : restAdvice ? '컨디션이 낮으면 훈련 효율이 떨어지고 다치기 쉬우며, 경기력도 떨어집니다. 훈련 화면에서 휴식을 고를 수 있습니다. (단축키: 스페이스)' : '단축키: 스페이스'}
       >
         <span className="c-main">{d.userMatch ? '경기 시작' : decision ? '결정 필요' : '계속'}<Icon name="next" /></span>
         <small>{d.userMatch ? d.userMatch.label : decision ? '오늘의 결정을 먼저 고르세요' : restAdvice ?? `훈련: ${plan}`}</small>
@@ -182,6 +190,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
         )}
         {children}
       </div>
+      {popup && <EventModal S={S} act={act} onClose={() => setClosed(popupKey)} />}
     </div>
   );
 }

@@ -68,7 +68,7 @@ const Lines = memo(function Lines() {
   );
 });
 
-export default function FullCourt({ anim, scene, colors, labels, faces, mySide, selected, onPick }: {
+export default function FullCourt({ anim, scene, colors, labels, faces, mySide, selected, onPick, onInfo }: {
   anim: CourtAnimation | null;
   scene: Scene;
   colors: [string, string];
@@ -77,6 +77,7 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
   mySide: number;
   selected?: string | null;
   onPick?: (id: string) => void; // 우리 팀 선수를 누르면 (교체 선택)
+  onInfo?: (id: string) => void; // 상대 선수를 누르면 (능력치 보기). 교체를 고를 수 없을 때(경기 종료)는 우리 선수도 이쪽으로 간다
 }) {
   const [now, setNow] = useState(0);
 
@@ -114,15 +115,16 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
         const face = faces?.[p.id];
         // 연결된 원작 이미지는 세로로 긴 상반신(4:5)이라 위쪽 얼굴 부분만, 올린 이미지는 정사각형 그대로 원 안에 넣는다
         const tall = face?.startsWith('/portraits/');
+        const press = mine && onPick ? () => onPick(p.id) : onInfo ? () => onInfo(p.id) : undefined;
         return (
           <g
             key={p.id}
             transform={`translate(${p.x.toFixed(3)} ${p.y.toFixed(3)})`}
-            className={`dot ${mine && onPick ? 'pick' : ''} ${selected === p.id ? 'sel' : ''}`}
-            onClick={mine && onPick ? () => onPick(p.id) : undefined}
+            className={`dot ${press ? 'pick' : ''} ${selected === p.id ? 'sel' : ''}`}
+            onClick={press}
           >
             {/* 손가락으로 누르기 쉽게 보이는 원보다 넓은 터치 영역 */}
-            {mine && onPick && <circle className="hit" r="1.5" />}
+            {press && <circle className="hit" r="1.5" />}
             {hasBall && <circle className="holder" r="0.66" />}
             <circle className="body" r="0.44" fill={colors[p.side]} />
             {face ? (

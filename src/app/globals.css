@@ -947,3 +947,18 @@ button, select, summary, label, [role="tab"], tr.click, li.click, .bench-row, .m
   .cover-inner { padding-top: 58vw; }
   .cover-menu { align-content: start; }
 }
+
+/* 오늘의 결정 팝업 */
+.modal.event-modal { width: min(620px, 100%); border-color: var(--gold); }
+.modal.event-modal h2 { font-size: 22px; }
+.event-foot { justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+
+/* 경기 중 선수 능력치 창 */
+.modal.player-card { width: min(560px, 100%); }
+.modal.player-card h2 { font-size: 22px; }
+.pc-head { display: flex; align-items: center; gap: 12px; }
+.pc-ovr { display: grid; justify-items: center; gap: 2px; }
+.pc-live { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--muted); }
+.pc-live > span { display: inline-flex; align-items: center; gap: 6px; }
+.bench-row.has-info { grid-template-columns: 32px minmax(0, 1fr) 56px 34px 30px auto; }
+.bench-row .info-btn { padding: 2px 8px; min-height: 0; font-size: 12px; }

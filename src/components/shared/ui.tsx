@@ -5,6 +5,7 @@ import { playerRating } from '@/game/match/review';
 import type { BoxTeam, Career, Defense, Focus, GrowthEvent, Match, NameStyle, RatingKey, Tactics } from '@/game/types';
 import type { MatchLine } from '@/state/inbox';
 import type { Act, PlayingState } from '@/state/useGame';
+export type { Act, PlayingState };
 
 // 게임을 시작한 뒤의 화면들이 받는 속성
 export interface ViewProps {
