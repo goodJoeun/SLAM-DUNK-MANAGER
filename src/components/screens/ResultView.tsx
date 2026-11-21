@@ -6,6 +6,7 @@ import { teamOverall } from '@/game/team/school';
 import type { BoxPlayer, BoxTeam, LogEvent, ShotType } from '@/game/types';
 import type { ActiveMatch } from '@/state/useGame';
 import { KEY_EVENT } from '@/state/live';
+import { quarterScores } from './MatchBoards';
 import Portrait from '@/components/shared/Portrait';
 import { Attr, Crest, Icon, PosBadge, Rating, Seg, clubVars, condClass } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
@@ -16,17 +17,6 @@ const SHOTS: [ShotType, string][] = [['rim', '골밑슛'], ['post', '포스트�
 
 const pctText = (made: number, tried: number) => (tried ? `${((100 * made) / tried).toFixed(1)}%` : '-');
 const sum = (t: BoxTeam, f: (p: BoxPlayer) => number) => t.players.reduce((s, p) => s + f(p), 0);
-
-// 쿼터별 득점: 중계 기록에서 각 쿼터의 마지막 점수를 찾아 앞 쿼터와의 차이를 구한다
-function quarterScores(log: LogEvent[], final: [number, number]) {
-  const ends: [number, number][] = [];
-  for (const e of log) {
-    const [x, y] = e.score.split('-').map(Number);
-    if (Number.isFinite(x) && Number.isFinite(y)) ends[e.period - 1] = [x, y];
-  }
-  if (ends.length) ends[ends.length - 1] = final;
-  return ends.map((q, i) => { const prev = ends[i - 1] ?? [0, 0]; return [q[0] - prev[0], q[1] - prev[1]]; });
-}
 
 // 슛 종류별 성공/시도 (블록당한 슛은 수비 쪽 줄로 적히므로 반대편의 실패로 센다)
 function shotMix(log: LogEvent[]) {
