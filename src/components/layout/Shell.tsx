@@ -152,8 +152,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
 
       {!inMatch && (
         <nav className="sidebar" aria-label="메뉴">
+          {/* 넓은 화면: 메뉴 맨 위에 우리 학교 (머리띠의 학교 표시는 숨긴다) */}
+          <div className="side-club">
+            <Crest name={team.name} size={46} />
+            <div><b>{team.name}</b><span>{c.prefecture} · 학교 수준 {team.prestige}</span></div>
+          </div>
           {NAV.map((n) => (
-            <button key={n.key} className={`nav-item ${S.screen === n.key && !S.schoolId ? 'on' : ''}`} onClick={() => act('screen', n.key)}>
+            <button key={n.key} className={`nav-item ${n.key === 'leaders' ? 'sep' : ''} ${S.screen === n.key && !S.schoolId ? 'on' : ''}`} onClick={() => act('screen', n.key)}>
               <Icon name={n.icon} />{n.label}
               {n.key === 'inbox' && unread > 0 && <span className="badge">{unread}</span>}
             </button>
@@ -163,7 +168,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
             <div className="row"><span>컨디션 {cond}</span><CondBar value={cond} /></div>
           </div>
           {/* 게임을 나가는 버튼이라 "계속" 옆이 아니라 메뉴 맨 끝에 둔다 */}
-          <button className="nav-item nav-reset" title="지금 게임은 그대로 저장됩니다. 표지에서 다른 칸의 게임을 이어 하거나 새 게임을 시작할 수 있습니다." onClick={() => act('menu')}>표지로 나가기</button>
+          <button className="nav-item nav-reset" title="지금 게임은 그대로 저장됩니다. 표지에서 다른 칸의 게임을 이어 하거나 새 게임을 시작할 수 있습니다." onClick={() => act('menu')}><Icon name="back" />표지로 나가기</button>
         </nav>
       )}
 

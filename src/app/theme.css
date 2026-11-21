@@ -786,3 +786,48 @@ body { font-family: var(--font-ui); font-feature-settings: "ss05"; -webkit-font-
 
 /* 기울임은 쓰지 않는다. <i>, <em>은 꾸밈용 조각으로만 쓰므로 똑바로 세운다 */
 i, em { font-style: normal; }
+.strength > span { font-size: 15px; font-weight: 700; }
+
+/* ---------- 왼쪽 메뉴: 학교 색으로 채운 세로 띠 ----------
+   넓은 화면에서 메뉴가 화면 맨 위부터 바닥까지 차지하고, 머리띠는 그 오른쪽에서 시작한다.
+   메뉴 맨 위에 우리 학교를 두고, 항목은 넉넉한 간격의 흰 글씨로 둔다. */
+.side-club { display: none; }
+@media (min-width: 861px) {
+  .app:not(.in-match) { grid-template-columns: 224px minmax(0, 1fr); }
+  .app:not(.in-match) > .app-header, .app:not(.in-match) > .content { grid-column: 2; }
+  .app:not(.in-match) > .app-header .club { display: none; }
+  .app:not(.in-match) > .app-header .hdr-date { padding-left: 4px; border-left: 0; }
+  .app-header {
+    background: linear-gradient(100deg, color-mix(in srgb, var(--club) 52%, #000) 0, color-mix(in srgb, var(--club) 34%, #04060a) 60%, color-mix(in srgb, var(--club) 26%, #04060a));
+    border-bottom: 1px solid color-mix(in srgb, var(--club) 60%, #000);
+  }
+  .sidebar {
+    position: fixed; left: 0; top: 0; width: 224px; height: 100vh; height: 100dvh; z-index: 21; gap: 4px; padding: 0 0 10px; /* 격자 밖에 고정한다 (줄 높이 계산에 끼지 않게) */
+    background: linear-gradient(180deg, color-mix(in srgb, var(--club) 58%, #000), color-mix(in srgb, var(--club) 40%, #000) 55%, color-mix(in srgb, var(--club) 30%, #000));
+    border-right: 1px solid color-mix(in srgb, var(--club) 45%, #000);
+    box-shadow: 6px 0 22px rgb(0 0 0 / 0.35);
+    overflow-y: auto; scrollbar-width: none;
+  }
+  .side-club {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 26px 22px 24px;
+    border-bottom: 1px solid rgb(255 255 255 / 0.14); background: rgb(0 0 0 / 0.12);
+  }
+  .side-club > div { display: grid; gap: 3px; min-width: 0; }
+  .side-club b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 19px; font-weight: 900; color: #fff; letter-spacing: 0.01em; }
+  .side-club span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; color: rgb(255 255 255 / 0.72); white-space: nowrap; }
+  .sidebar .nav-item {
+    width: auto; margin: 0 12px; padding: 11px 14px; gap: 14px; border-radius: 8px;
+    color: rgb(255 255 255 / 0.8); font-size: 13.5px; font-weight: 700; letter-spacing: 0.01em;
+  }
+  .sidebar .nav-item svg { width: 19px; height: 19px; opacity: 0.9; }
+  .sidebar .nav-item:hover:not(.on) { background: rgb(255 255 255 / 0.1); color: #fff; }
+  .sidebar .nav-item.on { background: rgb(0 0 0 / 0.32); color: #fff; box-shadow: inset 3px 0 0 #fff; text-shadow: none; }
+  .sidebar .nav-item.sep { margin-top: 13px; }
+  .sidebar .nav-item.sep::before { content: ""; position: absolute; }
+  .sidebar .nav-item.sep { position: relative; }
+  .sidebar .nav-item.sep::after { content: ""; position: absolute; left: 6px; right: 6px; top: -9px; border-top: 1px solid rgb(255 255 255 / 0.16); }
+  .sidebar .side-foot { margin: auto 12px 0; padding: 14px 14px 8px; border-top: 1px solid rgb(255 255 255 / 0.16); color: rgb(255 255 255 / 0.78); }
+  .sidebar .side-foot .cond { background: rgb(0 0 0 / 0.35); }
+  .sidebar .nav-reset { margin-top: 2px; font-size: 12.5px; font-weight: 600; color: rgb(255 255 255 / 0.66); }
+  .sidebar .nav-reset svg { width: 16px; height: 16px; }
+}
