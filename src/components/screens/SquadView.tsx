@@ -1,22 +1,22 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { PROGRAMS, SCHOOL, teamOverall } from '@/game/team/school';
 import { RECRUITING, SEASON, prospectsOf, recruitChance } from '@/game/career/season';
 import { overall } from '@/game/match/engine';
-import { RATING_KEYS } from '@/game/team/generate';
 import { TRAITS, moraleLabel, moraleOf, traitOf } from '@/game/team/people';
 import type { Career, Player, RatingKey, TrendPoint } from '@/game/types';
 import type { Act } from '@/state/useGame';
 import Portrait, { PortraitEditor, licensedPortrait } from '@/components/shared/Portrait';
 import {
-  ATTR_GROUPS, Attr, CondBar, Crest, Icon, PageTitle, Panel, POS_NAME, PosBadge, RATING_SHORT, Rating, Seg, Select, Stars,
-  abilityStars, pct, potentialStars, userTeam,
+  ATTR_GROUPS, Attr, CondBar, Crest, Icon, Panel, POS_NAME, PosBadge, RATING_SHORT, Rating, Seg, Select, Sheet, Stars,
+  abilityStars, attrClass, pct, potentialStars, userTeam,
 } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
-type SortKey = 'lineup' | 'pos' | 'name' | 'year' | 'ovr' | 'pot' | 'cond' | 'pts' | RatingKey;
+type SortKey = 'lineup' | 'pos' | 'name' | 'year' | 'ovr' | 'pot' | 'cond' | 'morale' | 'gp' | 'min' | 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | 'fg' | 'tp' | RatingKey | `g:${number}`;
 
 const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) => k !== 'rest' && k !== 'scout').map(([k, v]) => [k, v.label]));
-const VIEWS = { overview: '개요', attrs: '능력치', recruit: '신입생 스카우트' };
+const VIEWS = { attrs: '능력치', status: '상태', stats: '기록', recruit: '스카우트' };
 type View = keyof typeof VIEWS;
 
 // 신입생 스카우트: 중학 유망주 가운데 영입 목표를 고른다. 결과는 학년이 바뀔 때 정해진다.
@@ -105,31 +105,6 @@ function RecruitPanel({ c, act }: { c: Career; act: Act }) {
       </p>
     </>
   );
-}
-
-const seasonAvg = (c: Career, p: Player) => {
-  const s = c.stats[p.id];
-  return s?.gp ? s.pts / s.gp : null;
-};
-
-function sortValue(c: Career, p: Player, key: SortKey, index: number): number | string {
-  switch (key) {
-    case 'lineup': return -index;
-    case 'pos': return -p.pos;
-    case 'name': return p.name;
-    case 'year': return p.year;
-    case 'ovr': return overall(p);
-    case 'pot': return p.potential;
-    case 'cond': return p.condition;
-    case 'pts': return seasonAvg(c, p) ?? -1;
-    default: return p.ratings[key];
-  }
-}
-
-function status(p: Player, index: number) {
-  if (p.injuredDays) return <span className="pill bad">부상 {p.injuredDays}일</span>;
-  if (index < 5) return <span className="pill club">주전</span>;
-  return <span className="pill">벤치</span>;
 }
 
 // 종합 능력치 변화를 계단 모양 선으로 그린다. 가로축은 기록을 시작한 뒤로 지난 날 수
@@ -321,8 +296,57 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
   );
 }
 
+// 능력치 표의 묶음: 묶음마다 평균을 먼저 보여 주고 세부 능력치를 잇는다
+const GROUPS: { title: string; keys: RatingKey[] }[] = [
+  { title: '골밑', keys: ['ins', 'dnk', 'reb'] },
+  { title: '외곽', keys: ['mid', 'tp', 'ft'] },
+  { title: '플레이메이킹', keys: ['drb', 'pss', 'oiq'] },
+  { title: '수비', keys: ['mdf', 'tdf', 'diq'] },
+  { title: '신체', keys: ['hgt', 'str', 'spd', 'jmp', 'end'] },
+];
+// 좁은 칸에 들어가는 짧은 머리글 (없으면 RATING_SHORT)
+const COL_LABEL: Partial<Record<RatingKey, string>> = { oiq: 'IQ', diq: 'IQ', mdf: '대인', tdf: '팀' };
+const rating = (p: Player, k: RatingKey) => p.ratings[k] ?? p.ratings.diq; // 대인·팀 수비가 없는 예전 데이터는 수비IQ로 읽는다
+const groupAvg = (p: Player, g: number) => GROUPS[g].keys.reduce((s, k) => s + rating(p, k), 0) / GROUPS[g].keys.length;
+const avgOf = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
+
+// 색으로 수준을 보여 주는 숫자 칸 (종합처럼 상자를 두르지 않는다)
+const Num = ({ v, bold = false }: { v: number; bold?: boolean }) => <span className={`gv ${attrClass(v)} ${bold ? 'b' : ''}`}>{Math.round(v)}</span>;
+
+function sortValue(c: Career, p: Player, key: SortKey, index: number): number | string {
+  if (key.startsWith('g:')) return groupAvg(p, Number(key.slice(2)));
+  const s = c.stats[p.id];
+  const per = (x: number | undefined) => (s?.gp ? (x ?? 0) / s.gp : -1);
+  switch (key) {
+    case 'lineup': return -index;
+    case 'pos': return -p.pos;
+    case 'name': return p.name;
+    case 'year': return p.year;
+    case 'ovr': return overall(p);
+    case 'pot': return p.potential;
+    case 'cond': return p.condition;
+    case 'morale': return moraleOf(p);
+    case 'gp': return s?.gp ?? -1;
+    case 'min': return per(s?.sec);
+    case 'pts': return per(s?.pts);
+    case 'reb': return per(s?.reb);
+    case 'ast': return per(s?.ast);
+    case 'stl': return per(s?.stl);
+    case 'blk': return per(s?.blk);
+    case 'fg': return s?.fga ? s.fgm / s.fga : -1;
+    case 'tp': return s?.tpa ? s.tpm / s.tpa : -1;
+    default: return rating(p, key as RatingKey);
+  }
+}
+
+function status(p: Player, index: number) {
+  if (p.injuredDays) return <span className="pill bad">부상 {p.injuredDays}일</span>;
+  if (index < 5) return <span className="pill club">주전</span>;
+  return <span className="pill">벤치</span>;
+}
+
 export default function SquadView({ S, act }: ViewProps) {
-  const [view, setView] = useState<View>(S.squadTab === 'recruit' ? 'recruit' : 'overview');
+  const [view, setView] = useState<View>(S.squadTab === 'recruit' ? 'recruit' : 'attrs');
   const [sort, setSort] = useState<SortKey>('lineup');
   const c = S.career;
   const team = userTeam(c);
@@ -337,74 +361,185 @@ export default function SquadView({ S, act }: ViewProps) {
       return typeof x === 'string' ? x.localeCompare(String(y)) : (y as number) - x;
     });
   }
-  const th = (key: SortKey, label: string, cls = '') => (
-    <th key={key} className={`sortable ${sort === key ? 'sorted' : ''} ${cls}`} onClick={() => setSort(sort === key ? 'lineup' : key)}>{label}</th>
+  const th = (key: SortKey, label: string, cls = '', title?: string) => (
+    <th key={key} title={title} className={`sortable ${sort === key ? 'sorted' : ''} ${cls}`} onClick={() => setSort(sort === key ? 'lineup' : key)}>{label}</th>
   );
+  const everyone = team.players;
+  const fit = everyone.filter((p) => !p.injuredDays);
+  // 올해 공식전 기록 (경기당)
+  const stat = (p: Player) => c.stats[p.id];
+  const per = (p: Player, f: (s: NonNullable<ReturnType<typeof stat>>) => number) => { const s = stat(p); return s?.gp ? (f(s) / s.gp).toFixed(1) : null; };
+  const dash = <span className="faint">-</span>;
+  const teamGames = Math.max(0, ...everyone.map((p) => stat(p)?.gp ?? 0));
+  const teamPer = (f: (s: NonNullable<ReturnType<typeof stat>>) => number) => (teamGames ? (everyone.reduce((sum, p) => sum + (stat(p) ? f(stat(p)!) : 0), 0) / teamGames).toFixed(1) : '-');
+  const teamPct = (m: 'fgm' | 'tpm', a: 'fga' | 'tpa') => pct(everyone.reduce((x, p) => x + (stat(p)?.[m] ?? 0), 0), everyone.reduce((x, p) => x + (stat(p)?.[a] ?? 0), 0));
+
+  // 선수 이름 칸 (왼쪽에 붙어 있는 칸)
+  const nameCell = (p: Player) => (
+    <td className="stick">
+      <span className="name-cell">
+        <Portrait name={p.name} src={S.portraits[p.name] ?? licensedPortrait(p)} size={26} round />
+        <span className="gt-name">
+          <b>{p.name}{p.fixed && <i className="faint" title="원작에 나오는 선수"> ★</i>}</b>
+          {p.injuredDays ? <small className="bad">부상 {p.injuredDays}일</small> : null}
+        </span>
+      </span>
+    </td>
+  );
+  const basicHead = (
+    <>
+      {th('name', '선수', 'stick')}
+      {th('pos', '포지션')}
+      {th('year', '학년')}
+      {th('ovr', '종합')}
+    </>
+  );
+  const basicCells = (p: Player) => (
+    <>
+      {nameCell(p)}
+      <td><PosBadge pos={p.pos} /></td>
+      <td className="muted">{p.year}</td>
+      <td><Attr v={overall(p)} /></td>
+    </>
+  );
+  const rowClass = (p: Player, i: number) => `click ${sort === 'lineup' && i === 5 ? 'sep' : ''} ${p.injuredDays ? 'dim' : ''}`;
+  const tableStyle = { '--rows': rows.length } as CSSProperties;
 
   return (
-    <div className="page">
-      <PageTitle title="선수단" sub={`${team.players.length}명 · 팀 전력 ${teamOverall(team)} · 선발은 전술 화면에서 직접 정할 수 있습니다`}>
-        <Seg options={VIEWS} value={view} onChange={(v) => setView(v as View)} />
-      </PageTitle>
-      {view === 'recruit' ? <RecruitPanel c={c} act={act} /> : <><Panel title={view === 'overview' ? '선수 목록' : '능력치 비교'} flush action={<span className="hint">머리글을 누르면 정렬 · 선수를 누르면 상세</span>}>
-        <div className="table-wrap"><table className="data">
+    <Sheet
+      icon="squad"
+      title="선수단"
+      sub={`${everyone.length}명 · 팀 전력 ${teamOverall(team)} · 머리글을 누르면 정렬, 선수를 누르면 상세`}
+      actions={<Seg options={VIEWS} value={view} onChange={(v) => setView(v as View)} />}
+    >
+      {view === 'recruit' ? <div className="sheet-pad"><RecruitPanel c={c} act={act} /></div> : view === 'attrs' ? (
+        <table className="gt" style={tableStyle}>
           <thead>
+            <tr className="ghead">
+              <th className="stick" colSpan={1}>기본 정보</th><th colSpan={3} />
+              {GROUPS.map((g) => <th key={g.title} className="gb" colSpan={g.keys.length + 1}>{g.title}</th>)}
+            </tr>
+            <tr className="gcols">
+              {basicHead}
+              {GROUPS.map((g, gi) => (
+                <Fragment key={g.title}>
+                  {th(`g:${gi}`, '평균', 'gb avg', `${g.title} 평균`)}
+                  {g.keys.map((k) => th(k, COL_LABEL[k] ?? RATING_SHORT[k], '', RATING_SHORT[k]))}
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ p, i }) => (
+              <tr key={p.id} className={rowClass(p, i)} onClick={() => act('player', p.id)}>
+                {basicCells(p)}
+                {GROUPS.map((g, gi) => (
+                  <Fragment key={g.title}>
+                    <td className="gb avg"><Num v={groupAvg(p, gi)} bold /></td>
+                    {g.keys.map((k) => <td key={k}><Num v={rating(p, k)} /></td>)}
+                  </Fragment>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
             <tr>
-              {th('pos', '포지션', 'l')}
-              {th('name', '이름', 'l name')}
-              {view === 'overview' ? (
-                <>
-                  {th('year', '학년')}
-                  <th className="c">현재 능력</th>
-                  {th('pot', '잠재력', 'c')}
-                  {th('ovr', '종합')}
-                  {th('cond', '컨디션')}
-                  <th className="c">사기</th>
-                  <th className="l hide-narrow">성격</th>
-                  <th className="c">상태</th>
-                  {th('pts', '경기당 득점')}
-                </>
-              ) : (
-                <>
-                  {th('ovr', '종합')}
-                  {RATING_KEYS.map((k) => th(k, RATING_SHORT[k], 'c'))}
-                </>
-              )}
+              <td className="stick">팀 평균</td><td /><td className="muted">{avgOf(everyone.map((p) => p.year)).toFixed(1)}</td><td><Attr v={avgOf(everyone.map((p) => overall(p)))} /></td>
+              {GROUPS.map((g, gi) => (
+                <Fragment key={g.title}>
+                  <td className="gb avg"><Num v={avgOf(everyone.map((p) => groupAvg(p, gi)))} bold /></td>
+                  {g.keys.map((k) => <td key={k}><Num v={avgOf(everyone.map((p) => rating(p, k)))} /></td>)}
+                </Fragment>
+              ))}
+            </tr>
+          </tfoot>
+        </table>
+      ) : view === 'status' ? (
+        <table className="gt" style={tableStyle}>
+          <thead>
+            <tr className="gcols solo">
+              {basicHead}
+              <th className="gb">현재 능력</th>
+              {th('pot', '잠재력')}
+              {th('cond', '컨디션', 'gb')}
+              {th('morale', '사기')}
+              <th className="gb l">성격</th>
+              <th>상태</th>
+              <th className="gb l">개인 훈련</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(({ p, i }) => {
-              const ovr = overall(p);
-              const avg = seasonAvg(c, p);
+              const morale = moraleOf(p);
               return (
-                <tr key={p.id} className={`click ${sort === 'lineup' && i === 5 ? 'sep' : ''} ${p.injuredDays ? 'dim' : ''}`} onClick={() => act('player', p.id)}>
-                  <td className="l"><PosBadge pos={p.pos} /></td>
-                  <td className="l name"><span className="name-cell"><Portrait name={p.name} src={S.portraits[p.name] ?? licensedPortrait(p)} size={26} round />{p.name}{p.fixed && <span className="faint">★</span>}</span></td>
-                  {view === 'overview' ? (
-                    <>
-                      <td>{p.year}학년</td>
-                      <td className="c"><Stars value={abilityStars(ovr)} /></td>
-                      <td className="c"><Stars value={potentialStars(p.potential)} /></td>
-                      <td><Attr v={ovr} /></td>
-                      <td><span className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}><span className="num">{Math.round(p.condition)}</span><CondBar value={p.condition} /></span></td>
-                      <td className="c"><span className={moraleOf(p) >= 68 ? 'good' : moraleOf(p) < 52 ? 'bad' : 'muted'}>{moraleLabel(moraleOf(p))}</span></td>
-                      <td className="l hide-narrow" title={TRAITS[traitOf(p)].info}>{TRAITS[traitOf(p)].label}</td>
-                      <td className="c">{status(p, i)}</td>
-                      <td>{avg == null ? <span className="faint">-</span> : avg.toFixed(1)}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td><Attr v={ovr} /></td>
-                      {RATING_KEYS.map((k) => <td key={k} className="c"><Attr v={p.ratings[k]} /></td>)}
-                    </>
-                  )}
+                <tr key={p.id} className={rowClass(p, i)} onClick={() => act('player', p.id)}>
+                  {basicCells(p)}
+                  <td className="gb"><Stars value={abilityStars(overall(p))} /></td>
+                  <td><Stars value={potentialStars(p.potential)} /></td>
+                  <td className="gb"><span className="gt-cond"><b>{Math.round(p.condition)}</b><CondBar value={p.condition} /></span></td>
+                  <td><span className={morale >= 68 ? 'good' : morale < 52 ? 'bad' : 'muted'}>{moraleLabel(morale)}</span></td>
+                  <td className="gb l" title={TRAITS[traitOf(p)].info}>{TRAITS[traitOf(p)].label}</td>
+                  <td>{status(p, i)}</td>
+                  <td className="gb l">{p.focus ? PROGRAMS[p.focus].label : <span className="faint">지정 안 함</span>}</td>
                 </tr>
               );
             })}
           </tbody>
-        </table></div>
-      </Panel>
-      <p className="hint">★ 표시는 원작에 나오는 선수입니다. 현재 능력과 잠재력은 별 5개 만점으로 표시합니다.</p></>}
-    </div>
+          <tfoot>
+            <tr>
+              <td className="stick">팀 평균</td><td /><td className="muted">{avgOf(everyone.map((p) => p.year)).toFixed(1)}</td><td><Attr v={avgOf(everyone.map((p) => overall(p)))} /></td>
+              <td className="gb" /><td />
+              <td className="gb"><span className="gt-cond"><b>{Math.round(avgOf(fit.map((p) => p.condition)))}</b><CondBar value={avgOf(fit.map((p) => p.condition))} /></span></td>
+              <td className="muted">{moraleLabel(avgOf(everyone.map((p) => moraleOf(p))))}</td>
+              <td className="gb" /><td className="muted">부상 {everyone.length - fit.length}명</td><td className="gb" />
+            </tr>
+          </tfoot>
+        </table>
+      ) : (
+        <table className="gt" style={tableStyle}>
+          <thead>
+            <tr className="gcols solo">
+              {basicHead}
+              {th('gp', '경기', 'gb')}
+              {th('min', '분')}
+              {th('pts', '득점', 'gb')}
+              {th('reb', '리바운드')}
+              {th('ast', '어시스트')}
+              {th('stl', '스틸')}
+              {th('blk', '블록')}
+              {th('fg', '야투', 'gb')}
+              {th('tp', '3점')}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ p, i }) => {
+              const s = stat(p);
+              return (
+                <tr key={p.id} className={rowClass(p, i)} onClick={() => act('player', p.id)}>
+                  {basicCells(p)}
+                  <td className="gb">{s?.gp ?? dash}</td>
+                  <td>{per(p, (x) => x.sec / 60) ?? dash}</td>
+                  <td className="gb"><b>{per(p, (x) => x.pts) ?? dash}</b></td>
+                  <td>{per(p, (x) => x.reb) ?? dash}</td>
+                  <td>{per(p, (x) => x.ast) ?? dash}</td>
+                  <td>{per(p, (x) => x.stl) ?? dash}</td>
+                  <td>{per(p, (x) => x.blk) ?? dash}</td>
+                  <td className="gb">{s?.gp ? pct(s.fgm, s.fga) : dash}</td>
+                  <td>{s?.gp ? pct(s.tpm, s.tpa) : dash}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td className="stick">팀 합계 · 경기당</td><td /><td /><td />
+              <td className="gb">{teamGames || '-'}</td><td />
+              <td className="gb">{teamPer((x) => x.pts)}</td><td>{teamPer((x) => x.reb)}</td><td>{teamPer((x) => x.ast)}</td><td>{teamPer((x) => x.stl)}</td><td>{teamPer((x) => x.blk)}</td>
+              <td className="gb">{teamPct('fgm', 'fga')}</td><td>{teamPct('tpm', 'tpa')}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </Sheet>
   );
 }

@@ -435,3 +435,181 @@ input[type='checkbox'] { accent-color: var(--club); }
   .pick-slots { padding: 0 12px 12px; }
   .pick-foot { justify-content: center; text-align: center; }
 }
+
+/* ---------- 화면을 가득 채우는 표 (선수단·리더보드) ----------
+   내용 칸의 여백을 없애고 머리띠 아래를 꽉 채운다. 표는 그 안에서만 스크롤하고, 머리글·이름 칸·아래 합계 줄은 붙어 있다. */
+.content:has(> .sheet) {
+  display: flex; flex-direction: column; padding: 0;
+  height: calc(100vh - var(--header-h, 62px)); height: calc(100dvh - var(--header-h, 62px));
+}
+.content:has(> .sheet) > .day-note { flex: none; max-width: none; margin: 10px 14px; }
+.sheet { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #070a11; }
+.sheet-bar {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  min-height: 48px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: #0b0f18;
+}
+.sheet-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.sheet-title svg { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.sheet-title b { font-size: 14px; white-space: nowrap; }
+.sheet-title .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-bar .seg button { padding: 4px 12px; font-size: 12px; }
+.sheet-body { flex: 1; min-height: 0; overflow: auto; container-type: size; }
+.sheet-pad { display: grid; gap: 14px; align-content: start; padding: 16px; }
+.sheet-empty { display: grid; place-content: center; justify-items: center; gap: 6px; height: 100%; padding: 24px; text-align: center; color: var(--muted); }
+.sheet-empty b { color: var(--text); font-size: 15px; }
+
+/* 빽빽한 표. --rows(줄 수)를 주면 줄 높이를 늘려 표가 칸 높이를 꽉 채운다 (줄이 많으면 34px로 두고 스크롤) */
+.gt { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.gt th, .gt td { padding: 0 5px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--line-soft); }
+.gt td { height: max(34px, min(52px, calc((100cqh - 100px) / var(--rows, 99)))); }
+.gt th.l, .gt td.l { text-align: left; }
+.gt thead th {
+  position: sticky; top: 0; z-index: 3; height: 32px; background: #0b0f18;
+  color: var(--faint); font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; user-select: none;
+}
+.gt thead tr.ghead th { height: 28px; color: var(--muted); letter-spacing: 0.14em; }
+.gt thead tr.gcols th { top: 28px; border-bottom-color: var(--line); }
+.gt thead tr.gcols.solo th { top: 0; height: 36px; }
+.gt th.sortable { cursor: pointer; }
+.gt th.sortable:hover { color: var(--text); }
+.gt th.sorted { color: var(--text); box-shadow: inset 0 -2px 0 var(--club); }
+.gt .gb { border-left: 1px solid var(--line); } /* 묶음 경계 */
+.gt tbody td.avg { background: rgb(255 255 255 / 0.025); } /* 아래 합계 줄은 불투명해야 뒤의 줄이 비치지 않는다 */
+.gt .stick { position: sticky; left: 0; z-index: 2; padding: 0 12px 0 16px; text-align: left; background: #0c111b; box-shadow: 1px 0 0 var(--line); }
+.gt thead .stick, .gt tfoot .stick { z-index: 4; }
+.gt tbody tr.click { cursor: pointer; }
+.gt tbody tr:hover td { background: #121a29; }
+.gt tbody tr.me td { background: color-mix(in srgb, var(--club) 16%, #0c111b); }
+.gt tbody tr.sep td { border-top: 1px solid var(--edge); }
+.gt tbody tr.dim td { opacity: 0.62; }
+.gt tbody tr.dim td.stick { opacity: 1; }
+.gt tfoot td {
+  position: sticky; bottom: 0; z-index: 3; height: 40px; background: #0b0f18;
+  border-top: 1px solid var(--line); border-bottom: 0; font-weight: 800;
+}
+.gt tfoot .stick { color: var(--info); font-size: 11px; letter-spacing: 0.1em; }
+.gt .name-cell { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.gt-name { display: grid; min-width: 0; line-height: 1.2; }
+.gt-name b { font-weight: 700; } /* 이름은 줄이지 않는다: 표가 좁으면 옆으로 밀어서 본다 */
+.gt-name b i { font-style: normal; font-weight: 400; }
+.gt-name small { font-size: 10px; font-weight: 800; letter-spacing: 0.04em; }
+.gt-name small.bad { color: var(--bad); }
+.gt-cond { display: inline-flex; align-items: center; gap: 8px; }
+.gt-cond b { min-width: 22px; text-align: right; }
+/* 수준에 따라 색을 입힌 숫자 */
+.gv { font-weight: 600; }
+.gv.b { font-weight: 800; }
+.gv.a1 { color: var(--a1); }
+.gv.a2 { color: var(--a2); }
+.gv.a3 { color: var(--a3); }
+.gv.a4 { color: var(--a4); }
+.gv.a5 { color: var(--a5); }
+.gt .rank { width: 44px; color: var(--faint); font-weight: 800; }
+.gt .rank.top { color: var(--gold); }
+.gt td.hot { color: #fff; font-weight: 800; background: color-mix(in srgb, var(--club) 12%, transparent); }
+
+@media (max-width: 860px) {
+  /* 휴대폰: 아래에 고정된 메뉴 위까지만 채운다 */
+  .content:has(> .sheet) {
+    height: calc(100dvh - var(--header-h, 62px) - var(--dock-h, 118px)); padding: 0;
+  }
+  .sheet-bar { padding: 8px 12px; }
+  .sheet-title .muted { display: none; }
+  .sheet-bar .seg { flex: 1 1 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .sheet-bar .seg button { min-height: 38px; padding: 4px 2px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gt { font-size: 13.5px; }
+  .gt th, .gt td { padding: 0 8px; }
+  .gt td { height: 44px; }
+  .gt thead th { font-size: 11.5px; }
+  .gt .stick { padding: 0 10px 0 12px; }
+  .gt .name-cell .portrait { display: none; }
+  .sheet-pad { padding: 12px; }
+}
+
+/* ---------- 경기 결과 화면 ----------
+   위에 최종 점수 띠, 탭, 가운데 기록 표, 맨 아래에 붙어 있는 이동 버튼. */
+.content:has(> .result) { padding: 0; }
+.result { display: flex; flex-direction: column; min-height: calc(100vh - var(--header-h, 62px)); min-height: calc(100dvh - var(--header-h, 62px)); background: #070a11; }
+.rs-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 28px;
+  padding: 22px 24px 18px; border-bottom: 1px solid var(--line-soft);
+  background: radial-gradient(700px 180px at 50% 0, rgb(255 255 255 / 0.05), transparent 70%), #0a0e17;
+}
+.rs-team { display: flex; align-items: center; justify-content: flex-end; gap: 16px; min-width: 0; }
+.rs-team.away { flex-direction: row-reverse; }
+.rs-who { display: grid; justify-items: end; min-width: 0; }
+.rs-team.away .rs-who { justify-items: start; }
+.rs-who b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; font-weight: 800; color: color-mix(in srgb, var(--club) 62%, #fff); }
+.rs-score { font-size: 46px; font-weight: 900; font-style: italic; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px rgb(255 255 255 / 0.25); }
+.rs-team.lost .rs-score { color: var(--faint); text-shadow: none; }
+.rs-team.lost .rs-who b { opacity: 0.6; }
+.rs-mid { display: grid; justify-items: center; gap: 8px; }
+.rs-mid .eyebrow { font-size: 10.5px; letter-spacing: 0.18em; color: var(--muted); white-space: nowrap; }
+.rs-pill { padding: 3px 18px; border-radius: 999px; font-size: 12px; font-weight: 900; letter-spacing: 0.2em; color: #fff; }
+.rs-pill.win { background: var(--good); box-shadow: 0 0 18px color-mix(in srgb, var(--good) 55%, transparent); }
+.rs-pill.lose { background: var(--bad); box-shadow: 0 0 18px color-mix(in srgb, var(--bad) 55%, transparent); }
+.rs-quarters { border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; background: #0d1320; border: 1px solid var(--line); border-radius: 6px; }
+.rs-quarters th, .rs-quarters td { padding: 3px 9px; text-align: center; border: 1px solid var(--line-soft); }
+.rs-quarters th { color: var(--faint); font-weight: 700; }
+.rs-quarters td:first-child { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: var(--muted); font-weight: 700; }
+
+.rs-tabs { display: flex; justify-content: center; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--line-soft); background: #0a0e17; overflow-x: auto; scrollbar-width: none; }
+.rs-tabs button { flex: none; padding: 12px 14px; border: 0; background: none; color: var(--muted); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.rs-tabs button:hover { color: var(--text); }
+.rs-tabs button.on { color: #fff; box-shadow: inset 0 -2px 0 var(--info); }
+
+.rs-body { flex: 1; display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1280px; margin: 0 auto; padding: 18px 20px 24px; }
+.rs-panel { min-width: 0; border: 1px solid var(--line); border-top: 2px solid var(--club, var(--line)); border-radius: 8px; background: #0b0f18; overflow: hidden; }
+.rs-panel > header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 46px; padding: 8px 16px; border-bottom: 1px solid var(--line-soft); }
+.rs-panel > header b { font-size: 14px; }
+.rs-panel > header .muted { font-size: 12px; }
+.rs-panel > header .seg button { padding: 4px 10px; font-size: 12px; }
+.rs-table { font-size: 12.5px; }
+.rs-table td { height: 36px; }
+.rs-table thead th { position: static; }
+.rs-table thead .stick, .rs-table .stick { position: sticky; left: 0; }
+.rs-table tfoot td { position: static; height: 38px; }
+.rs-table tfoot .stick { position: sticky; }
+.rs-table tbody tr.mvp td { background: color-mix(in srgb, var(--gold) 9%, #0c111b); }
+.rs-mvp { font-style: normal; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; color: var(--gold); }
+.rs-en.low { color: var(--bad); }
+.rs-en.mid { color: var(--warn); }
+.rs-en.green { color: var(--good); }
+.rs-share { text-align: left !important; color: var(--muted); }
+.rs-share > span { display: inline-block; width: 70px; height: 6px; margin-right: 8px; border-radius: 3px; background: var(--panel-3); overflow: hidden; vertical-align: middle; }
+.rs-share > span > i { display: block; height: 100%; background: var(--info); }
+.rs-log { max-height: none; }
+.rs-log > div { display: grid; grid-template-columns: 62px 52px minmax(0, 1fr); gap: 8px; padding: 6px 16px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; }
+.rs-log > div.mine { background: color-mix(in srgb, var(--club) 9%, transparent); }
+.rs-log > div.q-start { border-top: 2px solid var(--line); }
+.rs-log .t { color: var(--faint); font-variant-numeric: tabular-nums; }
+.rs-review { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.rs-review li { padding: 10px 16px; border-bottom: 1px solid var(--line-soft); line-height: 1.5; }
+
+.rs-cta {
+  position: sticky; bottom: 0; z-index: 10; display: flex; justify-content: center; align-items: center; gap: 10px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgb(7 10 17 / 0.82), #070a11 60%); backdrop-filter: blur(6px);
+}
+.rs-cta .btn { min-height: 44px; }
+.rs-go { min-width: 230px; justify-content: center; font-size: 15px; box-shadow: 0 0 26px color-mix(in srgb, var(--club) 55%, transparent); }
+
+@media (max-width: 860px) {
+  .app.in-match .content:has(> .result) { padding: 0; }
+  .rs-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 8px; padding: 14px 12px; }
+  .rs-mid { grid-column: 1 / -1; grid-row: 2; }
+  .rs-team { gap: 8px; }
+  .rs-team > img, .rs-team > svg { width: 38px; height: auto; }
+  .rs-who b { font-size: 14px; }
+  .rs-score { font-size: 34px; }
+  .rs-tabs { justify-content: flex-start; padding: 0 8px; }
+  .rs-tabs button { min-height: 44px; }
+  .rs-body { padding: 12px 10px 16px; gap: 12px; }
+  .rs-panel > header { padding: 8px 12px; }
+  .rs-table { font-size: 13px; }
+  .rs-table td { height: 42px; }
+  .rs-log > div { grid-template-columns: 56px 46px minmax(0, 1fr); padding: 8px 12px; font-size: 13.5px; }
+  .rs-cta { flex-direction: column-reverse; align-items: stretch; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .rs-go { min-width: 0; }
+}
+.lb-school { display: inline-flex; align-items: center; gap: 7px; }

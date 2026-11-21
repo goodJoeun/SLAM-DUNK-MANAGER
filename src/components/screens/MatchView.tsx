@@ -2,16 +2,16 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { denyOutlook, tacticLoad } from '@/game/match/engine';
 import { today } from '@/game/career/season';
-import { keyMoments, playerRating } from '@/game/match/review';
-import type { BoxPlayer, BoxTeam, LogEvent, PlayerRole, PlayerView, RatingKey, Tactics, TeamView } from '@/game/types';
+import type { BoxPlayer, BoxTeam, PlayerRole, PlayerView, RatingKey, Tactics, TeamView } from '@/game/types';
 import type { ActiveMatch } from '@/state/useGame';
 import { ALERTS, FEED_MODES, FRESH_ENERGY, KEY_EVENT, SPEEDS, TIRED_LEVELS, breakLabel, periodLabel, teamTotals } from '@/state/live';
 import type { AlertKey, BreakInfo, FeedMode, SpeedKey } from '@/state/live';
 import FullCourt from '@/components/court/FullCourt';
+import ResultView from './ResultView';
 import { tipOffScene } from '@/components/court/choreo';
 import Portrait, { licensedPortrait } from '@/components/shared/Portrait';
 import {
-  ATTR_GROUPS, Attr, CondBar, Crest, DEFENSE, DEFENSE_ROLE, DEFENSE_ROLE_INFO, FOCUS, Icon, OFFENSE_ROLE, OFFENSE_ROLE_INFO, POS_NAME, Panel, PosBadge, RATING_SHORT, Rating, Seg, Select,
+  ATTR_GROUPS, Attr, CondBar, Crest, DEFENSE, DEFENSE_ROLE, DEFENSE_ROLE_INFO, FOCUS, Icon, OFFENSE_ROLE, OFFENSE_ROLE_INFO, POS_NAME, Panel, PosBadge, RATING_SHORT, Seg, Select,
   TacticSelects, matchColors,
 } from '@/components/shared/ui';
 import { TRAITS, traitOf } from '@/game/team/people';
@@ -290,84 +290,6 @@ function PlayerCard({ player: p, live, stat, faces, team, mine, onStep, onClose 
   );
 }
 
-function EndModal({ faces, view, box, log, side, label, onFinish, onClose }: {
-  faces: Record<string, string>;
-  view: { teams: TeamView[]; period: number };
-  box: BoxTeam[];
-  log: LogEvent[];
-  side: number;
-  label: string;
-  onFinish: () => void;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  const [h, a] = view.teams;
-  const won = view.teams[side].score > view.teams[1 - side].score;
-  const top = (t: BoxTeam) => t.players.reduce((x, y) => (y.pts > x.pts ? y : x));
-  // 쿼터별 득점: 중계 기록에서 각 쿼터의 마지막 점수를 찾아 앞 쿼터와의 차이를 구한다
-  const ends: [number, number][] = [];
-  for (const e of log) {
-    const [x, y] = e.score.split('-').map(Number);
-    if (Number.isFinite(x) && Number.isFinite(y)) ends[e.period - 1] = [x, y];
-  }
-  if (ends.length) ends[ends.length - 1] = [h.score, a.score];
-  const moments = keyMoments(log, side);
-  const best = box[side].players.filter((p) => p.sec > 0).reduce((x, y) => (playerRating(y) > playerRating(x) ? y : x));
-  const quarters = ends.map((q, i) => { const prev = ends[i - 1] ?? [0, 0]; return [q[0] - prev[0], q[1] - prev[1]]; });
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="end-title" onClick={(e) => e.stopPropagation()}>
-        <span className="eyebrow">{label}{view.period > 4 ? ' · 연장' : ''}</span>
-        <h2 id="end-title" className={won ? 'good' : 'bad'}>{won ? '승리!' : '패배'}</h2>
-        <div className="end-score">
-          <div><Crest name={h.name} size={40} /><b>{h.name}</b></div>
-          <span className="num">{h.score} : {a.score}</span>
-          <div><Crest name={a.name} size={40} /><b>{a.name}</b></div>
-        </div>
-        {quarters.length > 1 && (
-          <table className="quarters">
-            <thead><tr><th />{quarters.map((_, i) => <th key={i}>{i < 4 ? `${i + 1}Q` : `연장${i - 3}`}</th>)}<th>합계</th></tr></thead>
-            <tbody>
-              {[h, a].map((t, s) => (
-                <tr key={t.name}><td>{t.name}</td>{quarters.map((q, i) => <td key={i}>{q[s]}</td>)}<td>{t.score}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <ul className="lines">
-          {box.map((t) => {
-            const p = top(t);
-            return (
-              <li key={t.name}>
-                <span className="muted">{t.name} 최다 득점</span>
-                <span className="name-cell"><Portrait name={p.name} src={faces[p.id]} size={26} round /><span><b>{p.name}</b> {p.pts}점 · 리바 {p.orb + p.drb} · 어시 {p.ast}</span></span>
-              </li>
-            );
-          })}
-          <li>
-            <span className="muted">우리 팀 최고 평점</span>
-            <span className="name-cell"><Portrait name={best.name} src={faces[best.id]} size={26} round /><span><b>{best.name}</b> <Rating v={playerRating(best)} /></span></span>
-          </li>
-        </ul>
-        {moments.length > 0 && (
-          <div className="moments">
-            <h3>승부처</h3>
-            <ul>{moments.map((l) => <li key={l}>{l}</li>)}</ul>
-          </div>
-        )}
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn ghost" onClick={onClose}>기록 더 보기</button>
-          <button className="btn primary" autoFocus onClick={onFinish}>결과 반영</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function MatchView({ S, act, match: m }: ViewProps & { match: ActiveMatch }) {
   // 점수판·기록은 연출 중인 공격권이 끝나기 전까지 이전 상태로 보여 준다. 선수 명단(교체)은 지금 상태.
   const live = m.game.view();
@@ -492,11 +414,11 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   // 마지막 공격권 연출까지 끝난 뒤에 종료 창을 띄운다
   const ended = live.finished && !m.pending;
 
+  // 경기가 끝나면 지휘 화면 대신 결과 화면을 보여 준다
+  if (ended) return <ResultView S={S} act={act} match={m} faces={faces} />;
+
   return (
     <div className="page match" data-tab={tab} style={colors}>
-      {ended && !m.endSeen && (
-        <EndModal faces={faces} view={live} box={m.game.result().box} log={m.game.result().log} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
-      )}
       {infoPlayer && infoTeam && (
         <PlayerCard player={infoPlayer} live={infoLive} stat={infoStat} faces={faces} team={infoTeam.name} mine={infoTeam === mine} onStep={stepInfo} onClose={() => setInfoId(null)} />
       )}

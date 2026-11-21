@@ -36,7 +36,7 @@ const matchKey = (slot: number) => (slot === 1 ? MATCH_KEY : `${MATCH_KEY}-s${sl
 // 세이브 칸 목록에 보여 줄 요약 (빈 칸은 null)
 export interface SlotInfo { slot: number; team: string; when: string; done: boolean }
 
-export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'schedule' | 'comp' | 'schools' | 'records';
+export type ScreenKey = 'home' | 'inbox' | 'squad' | 'tactics' | 'training' | 'schedule' | 'comp' | 'schools' | 'leaders' | 'records';
 
 export type { ActiveMatch } from './live';
 
@@ -541,7 +541,14 @@ const actions = {
     resumeAfterScouting(S);
     save(S);
   },
-  simulate({ S }: Ctx) { openMatchReport(S, advance(S).fresh); resumeAfterScouting(S); save(S); },
+  // 결과만 보기: AI 코치에게 처음부터 끝까지 맡겨 바로 끝낸 뒤, 직접 지휘한 경기와 같은 결과 화면을 보여 준다
+  simulate({ S }: Ctx) {
+    startCommand(S);
+    const m = S.match;
+    if (!m) { openMatchReport(S, advance(S).fresh); resumeAfterScouting(S); save(S); return; } // 치를 경기가 없으면 하루만 넘긴다
+    m.game.setAuto(m.side, true);
+    while (!m.game.finished) advanceMatch(m, S.prefs, false);
+  },
   command({ S }: Ctx) { startCommand(S); },
   player({ S }: Ctx, id: string | null) { S.playerId = id || null; S.screen = 'squad'; S.schoolId = null; },
   tactic({ S }: Ctx, key: 'focus' | 'defense' | 'pace', value: string) {
@@ -755,11 +762,14 @@ const actions = {
     const label = TACTIC_LABEL[key];
     if (label) logChange(m, `tactic:${key}`, `전술 변경 · ${label}`, said(key, before[key]), said(key, next[key]));
   },
-  finish({ S }: Ctx) {
+  // 경기 결과를 반영하고 결과 화면을 떠난다. to: 'home'이면 홈으로, 'report'면 받은 소식의 경기 보고서로
+  finish({ S }: Ctx, to: 'home' | 'report' = 'report') {
     const m = matchOf(S);
     stopMatchTimer(S);
     S.match = null;
-    openMatchReport(S, advance(S, { match: m }).fresh);
+    const { fresh } = advance(S, { match: m });
+    if (to === 'report') openMatchReport(S, fresh);
+    else if (!fresh.some((x) => x.kind === 'season')) { S.screen = 'home'; S.playerId = null; S.schoolId = null; } // 연말 평가가 떴으면 그대로 둔다
     resumeAfterScouting(S);
     save(S);
   },

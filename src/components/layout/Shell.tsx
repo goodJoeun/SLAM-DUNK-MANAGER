@@ -18,7 +18,8 @@ const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
   { key: 'schedule', label: '일정', icon: 'calendar' },
   { key: 'comp', label: '대회', icon: 'trophy' },
   { key: 'schools', label: '학교', icon: 'school' },
-  { key: 'records', label: '기록', icon: 'chart' },
+  { key: 'leaders', label: '리더보드', icon: 'chart' },
+  { key: 'records', label: '기록', icon: 'records' },
 ];
 
 // 휴대폰 화면의 아래쪽 탭. 나머지 메뉴는 '더보기'에 넣는다
@@ -39,16 +40,22 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   // 머리띠 높이를 재어 두면, 그 아래에 붙는 요소(경기 점수판, 메뉴)가 머리띠가 두 줄로 늘어나도 겹치지 않는다
   const appRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
+  // 휴대폰 화면 아래에 고정된 줄(계속 버튼·메뉴)의 높이도 잰다. 화면을 가득 채우는 표가 그 위까지만 차지하게 한다
+  const dockRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const header = headerRef.current;
     const app = appRef.current;
     if (!header || !app) return;
-    const update = () => app.style.setProperty('--header-h', `${header.offsetHeight}px`);
+    const update = () => {
+      app.style.setProperty('--header-h', `${header.offsetHeight}px`);
+      app.style.setProperty('--dock-h', `${dockRef.current?.offsetHeight ?? 0}px`);
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(header);
+    if (dockRef.current) ro.observe(dockRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [inMatchNow(S)]);
 
   // 화면을 바꾸면 맨 위에서 시작한다 (이전 화면의 스크롤 위치가 남아 제목이 가려지지 않게)
   useEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, S.schoolId, inMatchNow(S)]);
@@ -130,7 +137,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
           <span>{d ? d.phase : `${c.year}년차`}</span>
         </div>
         <div className="spacer" />
-        {inMatch && <span className="pill live">경기 중</span>}
+        {inMatch && <span className="pill live">{S.match?.game.finished ? '경기 종료' : '경기 중'}</span>}
         {!inMatch && d && <NextChip d={d} />}
         <div className="hdr-act">{actions}</div>
       </header>
@@ -154,7 +161,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
 
       {/* 휴대폰 화면: '계속' 버튼과 메뉴를 엄지가 닿는 화면 아래에 고정한다 */}
       {!inMatch && (
-        <div className="dock">
+        <div ref={dockRef} className="dock">
           {more && (
             <div className="dock-more">
               {MORE.map((n) => (

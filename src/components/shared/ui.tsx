@@ -146,6 +146,7 @@ const ICONS = {
   school: ['M12 3 20 6v6c0 5-3.4 8-8 9.5C7.4 20 4 17 4 12V6z', 'M9 12l2.2 2.2L15.5 10'],
   trophy: ['M8 4h8v5a4 4 0 0 1-8 0z', 'M8 6H5a3 3 0 0 0 3 4', 'M16 6h3a3 3 0 0 1-3 4', 'M12 13v4', 'M8 20h8', 'M10 17h4v3h-4z'],
   chart: ['M4 20V11', 'M10 20V5', 'M16 20v-7', 'M21 20H3'],
+  records: ['M6 4h12v16H6z', 'M9 9h6', 'M9 13h6', 'M9 17h3'],
   ball: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M3 12h18', 'M12 3v18', 'M5.6 5.6c3 3 3 9.8 0 12.8', 'M18.4 5.6c-3 3-3 9.8 0 12.8'],
   cross: ['M12 5v14', 'M5 12h14'],
   alert: ['M12 4 2.5 20h19z', 'M12 10v4.5', 'M12 17.5h.01'],
@@ -189,6 +190,20 @@ export function PosBadge({ pos }: { pos: number }) {
 }
 
 // ---------- 틀 ----------
+
+// 화면을 가득 채우는 표 화면의 틀 (선수단·리더보드): 위에 제목 띠, 아래는 그 안에서 스크롤되는 표
+export function Sheet({ icon, title, sub, actions, children }: { icon: IconName; title: string; sub?: string; actions?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="sheet">
+      <div className="sheet-bar">
+        <span className="sheet-title"><Icon name={icon} /><b>{title}</b>{sub && <span className="muted">{sub}</span>}</span>
+        <span className="spacer" />
+        {actions}
+      </div>
+      <div className="sheet-body">{children}</div>
+    </div>
+  );
+}
 
 export function PageTitle({ title, sub, children }: { title: string; sub?: string; children?: ReactNode }) {
   return (

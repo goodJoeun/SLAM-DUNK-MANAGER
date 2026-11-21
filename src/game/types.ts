@@ -327,6 +327,23 @@ export interface SeasonStat {
   teamId: string;
   gp: number; sec: number; pts: number; reb: number; ast: number; stl: number; blk: number;
   fgm: number; fga: number; tpm: number; tpa: number;
+  team?: string; // 기록할 때의 학교 이름 (다른 현 대표는 대회가 끝나면 정리되므로 이름을 함께 남긴다)
+  pos?: number;
+}
+
+// 리더보드 한 줄: 경기당 평균과 성공률
+export type BoardKey = 'gp' | 'min' | 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | 'fg' | 'tp';
+export interface BoardRow {
+  id: string;
+  name: string;
+  teamId: string;
+  team: string;
+  pos: number;
+  mine: boolean;
+  local: boolean; // 우리 현의 학교 (눌러서 학교 정보를 볼 수 있다)
+  gp: number; min: number; pts: number; reb: number; ast: number; stl: number; blk: number;
+  fg: number | null; tp: number | null; // 성공률(%). 던진 슛이 없으면 null
+  fgm: number; fga: number; tpm: number; tpa: number; // 경기당
 }
 // 우리 선수의 한 경기 기록 (연습 경기 포함). 선수 상세의 최근 경기 표에 쓴다
 export interface GameLine {
@@ -365,6 +382,8 @@ export interface Career {
   results: CompetitionResult[]; // 지금까지 끝난 대회 기록
   comp: Competition | null; // 진행 중인 대회
   stats: Record<string, SeasonStat>;
+  // 지금(또는 가장 최근) 대회의 선수 기록. 다른 현 대표의 전국 대회 기록도 들어 있다. 다음 대회가 시작되면 새로 쌓는다
+  compStats?: { key: CompetitionKey; name: string; stats: Record<string, SeasonStat> };
   yearPoints: Record<string, number>; // 학교별 올해 대회 성적 점수
   calendar: CalendarDay[];
   dayIndex: number;

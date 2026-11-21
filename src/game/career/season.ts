@@ -29,8 +29,8 @@ import { moraleAfterMatch, moraleAfterTraining, moraleOvernight, rollEvent } fro
 import type { Rng } from '../rng.ts';
 import type { Game } from '../match/engine.ts';
 import type {
-  BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, DrawInfo, ProgramKey, Round, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
+  BoardRow, BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
+  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, DrawInfo, ProgramKey, Round, SeasonStat, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
 } from '../types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -379,6 +379,7 @@ function startCompetition(state: Career, key: CompetitionKey, rng: Rng) {
     prefChampion: null, champion: null,
   };
   state.comp = c;
+  state.compStats = { key, name: C.name, stats: {} }; // 대회 리더보드용 기록을 새로 쌓는다
   state.prep = {}; // 새 대회: 지난 대회를 위해 한 분석은 버린다
   // 학교 수준(지난 성적 반영) 순으로 시드를 준다
   const seeded = [...state.regionIds].sort((a, b) => state.teams[b].prestige - state.teams[a].prestige);
@@ -397,13 +398,17 @@ function startCompetition(state: Career, key: CompetitionKey, rng: Rng) {
 }
 
 function recordStats(state: Career, box: BoxTeam[]) {
+  // 한 해 누적(현 리더보드)과 이번 대회 누적(대회 리더보드)에 함께 적는다
+  const stores = [state.stats, state.compStats?.stats].filter((x): x is Record<string, SeasonStat> => !!x);
   for (const t of box) {
     for (const p of t.players) {
       if (!p.sec) continue;
-      const s = (state.stats[p.id] ??= { id: p.id, name: p.name, teamId: t.id!, gp: 0, sec: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0 });
-      s.gp++;
-      s.reb += p.orb + p.drb;
-      for (const k of ['sec', 'pts', 'ast', 'stl', 'blk', 'fgm', 'fga', 'tpm', 'tpa'] as const) s[k] += p[k];
+      for (const store of stores) {
+        const s = (store[p.id] ??= { id: p.id, name: p.name, teamId: t.id!, team: t.name, pos: p.pos, gp: 0, sec: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0 });
+        s.gp++;
+        s.reb += p.orb + p.drb;
+        for (const k of ['sec', 'pts', 'ast', 'stl', 'blk', 'fgm', 'fga', 'tpm', 'tpa'] as const) s[k] += p[k];
+      }
     }
   }
 }
@@ -932,4 +937,26 @@ export function leaders(state: Career, key: LeaderKey, n = 5, minGames = 2): Lea
     .map((s) => ({ ...s, team: state.teams[s.teamId].name, avg: s[key] / s.gp }))
     .sort((a, b) => b.avg - a.avg)
     .slice(0, n);
+}
+
+// 리더보드: 선수별 경기당 기록.
+//   scope 'pref'  올해 공식전에 나온 우리 현 선수 (minGames 경기 이상)
+//   scope 'comp'  지금(또는 가장 최근) 대회에 나온 모든 선수. 전국 대회에 나온 다른 현 대표도 포함한다
+export function leaderboard(state: Career, scope: 'pref' | 'comp', minGames = scope === 'pref' ? 2 : 1): BoardRow[] {
+  const source = scope === 'pref'
+    ? Object.values(state.stats).filter((s) => state.regionIds.includes(s.teamId))
+    : Object.values(state.compStats?.stats ?? {});
+  const pct = (made: number, tried: number) => (tried ? (100 * made) / tried : null);
+  return source.filter((s) => s.gp >= minGames).map((s) => {
+    const team = state.teams[s.teamId];
+    const per = (x: number) => x / s.gp;
+    return {
+      id: s.id, name: s.name, teamId: s.teamId, team: s.team ?? team?.name ?? '?',
+      pos: s.pos ?? team?.players.find((p) => p.id === s.id)?.pos ?? 0,
+      mine: s.teamId === state.userTeamId, local: state.regionIds.includes(s.teamId),
+      gp: s.gp, min: per(s.sec) / 60, pts: per(s.pts), reb: per(s.reb), ast: per(s.ast), stl: per(s.stl), blk: per(s.blk),
+      fg: pct(s.fgm, s.fga), tp: pct(s.tpm, s.tpa),
+      fgm: per(s.fgm), fga: per(s.fga), tpm: per(s.tpm), tpa: per(s.tpa),
+    };
+  });
 }
