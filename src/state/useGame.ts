@@ -14,7 +14,8 @@ import type {
 } from '@/game/types';
 import { callsOf, recording, replay } from '@/game/match/replay';
 import type { Call } from '@/game/match/replay';
-import { BREAK_MS, DEFAULT_PREFS, FEED_LIMIT, SPEEDS, TIRED_LEVELS, addNote, advanceMatch, beginPossession, newMatch, periodLabel, reveal } from './live';
+import { BREAK_MS, DEFAULT_PREFS, FEED_LIMIT, SPEEDS, TIRED_LEVELS, addNote, advanceMatch, beginPossession, logChange, newMatch, periodLabel, reveal } from './live';
+import { DEFENSE, DEFENSE_ROLE, FOCUS, OFFENSE_ROLE, PACE } from '@/components/shared/ui';
 import type { ActiveMatch, AlertKey, FeedMode, MatchPrefs, SpeedKey } from './live';
 import { recruitMessage, buildMessages, mergeTraining, quiet, supersedes, teamNames, trainingDigest, welcomeMessage } from './inbox';
 import type { Message, MessageDraft } from './inbox';
@@ -398,6 +399,14 @@ function startCommand(S: GameState) {
   if (match) S.match = newMatch({ ...match, game: recording(match.game) }, counter);
 }
 
+// 중계에 남기는 전술·개인 지시의 이름 (화면의 버튼 글자와 같다)
+const FOCUS_NAME: Record<string, string> = FOCUS;
+const DEFENSE_NAME: Record<string, string> = DEFENSE;
+const PACE_NAME: Record<string, string> = Object.fromEntries(PACE);
+const TACTIC_LABEL: Partial<Record<keyof Tactics, string>> = { focus: '공격', defense: '수비', pace: '템포', keyPlayerId: '에이스', denyPlayerId: '집중 마크', denyDefenderId: '마크 담당' };
+const OFFENSE_ROLE_NAME: Record<string, string> = Object.fromEntries(OFFENSE_ROLE);
+const DEFENSE_ROLE_NAME: Record<string, string> = Object.fromEntries(DEFENSE_ROLE);
+
 interface Ctx {
   S: GameState;
   rerender: () => void;
@@ -618,11 +627,17 @@ const actions = {
   // 선수별 개인 지시 (경기 중 바로 적용)
   playerRole({ S }: Ctx, id: string, kind: 'offense' | 'defense', value: string) {
     const m = matchOf(S);
-    const roles = { ...(m.game.view().teams[m.side].tactics.roles ?? {}) };
+    const me = m.game.view().teams[m.side];
+    const roles = { ...(me.tactics.roles ?? {}) };
+    const before = roles[id]?.[kind] ?? '';
+    if (before === value) return;
     const role = { ...roles[id], [kind]: value || undefined };
     if (!role.offense && !role.defense) delete roles[id];
     else roles[id] = role as PlayerRole;
     m.game.setTactics(m.side, { roles });
+    const names = kind === 'offense' ? OFFENSE_ROLE_NAME : DEFENSE_ROLE_NAME;
+    const who = [...me.court, ...me.bench].find((p) => p.id === id)?.name ?? '';
+    logChange(m, `role:${id}:${kind}`, `개인 지시 · ${who} ${kind === 'offense' ? '공격' : '수비'}`, names[before] ?? '기본', names[value] ?? '기본');
   },
   pause({ S }: Ctx) {
     const m = matchOf(S);
@@ -722,9 +737,22 @@ const actions = {
   },
   matchTactic({ S }: Ctx, key: keyof Tactics, value: string) {
     const m = matchOf(S);
+    const view = m.game.view();
+    const before = view.teams[m.side].tactics;
     const next = { [key]: key === 'pace' ? Number(value) : value || null } as Partial<Tactics>;
+    if ((before[key] ?? null) === (next[key] ?? null)) return;
     if (key === 'denyPlayerId') next.denyDefenderId = null; // 대상이 바뀌면 담당을 다시 고른다
     m.game.setTactics(m.side, next);
+    // 무엇을 무엇으로 바꿨는지 중계에 남긴다
+    const everyone = Object.fromEntries(view.teams.flatMap((t) => [...t.court, ...t.bench]).map((p) => [p.id, p.name]));
+    const said = (k: keyof Tactics, x: Tactics[keyof Tactics] | undefined) => {
+      if (k === 'focus') return FOCUS_NAME[(x as Tactics['focus']) ?? 'balanced'];
+      if (k === 'defense') return DEFENSE_NAME[(x as Tactics['defense']) ?? 'man'];
+      if (k === 'pace') return PACE_NAME[String(Math.round((x as number) ?? 0))];
+      return x ? everyone[x as string] ?? '?' : k === 'denyDefenderId' ? '같은 자리 선수' : '없음';
+    };
+    const label = TACTIC_LABEL[key];
+    if (label) logChange(m, `tactic:${key}`, `전술 변경 · ${label}`, said(key, before[key]), said(key, next[key]));
   },
   finish({ S }: Ctx) {
     const m = matchOf(S);

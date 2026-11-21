@@ -26,6 +26,40 @@ export const OFFENSE_ROLE: [string, string][] = [
   ['aggressive', '적극 공격'], ['conservative', '슛 자제'], ['three', '3점 위주'], ['drive', '돌파'], ['post', '포스트업'], ['pass', '패스 우선'],
 ];
 export const DEFENSE_ROLE: [string, string][] = [['tight', '타이트 마크'], ['safe', '파울 조심']];
+// 개인 지시가 실제로 하는 일. 경기 중 지시 창에서 고른 지시 아래에 한 줄로 보여 준다 (수치는 engine.ts의 TUNING.roles)
+export const OFFENSE_ROLE_INFO: Record<string, string> = {
+  '': '선수의 성향대로 공격합니다.',
+  aggressive: '슛을 훨씬 많이 가져갑니다. 무리한 슛과 실책도 늘어납니다.',
+  conservative: '좋은 기회에만 쏴 성공률이 조금 오릅니다. 슛이 줄고, 미루다 나오는 실책이 늡니다.',
+  three: '3점슛 비중을 크게 늘립니다. 3점이 좋은 선수에게 맞습니다.',
+  drive: '골밑 돌파 비중을 크게 늘립니다. 마무리가 좋은 선수에게 맞습니다.',
+  post: '포스트업 비중을 크게 늘립니다. 골밑 기술이 좋은 선수에게 맞습니다.',
+  pass: '슛을 줄이고 동료의 득점을 돕습니다. 어시스트가 늘어납니다.',
+};
+export const DEFENSE_ROLE_INFO: Record<string, string> = {
+  '': '무리하지 않고 맡은 선수를 막습니다.',
+  tight: '바짝 붙어 슛을 어렵게 하고 스틸을 노립니다. 파울이 1.5배로 늘어납니다.',
+  safe: '파울을 3분의 1쯤 줄입니다. 대신 상대의 슛이 조금 편해집니다.',
+};
+// 경기 중 팀 전술 버튼에 붙는 짧은 설명 (자세한 설명은 전술 화면에 있다)
+export const FOCUS_BRIEF: Record<Focus, string> = {
+  balanced: '슛 종류를 고르게 나눕니다.',
+  inside: '골밑슛과 포스트업 비중을 높입니다.',
+  outside: '3점슛 비중을 높이고 슈터에게 공이 갑니다.',
+  spread: '돌파와 3점만 노리고 미들슛은 버립니다.',
+};
+export const DEFENSE_BRIEF: Record<Defense, string> = {
+  man: '각자 맡은 선수를 막습니다.',
+  zone: '골밑을 잠그고 외곽슛을 내줍니다. 체력을 조금 아낍니다.',
+  press: '전방 압박으로 실책을 끌어냅니다. 뚫리면 쉬운 실점을 하고, 파울과 체력 소모가 늡니다.',
+  switch: '오픈 3점을 막습니다. 대신 포스트 미스매치를 내줍니다.',
+  drop: '빅맨이 림을 지킵니다. 대신 미들슛을 내줍니다.',
+};
+export const PACE_BRIEF: Record<string, string> = {
+  '-1': '공격 시간을 길게 씁니다. 실책과 체력 소모가 줄고, 공격권도 줄어듭니다.',
+  0: '보통 속도로 공격합니다.',
+  1: '속공을 노립니다. 쉬운 득점이 늘지만 실책과 체력 소모도 늡니다.',
+};
 
 type Options = Record<string, string> | [string, string][];
 const entries = (options: Options) => (Array.isArray(options) ? options : Object.entries(options));
@@ -199,15 +233,17 @@ export function Select({ options, value, onChange, style, disabled, children }: 
   );
 }
 
-export function Seg({ options, value, onChange }: {
+// titles: 선택지별 설명 (마우스를 올리면 보인다)
+export function Seg({ options, value, onChange, titles }: {
   options: Options;
   value: string | number | null | undefined;
   onChange: (value: string) => void;
+  titles?: Record<string, string>;
 }) {
   return (
     <div className="seg" role="group">
       {entries(options).map(([k, label]) => (
-        <button key={k} className={String(value) === k ? 'on' : ''} onClick={() => onChange(k)}>{label}</button>
+        <button key={k} className={String(value) === k ? 'on' : ''} title={titles?.[k]} aria-pressed={String(value) === k} onClick={() => onChange(k)}>{label}</button>
       ))}
     </div>
   );
@@ -220,10 +256,14 @@ export function TacticSelects({ tactics, onChange }: {
 }) {
   return (
     // 경기 중에 한 번 눌러 바꾸도록 선택 상자 대신 묶음 버튼으로 둔다
+    // 고른 전술이 무엇을 하는지: 넓은 화면에서는 버튼에 마우스를 올리면, 휴대폰에서는 줄 아래 글로 보여 준다 (tac-brief)
     <div className="tac-rows">
-      <div className="tac-row"><span className="hint">공격</span><Seg options={FOCUS} value={tactics.focus} onChange={(v) => onChange('focus', v)} /></div>
-      <div className="tac-row"><span className="hint">수비</span><Seg options={DEFENSE} value={tactics.defense} onChange={(v) => onChange('defense', v)} /></div>
-      <div className="tac-row"><span className="hint">템포</span><Seg options={PACE} value={Math.round(tactics.pace ?? 0)} onChange={(v) => onChange('pace', v)} /></div>
+      <div className="tac-row"><span className="hint">공격</span><Seg options={FOCUS} titles={FOCUS_BRIEF} value={tactics.focus} onChange={(v) => onChange('focus', v)} /></div>
+      <p className="tac-brief">{FOCUS_BRIEF[tactics.focus ?? 'balanced']}</p>
+      <div className="tac-row"><span className="hint">수비</span><Seg options={DEFENSE} titles={DEFENSE_BRIEF} value={tactics.defense} onChange={(v) => onChange('defense', v)} /></div>
+      <p className="tac-brief">{DEFENSE_BRIEF[tactics.defense ?? 'man']}</p>
+      <div className="tac-row"><span className="hint">템포</span><Seg options={PACE} titles={PACE_BRIEF} value={Math.round(tactics.pace ?? 0)} onChange={(v) => onChange('pace', v)} /></div>
+      <p className="tac-brief">{PACE_BRIEF[String(Math.round(tactics.pace ?? 0))]}</p>
     </div>
   );
 }

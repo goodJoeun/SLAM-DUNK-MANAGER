@@ -35,7 +35,8 @@ export type FeedMode = 'all' | 'key';
 export const FEED_MODES: Record<FeedMode, string> = { key: '주요 장면', all: '전체' };
 // 주요 장면: 득점·턴오버·블록·파울·교체·작전 타임 (빗나간 슛과 리바운드는 뺀다)
 // 주요 장면: 교체는 양이 많아 전체 보기에만 나온다
-export const KEY_EVENT = /성공|턴오버|스틸|블록|파울|작전 타임|퇴장/;
+// 감독이 바꾼 전술·개인 지시도 주요 장면에 남긴다 (언제 무엇을 바꿨는지 흐름과 견줘 볼 수 있게)
+export const KEY_EVENT = /성공|턴오버|스틸|블록|파울|작전 타임|퇴장|전술 변경|개인 지시/;
 
 // 체력 저하 알림 기준: 코트 위 선수의 체력이 이 아래로 떨어지면 알린다
 export const TIRED_LEVELS = [30, 40, 50];
@@ -137,6 +138,27 @@ export function addNote(m: ActiveMatch, view: GameView, tone: NoteTone, text: st
   const id = (m.notes[0]?.id ?? 0) + 1;
   m.notes.unshift({ id, period: view.period, clock: clockText(view.clock), text, tone, paused });
   if (m.notes.length > NOTE_LIMIT) m.notes.length = NOTE_LIMIT;
+}
+
+// 감독이 바꾼 전술·개인 지시를 중계에 한 줄 남긴다. 연출 중이면 그 공격권 뒤에 붙인다.
+// 같은 시각에 같은 항목(key)을 여러 번 바꾸면 한 줄로 합치고(처음 값 → 마지막 값), 도로 되돌렸으면 줄을 지운다.
+const changeOrigin = new WeakMap<LogEvent, { key: string; from: string }>();
+export function logChange(m: ActiveMatch, key: string, label: string, from: string, to: string) {
+  const v = m.game.view();
+  const stamp = clockText(v.clock);
+  const list = m.pending ? m.deferredLog : m.feed;
+  const i = list.findIndex((e) => e.period === v.period && e.clock === stamp && changeOrigin.get(e)?.key === key);
+  const origin = i >= 0 ? changeOrigin.get(list[i])!.from : from;
+  if (i >= 0) list.splice(i, 1);
+  if (origin === to) return;
+  const [h, a] = v.teams;
+  const line: LogEvent = {
+    period: v.period, clock: stamp, team: v.teams[m.side].name, side: m.side, at: m.game.result().log.at(-1)?.at ?? 0,
+    score: `${h.score}-${a.score}`, text: `${label}: ${origin} → ${to}`,
+  };
+  changeOrigin.set(line, { key, from: origin });
+  if (m.pending) m.deferredLog.push(line);
+  else m.feed.unshift(line);
 }
 
 // 이 공격권을 움직임으로 보여 줄지 (빠르게는 득점·블록·스틸이 있는 공격권만)

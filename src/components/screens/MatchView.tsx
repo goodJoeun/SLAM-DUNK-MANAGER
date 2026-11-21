@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { denyOutlook } from '@/game/match/engine';
+import { denyOutlook, tacticLoad } from '@/game/match/engine';
 import { today } from '@/game/career/season';
 import { keyMoments, playerRating } from '@/game/match/review';
-import type { BoxTeam, LogEvent, PlayerRole, PlayerView, TeamView } from '@/game/types';
+import type { BoxPlayer, BoxTeam, LogEvent, PlayerRole, PlayerView, RatingKey, Tactics, TeamView } from '@/game/types';
 import type { ActiveMatch } from '@/state/useGame';
 import { ALERTS, FEED_MODES, FRESH_ENERGY, KEY_EVENT, SPEEDS, TIRED_LEVELS, breakLabel, periodLabel, teamTotals } from '@/state/live';
 import type { AlertKey, BreakInfo, FeedMode, SpeedKey } from '@/state/live';
 import FullCourt from '@/components/court/FullCourt';
 import { tipOffScene } from '@/components/court/choreo';
 import Portrait, { licensedPortrait } from '@/components/shared/Portrait';
-import { ATTR_GROUPS, Attr, CondBar, Crest, DEFENSE_ROLE, Icon, OFFENSE_ROLE, POS_NAME, Panel, PosBadge, RATING_SHORT, Rating, Seg, Select, TacticSelects, matchColors } from '@/components/shared/ui';
+import {
+  ATTR_GROUPS, Attr, CondBar, Crest, DEFENSE, DEFENSE_ROLE, DEFENSE_ROLE_INFO, FOCUS, Icon, OFFENSE_ROLE, OFFENSE_ROLE_INFO, POS_NAME, Panel, PosBadge, RATING_SHORT, Rating, Seg, Select,
+  TacticSelects, matchColors,
+} from '@/components/shared/ui';
 import { TRAITS, traitOf } from '@/game/team/people';
 import type { Player } from '@/game/types';
 import type { ViewProps } from '@/components/shared/ui';
@@ -44,36 +47,93 @@ function Side({ team: t, mine, away = false, prep = 0 }: { team: TeamView; mine:
 const OFFENSE_CHOICES: [string, string][] = [['', '기본'], ...OFFENSE_ROLE];
 const DEFENSE_CHOICES: [string, string][] = [['', '기본'], ...DEFENSE_ROLE];
 const roleName = (list: [string, string][], key?: string) => list.find(([k]) => k === key)?.[1];
-function RoleRow({ role, open, onChange }: { role?: PlayerRole; open: boolean; onChange: (kind: 'offense' | 'defense', value: string) => void }) {
-  if (!open) {
-    if (!role) return null;
-    return (
-      <div className="role-tags">
-        {role.offense && <span className="pill club">공격 · {roleName(OFFENSE_ROLE, role.offense)}</span>}
-        {role.defense && <span className="pill club">수비 · {roleName(DEFENSE_ROLE, role.defense)}</span>}
-      </div>
-    );
-  }
+// 고른 지시가 무엇을 하는지 바로 아래에 한 줄로 알려 준다
+function RoleEdit({ role, onChange }: { role?: PlayerRole; onChange: (kind: 'offense' | 'defense', value: string) => void }) {
   return (
     <div className="role-edit">
-      <div><span className="hint">공격 지시</span><Seg options={OFFENSE_CHOICES} value={role?.offense ?? ''} onChange={(v) => onChange('offense', v)} /></div>
-      <div><span className="hint">수비 지시</span><Seg options={DEFENSE_CHOICES} value={role?.defense ?? ''} onChange={(v) => onChange('defense', v)} /></div>
+      <div><span className="hint">공격 지시</span><Seg options={OFFENSE_CHOICES} titles={OFFENSE_ROLE_INFO} value={role?.offense ?? ''} onChange={(v) => onChange('offense', v)} /></div>
+      <p className="role-info">{OFFENSE_ROLE_INFO[role?.offense ?? '']}</p>
+      <div><span className="hint">수비 지시</span><Seg options={DEFENSE_CHOICES} titles={DEFENSE_ROLE_INFO} value={role?.defense ?? ''} onChange={(v) => onChange('defense', v)} /></div>
+      <p className="role-info">{DEFENSE_ROLE_INFO[role?.defense ?? '']}</p>
     </div>
   );
 }
 
+// 선수에게 걸려 있는 지시를 이름 아래 꼬리표로: 에이스·개인 지시·집중 마크 담당
+function tagsFor(p: PlayerView, t: Tactics, targetName?: string): string[] {
+  const role = t.roles?.[p.id];
+  return [
+    t.keyPlayerId === p.id ? '에이스' : '',
+    role?.offense ? `공격 · ${roleName(OFFENSE_ROLE, role.offense)}` : '',
+    role?.defense ? `수비 · ${roleName(DEFENSE_ROLE, role.defense)}` : '',
+    t.denyPlayerId && t.denyDefenderId === p.id ? `${targetName ?? '상대'} 집중 마크` : '',
+  ].filter(Boolean);
+}
+
+// 선수의 가장 좋은 득점 수단 (상대 선수가 무엇으로 넣는지 한눈에 보려고)
+const SCORING: [string, RatingKey[]][] = [['골밑', ['ins', 'dnk']], ['미들', ['mid']], ['3점', ['tp']]];
+function bestScoring(p: Player) {
+  return SCORING
+    .map(([label, keys]) => ({ label, v: Math.round(Math.max(...keys.map((k) => p.ratings[k] ?? 0))) }))
+    .reduce((a, b) => (b.v > a.v ? b : a));
+}
+
 // faces: 선수 id -> 이미지 주소. 이미지가 없는 선수는 회색 기본 그림이 나온다
 // onClick: 줄을 누르면 (교체 등). onInfo: 줄 끝의 '정보' 버튼으로 능력치 창을 연다 (줄 누르기와 겹치지 않게 따로 둔다)
-function PlayerRow({ player: p, faces, selected = false, onClick, onInfo }: { player: PlayerView; faces: Record<string, string>; selected?: boolean; onClick?: () => void; onInfo?: (id: string) => void }) {
+// tags: 줄 아래 꼬리표 (걸려 있는 지시). no: 코트 그림의 번호 (상대 선수는 코트에 번호만 보여서, 누가 몇 번인지 여기서 맞춰 본다)
+function PlayerRow({ player: p, faces, selected = false, tags, no, onClick, onInfo }: {
+  player: PlayerView; faces: Record<string, string>; selected?: boolean; tags?: string[]; no?: number; onClick?: () => void; onInfo?: (id: string) => void;
+}) {
   return (
-    <div className={`bench-row ${onInfo ? 'has-info' : ''} ${selected ? 'sel' : ''} ${onClick && p.out ? 'off' : ''} ${onClick ? '' : 'static'}`} onClick={onClick}>
-      <PosBadge pos={p.pos} />
-      <span className="nm name-cell"><Portrait name={p.name} src={faces[p.id]} size={26} round /><span>{p.name} <span className="faint">{p.ovr}</span></span></span>
-      <CondBar value={p.energy} />
-      <span className="num">{p.pts}점</span>
-      <span className={`num ${p.pf >= 4 ? 'bad' : 'faint'}`}>{p.pf}F</span>
-      {onInfo && <button className="btn ghost small info-btn" title={`${p.name} 능력치 보기`} onClick={(e) => { e.stopPropagation(); onInfo(p.id); }}>정보</button>}
-    </div>
+    <>
+      <div className={`bench-row ${onInfo ? 'has-info' : ''} ${selected ? 'sel' : ''} ${onClick && p.out ? 'off' : ''} ${onClick ? '' : 'static'}`} onClick={onClick}>
+        <PosBadge pos={p.pos} />
+        <span className="nm name-cell">
+          {no != null && <i className="slot-no" title={`코트 그림의 ${no}번`}>{no}</i>}
+          <Portrait name={p.name} src={faces[p.id]} size={26} round />
+          <span className="nm-text"><span className="nm-name">{p.name}</span> <span className="faint">{p.ovr}</span></span>
+        </span>
+        <CondBar value={p.energy} />
+        <span className="num">{p.pts}점</span>
+        <span className={`num ${p.pf >= 4 ? 'bad' : 'faint'}`}>{p.pf}F</span>
+        {onInfo && <button className="btn ghost small info-btn" title={`${p.name} 능력치 보기`} onClick={(e) => { e.stopPropagation(); onInfo(p.id); }}>정보</button>}
+      </div>
+      {tags && tags.length > 0 && <div className="role-tags">{tags.map((tag) => <span key={tag} className="pill club">{tag}</span>)}</div>}
+    </>
+  );
+}
+
+// 상대 코트 위 다섯 명과, 각자를 우리 누가 막고 있는지. 여기서 바로 집중 마크를 걸고 푼다.
+function Matchups({ mine, opp, faces, roster, onInfo, onDeny }: {
+  mine: TeamView; opp: TeamView; faces: Record<string, string>; roster: Record<string, Player>;
+  onInfo: (id: string) => void; onDeny?: (id: string) => void;
+}) {
+  const t = mine.tactics;
+  // 엔진의 매치업(guardOf)과 같다: 같은 자리끼리 막고, 집중 마크 담당이 따로 있으면 대상과 자리를 맞바꾼다
+  const targetSlot = t.denyPlayerId ? opp.court.findIndex((p) => p.id === t.denyPlayerId) : -1;
+  const chosen = mine.court.findIndex((p) => p.id === t.denyDefenderId);
+  const markerSlot = targetSlot < 0 ? -1 : chosen >= 0 ? chosen : targetSlot;
+  const guardOf = (slot: number) => mine.court[targetSlot < 0 ? slot : slot === targetSlot ? markerSlot : slot === markerSlot ? targetSlot : slot];
+  return (
+    <>
+      {opp.court.map((p, slot) => {
+        const guard = guardOf(slot);
+        const src = roster[p.id];
+        const best = src ? bestScoring(src) : null;
+        const denied = t.denyPlayerId === p.id;
+        const edge = guard ? guard.ovr - p.ovr : 0;
+        return (
+          <Fragment key={p.id}>
+            <PlayerRow faces={faces} player={p} no={slot + 1} onInfo={onInfo} />
+            <div className="mu-line">
+              {best && <span>주무기 <b>{best.label} {best.v}</b></span>}
+              {guard && <span>수비 <b>{guard.name}</b> <span className={edge >= 5 ? 'good' : edge <= -5 ? 'bad' : 'faint'}>{edge > 0 ? `+${edge}` : edge}</span></span>}
+              {onDeny && <button className={`btn small ${denied ? 'primary' : 'ghost'}`} aria-pressed={denied} onClick={() => onDeny(denied ? '' : p.id)}>{denied ? '집중 마크 중 · 풀기' : '집중 마크'}</button>}
+            </div>
+          </Fragment>
+        );
+      })}
+    </>
   );
 }
 
@@ -159,23 +219,31 @@ function Compare({ box }: { box: BoxTeam[] }) {
 
 const MADE = /성공|블록|스틸/;
 
-type MatchTab = 'feed' | 'squad' | 'tactics' | 'stats';
-const MATCH_TABS: [MatchTab, string][] = [['feed', '중계'], ['squad', '선수·교체'], ['tactics', '전술'], ['stats', '기록']];
+type MatchTab = 'feed' | 'squad' | 'tactics' | 'opp' | 'stats';
+const MATCH_TABS: [MatchTab, string][] = [['feed', '중계'], ['squad', '선수·교체'], ['tactics', '전술'], ['opp', '상대'], ['stats', '기록']];
 
 // 경기 종료 창: 승패, 최종 점수, 양 팀 최다 득점자
 // 경기 중 선수 능력치 창: 내 선수와 상대 선수 모두. 오늘 경기 기록도 함께 보여 준다
-function PlayerCard({ player: p, live, faces, team, mine, onClose }: {
-  player: Player; live?: PlayerView; faces: Record<string, string>; team: string; mine: boolean; onClose: () => void;
+// stat: 오늘 경기 기록. onStep: 같은 팀의 앞뒤 선수로 넘긴다 (창을 닫았다 다시 열지 않고 명단을 훑어보게)
+function PlayerCard({ player: p, live, stat, faces, team, mine, onStep, onClose }: {
+  player: Player; live?: PlayerView; stat?: BoxPlayer; faces: Record<string, string>; team: string; mine: boolean; onStep: (dir: 1 | -1) => void; onClose: () => void;
 }) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft') onStep(-1);
+      else if (e.key === 'ArrowRight') onStep(1);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, onStep]);
+  // 창이 화면보다 길 때(휴대폰): 열거나 선수를 넘길 때마다 맨 위(이름)부터 보여 준다
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => { card.current?.scrollTo(0, 0); }, [p.id]);
   const trait = TRAITS[traitOf(p)];
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal player-card" role="dialog" aria-modal="true" aria-labelledby="pc-title" onClick={(e) => e.stopPropagation()}>
+      <div ref={card} className="modal player-card" role="dialog" aria-modal="true" aria-labelledby="pc-title" onClick={(e) => e.stopPropagation()}>
         <div className="pc-head">
           <Portrait name={p.name} src={faces[p.id]} size={56} round />
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -193,6 +261,14 @@ function PlayerCard({ player: p, live, faces, team, mine, onClose }: {
             {live.out && <span className="pill bad">출전 불가</span>}
           </div>
         )}
+        {stat && stat.sec > 0 && (
+          <div className="pc-box">
+            {([
+              ['출전', `${Math.round(stat.sec / 60)}분`], ['야투', `${stat.fgm}/${stat.fga}`], ['3점', `${stat.tpm}/${stat.tpa}`], ['자유투', `${stat.ftm}/${stat.fta}`],
+              ['리바', `${stat.orb + stat.drb}`], ['어시', `${stat.ast}`], ['스틸', `${stat.stl}`], ['블록', `${stat.blk}`], ['실책', `${stat.tov}`],
+            ] as [string, string][]).map(([label, value]) => <span key={label}><small>{label}</small><b>{value}</b></span>)}
+          </div>
+        )}
         <div className="attr-cols">
           {ATTR_GROUPS.map((g) => (
             <div key={g.title} className="attr-col">
@@ -203,7 +279,10 @@ function PlayerCard({ player: p, live, faces, team, mine, onClose }: {
             </div>
           ))}
         </div>
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <div className="row pc-foot">
+          <button className="btn" onClick={() => onStep(-1)} title="같은 팀의 앞 선수 (←)"><Icon name="back" />이전</button>
+          <button className="btn" onClick={() => onStep(1)} title="같은 팀의 다음 선수 (→)">다음<Icon name="next" /></button>
+          <span className="spacer" />
           <button className="btn primary" onClick={onClose} autoFocus>닫기</button>
         </div>
       </div>
@@ -359,6 +438,32 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const infoTeam = infoId ? live.teams.find((team) => [...team.court, ...team.bench].some((p) => p.id === infoId)) : undefined;
   const infoPlayer = infoTeam?.id ? S.career.teams[infoTeam.id]?.players.find((p) => p.id === infoId) : undefined;
   const infoLive = infoTeam ? [...infoTeam.court, ...infoTeam.bench].find((p) => p.id === infoId) : undefined;
+  const infoStat = infoId ? m.game.result().box.flatMap((team) => team.players).find((p) => p.id === infoId) : undefined;
+  const stepInfo = (dir: 1 | -1) => {
+    if (!infoTeam) return;
+    const ids = [...infoTeam.court, ...infoTeam.bench].map((p) => p.id);
+    setInfoId(ids[(ids.indexOf(infoId!) + dir + ids.length) % ids.length]);
+  };
+  // 선수 id -> 원본 선수 (능력치). 양 팀 모두
+  const roster: Record<string, Player> = {};
+  for (const team of live.teams) for (const p of (team.id ? S.career.teams[team.id]?.players : undefined) ?? []) roster[p.id] = p;
+  const denyName = t.denyPlayerId ? labels[t.denyPlayerId] : undefined;
+  const tags = (p: PlayerView) => tagsFor(p, t, denyName);
+  // 상대의 전술: 벤치에서 보이는 그대로 (공격 중심·수비 방식·템포)
+  const ot = opp.tactics;
+  const oppTactics = `${FOCUS[ot.focus ?? 'balanced']} 공격 · ${DEFENSE[ot.defense ?? 'man']} 수비 · ${(ot.pace ?? 0) > 0.25 ? '빠른' : (ot.pace ?? 0) < -0.25 ? '느린' : '보통'} 템포`;
+  // 지금 우리 전술의 부담 (전술 화면과 같은 계산)
+  const load = tacticLoad(t.defense, Math.round(t.pace ?? 0));
+  const pctDelta = (x: number) => (Math.abs(x - 1) < 0.005 ? '' : `${x > 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`);
+  const loadText = [
+    pctDelta(load.drain) && `체력 소모 ${pctDelta(load.drain)}`,
+    pctDelta(load.foul) && `파울 ${pctDelta(load.foul)}`,
+    pctDelta(load.shootingFoul) && `슈팅 파울 ${pctDelta(load.shootingFoul)}`,
+  ].filter(Boolean).join(' · ');
+  const heavy = load.drain > 1.2;
+  // 코트 옆 명단: 우리 다섯 명과 상대 다섯 명(매치업)을 바꿔 본다
+  const [sideTeam, setSideTeam] = useState<'mine' | 'opp'>('mine');
+  const setDeny = (id: string) => act('matchTactic', 'denyPlayerId', id);
   // 휴대폰 화면: 코트 아래 내용을 탭으로 나눠 보고, 덜 쓰는 조작은 '더보기'에 접어 둔다
   const [tab, setTab] = useState<MatchTab>('feed');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -393,7 +498,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
         <EndModal faces={faces} view={live} box={m.game.result().box} log={m.game.result().log} side={m.side} label={m.label} onFinish={() => act('finish')} onClose={() => act('dismissEnd')} />
       )}
       {infoPlayer && infoTeam && (
-        <PlayerCard player={infoPlayer} live={infoLive} faces={faces} team={infoTeam.name} mine={infoTeam === mine} onClose={() => setInfoId(null)} />
+        <PlayerCard player={infoPlayer} live={infoLive} stat={infoStat} faces={faces} team={infoTeam.name} mine={infoTeam === mine} onStep={stepInfo} onClose={() => setInfoId(null)} />
       )}
       <div className="scorebar">
         <Side team={v.teams[0]} mine={m.side === 0} prep={m.side === 0 ? prepBonus : 0} />
@@ -513,8 +618,15 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             ))}
           </div>
           </div>
-          <div className="court-tactics mt mt-tactics" title="경기 중에도 바로 적용됩니다">
-            <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
+          <div className="court-tactics mt mt-tactics">
+            <div className="tac-main">
+              <TacticSelects tactics={t} onChange={(key, value) => act('matchTactic', key, value)} />
+              {/* 지금 전술이 체력과 파울에 주는 부담, 그리고 상대가 쓰는 전술 */}
+              <p className="hint tac-load">
+                <span className={heavy ? 'bad' : ''}>{loadText ? `부담: ${loadText}` : '부담: 기본'}</span>
+                <span>상대: {oppTactics}</span>
+              </p>
+            </div>
             <div className="tac-picks">
               <label className="hint">에이스
                 <Select options={everyone} value={t.keyPlayerId} onChange={(value) => act('matchTactic', 'keyPlayerId', value)}><option value="">없음</option></Select>
@@ -549,10 +661,25 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
 
         {/* 코트 옆: 코트 위 다섯 명(체력·득점·파울)과 중계. 교체할 선수를 고르면 중계 자리에 벤치가 뜬다 */}
         <div className="match-side">
-          <Panel title="코트 위 5명" flush className="mt mt-none" action={<span className="hint">누르면 교체 · 막대는 체력</span>}>
-            {mine.court.map((p) => (
-              <PlayerRow key={p.id} faces={faces} player={p} selected={m.selected === p.id} onClick={v.finished ? undefined : () => act('pick', 'court', p.id)} onInfo={info} />
-            ))}
+          <Panel
+            title="코트 위 5명"
+            flush
+            className="mt mt-none court-five"
+            action={<Seg options={[['mine', '우리'], ['opp', '상대·매치업']]} value={sideTeam} onChange={(k) => setSideTeam(k as 'mine' | 'opp')} />}
+          >
+            {sideTeam === 'mine' ? (
+              <>
+                {mine.court.map((p) => (
+                  <PlayerRow key={p.id} faces={faces} player={p} selected={m.selected === p.id} tags={tags(p)} onClick={v.finished ? undefined : () => act('pick', 'court', p.id)} onInfo={info} />
+                ))}
+                <div className="sub-hint">선수를 누르면 개인 지시와 교체 · 막대는 체력</div>
+              </>
+            ) : (
+              <>
+                <Matchups mine={mine} opp={opp} faces={faces} roster={roster} onInfo={info} onDeny={v.finished ? undefined : setDeny} />
+                <div className="sub-hint">{oppTactics} · 번호는 코트 그림의 번호</div>
+              </>
+            )}
           </Panel>
 
           {outgoing ? (
@@ -563,7 +690,17 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
               action={<div className="row"><button className="btn ghost small" onClick={() => info(outgoing.id)}>능력치</button><button className="btn ghost small" onClick={() => act('pick', 'court', outgoing.id)}>닫기</button></div>}
             >
               {/* 고른 선수의 개인 지시를 교체 목록과 한자리에서 다룬다 (어디서 선수를 눌러도 이 창이 뜬다) */}
-              <RoleRow role={t.roles?.[outgoing.id]} open onChange={(kind, value) => act('playerRole', outgoing.id, kind, value)} />
+              {/* 지시를 고를 때 참고할 능력치: 무엇을 잘하는 선수인지 */}
+              {roster[outgoing.id] && (
+                <div className="sheet-attrs">
+                  {(['ins', 'dnk', 'mid', 'tp', 'pss', 'mdf'] as RatingKey[]).map((k) => (
+                    <span key={k}><small>{RATING_SHORT[k]}</small><Attr v={roster[outgoing.id].ratings[k] ?? roster[outgoing.id].ratings.diq} /></span>
+                  ))}
+                  <span><small>체력</small><b className={outgoing.energy < prefs.tiredAt ? 'bad' : ''}>{outgoing.energy}</b></span>
+                  <span><small>파울</small><b className={outgoing.pf >= 4 ? 'bad' : ''}>{outgoing.pf}</b></span>
+                </div>
+              )}
+              <RoleEdit role={t.roles?.[outgoing.id]} onChange={(kind, value) => act('playerRole', outgoing.id, kind, value)} />
               <div className="sub-hint">대신 들어갈 선수 · 누르면 교체</div>
               {mine.bench.map((p) => (
                 <PlayerRow key={p.id} faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} onInfo={info} />
@@ -613,18 +750,11 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             {m.selected ? '뜬 창에서 지시를 내리거나, 대신 들어갈 벤치 선수를 누르세요. 다음 공격권부터 바로 적용됩니다.' : '코트 선수를 누르면 개인 지시와 교체 창이 뜹니다. 내린 지시는 이름 아래에 꼬리표로 남습니다.'}
           </div>
           {mine.court.map((p) => (
-            <div key={p.id}>
-              <PlayerRow faces={faces} player={p} selected={m.selected === p.id} onClick={() => act('pick', 'court', p.id)} onInfo={info} />
-              <RoleRow role={t.roles?.[p.id]} open={false} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
-            </div>
+            <PlayerRow key={p.id} faces={faces} player={p} selected={m.selected === p.id} tags={tags(p)} onClick={() => act('pick', 'court', p.id)} onInfo={info} />
           ))}
           <div className="sub-hint">벤치</div>
           {mine.bench.map((p) => (
-            <div key={p.id}>
-              <PlayerRow faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} onInfo={info} />
-              {/* 벤치 선수의 지시는 미리 정해 둔 것만 꼬리표로 보여 준다 */}
-              <RoleRow role={t.roles?.[p.id]} open={false} onChange={(kind, value) => act('playerRole', p.id, kind, value)} />
-            </div>
+            <PlayerRow key={p.id} faces={faces} player={p} tags={tags(p)} onClick={() => act('pick', 'bench', p.id)} onInfo={info} />
           ))}
         </Panel>
 
@@ -647,8 +777,13 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             </div>
             <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 지친 선수가 여럿이면 한 번에 묶어 알립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
           </Panel>
-          <Panel title={`${opp.name} 선수`} flush className="mt mt-stats" action={<span className="hint">'정보'를 누르면 능력치</span>}>
-            {opp.court.map((p) => <PlayerRow key={p.id} faces={faces} player={p} onInfo={info} />)}
+          <Panel title={`${opp.name} 선수`} flush className="mt mt-opp" action={<span className="hint">정보를 누르면 능력치</span>}>
+            <div className="opp-brief">
+              <b>{oppTactics}</b>
+              <span className="muted">팀 파울 {opp.teamFouls} · 남은 작전 타임 {opp.timeoutsLeft}</span>
+            </div>
+            <div className="sub-hint">코트 위 5명 · 동그라미 숫자는 코트의 번호 · 수비 옆 숫자는 종합 능력 차</div>
+            <Matchups mine={mine} opp={opp} faces={faces} roster={roster} onInfo={info} onDeny={v.finished ? undefined : setDeny} />
             <div className="sub-hint">벤치</div>
             {opp.bench.map((p) => <PlayerRow key={p.id} faces={faces} player={p} onInfo={info} />)}
           </Panel>
