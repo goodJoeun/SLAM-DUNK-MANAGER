@@ -251,12 +251,12 @@ function maybeInjure(rng: Rng, p: Player, chance: number, report: { injuries: In
 }
 
 // 하루 훈련. program: PROGRAMS의 키, intensity: INTENSITY의 키
-export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: IntensityKey = 'normal', { camp = false }: { camp?: boolean } = {}) {
+export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: IntensityKey = 'normal', { camp = false, skip }: { camp?: boolean; skip?: (p: Player) => boolean } = {}) {
   const report = { program, intensity, growth: [] as GrowthEvent[], injuries: [] as InjuryEvent[] };
   const P = PROGRAMS[program];
   const I = INTENSITY[intensity];
   for (const p of team.players) {
-    if (p.injuredDays) continue;
+    if (p.injuredDays || skip?.(p)) continue; // skip: 훈련에서 빠지는 선수 (은퇴한 3학년)
     for (const k of ratingKeys(p)) gain(p, k, k === 'hgt' ? GROWTH.heightPerDay * (p.year === 1 ? 1.5 : 1) : GROWTH.passivePerDay, report.growth);
     if (program === 'scout') {
       p.condition = Math.max(0, p.condition - SCOUT_COST); // 영상 분석과 맞춤 연습: 성장은 없고 조금만 지친다

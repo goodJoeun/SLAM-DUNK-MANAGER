@@ -2,6 +2,7 @@ import { PREPARATION, SEASON, knownOpponents, seasonGoal, today, userHasBye, use
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/team/school';
 import type { Career, Team, Today } from '@/game/types';
 import type { Act, PlayingState } from '@/state/useGame';
+import { overall } from '@/game/match/engine';
 import { StandingsTable } from './CompView';
 import {
   Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, SchoolName, clubColor, mean, teamName, userTeam,
@@ -116,6 +117,22 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
       </Panel>
     );
   }
+  if (d.type === 'graduation') {
+    const seniors = team.players.filter((p) => p.year >= 3).sort((a, b) => overall(b) - overall(a));
+    return (
+      <Panel title="오늘 · 졸업식" className="h-today">
+        <p style={{ margin: 0 }}>{d.year}년차의 마지막 날입니다. 3학년 <b>{seniors.length}명</b>이 오늘 학교를 떠나고, 내일 신입생이 들어옵니다.</p>
+        <ul className="lines">
+          {seniors.map((p) => <li key={p.id}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={overall(p)} /></li>)}
+        </ul>
+        <p className="hint">졸업식을 마치면 교장의 올해 평가가 나오고, 영입 목표의 결과는 새 학년 첫날에 알 수 있습니다.</p>
+        <div className="row" style={{ justifyContent: 'center' }}>
+          <button className="btn" onClick={() => act('recruit')}>영입 목표 확인</button>
+          <button className="btn primary" onClick={() => act('proceed')}>졸업식 진행</button>
+        </div>
+      </Panel>
+    );
+  }
   const next = nextFixture(c);
   const plan = S.program === 'rest' || S.program === 'scout' ? PROGRAMS[S.program].label : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
   const prep = d.prep;
@@ -133,6 +150,15 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
         {d.camp && <div><small>특별 일정</small><b style={{ fontSize: 15 }}>여름 합숙</b><span className="muted">성장 ×1.4</span></div>}
       </div>
       {d.type === 'official' && <p className="hint">오늘은 다른 학교들의 대회 경기가 열립니다. 우리 팀은 훈련합니다.</p>}
+      {d.daysToNextMatch == null && (
+        <div className="notice" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ flex: 1, minWidth: 200 }}>
+            올해 경기를 모두 마쳤습니다. 졸업식까지 <b>{d.daysToGraduation}일</b> 남았고, 그날 3학년이 졸업하고 신입생이 들어옵니다. {c.retired ? '은퇴한 3학년은 훈련에서 빠지고, 1·2학년이 내년의 팀을 준비합니다.' : '남은 훈련은 내년의 팀을 위한 것입니다.'}
+          </span>
+          <button className="btn small" onClick={() => act('recruit')}>영입 목표 확인</button>
+          <button className="btn small primary" onClick={() => act('auto')} title="AI 코치가 학년이 끝나는 날까지 훈련을 맡습니다. 감독이 결정할 일이 생기면 멈춥니다">졸업식까지 진행</button>
+        </div>
+      )}
       {prep && (
         <div className="notice" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ flex: 1, minWidth: 200 }}>
@@ -327,7 +353,9 @@ export default function HomeView({ S, act }: ViewProps) {
             {upcoming.map(({ day, n }) => (
               <li key={n}>
                 <span><b className="num">{n}일</b> <span className="muted">{day.phase}</span></span>
-                {day.type === 'training'
+                {day.type === 'graduation'
+                  ? <span className="pill warn">졸업식</span>
+                  : day.type === 'training'
                   ? <span className="pill">{day.camp ? '합숙 훈련' : '훈련'}</span>
                   : day.type === 'practice'
                     ? <span className="pill club">연습 · {teamName(c, day.opponentId ?? '')}</span>

@@ -5,6 +5,7 @@ import type { Message, MessageKind } from '@/state/inbox';
 import type { Act } from '@/state/useGame';
 import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, Seg, isUser, potentialStars, Stars } from '@/components/shared/ui';
 import type { IconName, ViewProps } from '@/components/shared/ui';
+import { FarewellList } from '@/components/layout/FarewellModal';
 
 const KIND_ICON: Record<MessageKind, IconName> = {
   welcome: 'inbox', match: 'ball', training: 'training', round: 'trophy', competition: 'trophy', injury: 'cross', season: 'squad', scout: 'tactics', event: 'squad',
@@ -64,6 +65,7 @@ function MessageBody({ m, career, act }: { m: Message; career: Career; act: Act 
       return (
         <>
           <p>{m.summary}</p>
+          {m.farewell && !m.yearReview && <><h3>은퇴하는 3학년</h3><FarewellList f={m.farewell} /></>}
           {m.body?.map((line) => <p key={line}>{line}</p>)}
           {m.yearReview && (
             <>
@@ -83,6 +85,7 @@ function MessageBody({ m, career, act }: { m: Message; career: Career; act: Act 
               <tbody>{m.results.map((r, i) => <tr key={i}><td className="l">{r.year}년차</td><td className="l">{r.name}</td><td className="l">{r.userFinish}</td><td className="l">{r.champion}</td></tr>)}</tbody>
             </table></div>
           )}
+          {m.farewell && m.yearReview && <><h3>졸업생</h3><FarewellList f={m.farewell} /></>}
           {m.graduates && <><h3>졸업생</h3>
             <ul className="lines">{m.graduates.map((p) => <li key={p.name}><span><PosBadge pos={p.pos} /> <b>{p.name}</b></span><Attr v={p.ovr} /></li>)}</ul></>}
           {m.recruits && <><h3>신입생</h3>

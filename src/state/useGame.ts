@@ -11,7 +11,7 @@ import { resolveEvent } from '@/game/team/people';
 import type { DayDecision } from '@/game/career/season';
 import { INTENSITY, PROGRAMS } from '@/game/team/school';
 import type {
-  Career, DayReport, Defense, Focus, GrowthEvent, InjuryEvent, IntensityKey, NameStyle, PlayerRole, PrepInfo, ProgramKey, Tactics,
+  Career, DayReport, Defense, Farewell, Focus, GrowthEvent, InjuryEvent, IntensityKey, NameStyle, PlayerRole, PrepInfo, ProgramKey, Tactics,
 } from '@/game/types';
 import { callsOf, recording, replay } from '@/game/match/replay';
 import type { Call } from '@/game/match/replay';
@@ -72,6 +72,7 @@ export interface GameState {
   prefs: MatchPrefs;
   dayNote?: DayNote | null;
   lastEvent?: { title: string; chosen: string; result: string[]; day: number }; // 방금 결정한 사건의 결과 (그날 홈 화면에 보여 준다)
+  farewell?: Farewell | null; // 방금 은퇴한 3학년을 돌아보는 창 (닫으면 사라진다. 받은 소식에도 남는다)
 }
 
 // 게임을 시작한 뒤의 상태
@@ -251,6 +252,7 @@ function advance(S: GameState, decision: DayDecision = {}): { fresh: Message[]; 
   const report = playDay(career, decision);
   const fresh = report ? deliver(S, buildMessages(career, report, names)) : [];
   S.dayNote = null;
+  if (report?.farewell) S.farewell = report.farewell;
   openYearEnd(S, fresh);
   return { fresh, report };
 }
@@ -283,9 +285,12 @@ function noteDay(S: GameState, o: {
   S.dayNote = { year: career.year, dayIndex: career.dayIndex, title: o.title, items };
 }
 
+// 연말 평가(임기 결산 포함) 메시지인지. 같은 종류(season)인 3학년 은퇴 소식은 아니다
+const isYearEnd = (x: Message) => x.kind === 'season' && Boolean(x.yearReview || x.final);
+
 // 한 해가 끝나면 연말 평가(졸업·신입생 포함)를 바로 띄운다
 function openYearEnd(S: GameState, messages: Message[]) {
-  const m = messages.find((x) => x.kind === 'season' && (x.yearReview || x.final));
+  const m = messages.find(isYearEnd);
   if (!m) return;
   m.unread = false;
   S.messageId = m.id;
@@ -295,7 +300,7 @@ function openYearEnd(S: GameState, messages: Message[]) {
 // 경기 결과 메시지를 바로 연다
 function openMatchReport(S: GameState, messages: Message[]) {
   const m = messages.find((x) => x.kind === 'match');
-  if (!m || messages.some((x) => x.kind === 'season')) return; // 연말 평가가 떴으면 그대로 둔다
+  if (!m || messages.some(isYearEnd)) return; // 연말 평가가 떴으면 그대로 둔다
   m.unread = false;
   S.messageId = m.id;
   S.screen = 'inbox';
@@ -438,7 +443,7 @@ const actions = {
     save(S);
     const slots = readSlots();
     Object.assign(S, {
-      career: null, match: null, inbox: [], messageId: null, playerId: null, schoolId: null, dayNote: null, lastEvent: undefined,
+      career: null, match: null, inbox: [], messageId: null, playerId: null, schoolId: null, dayNote: null, lastEvent: undefined, farewell: null,
       screen: 'home', startSeed: randomSeed(), slots, slot: firstEmpty(slots), stage: 'title', lastSlot: lastOf(slots, S.slot || S.lastSlot),
     });
   },
@@ -497,6 +502,7 @@ const actions = {
     writeJson(PORTRAIT_KEY, next);
   },
   dismissDayNote({ S }: Ctx) { S.dayNote = null; },
+  dismissFarewell({ S }: Ctx) { S.farewell = null; },
   readAll({ S }: Ctx) { for (const m of S.inbox) m.unread = false; save(S); },
   program({ S }: Ctx, key: ProgramKey) {
     if (key === 'scout' && S.program !== 'scout') S.resumeProgram = S.program;
@@ -523,7 +529,8 @@ const actions = {
     let ended = false; // 한 해가 끝났다
     let last: DayReport | null = null;
     let days = 0;
-    while (!career.finished && !today(career)?.userMatch) {
+    // 졸업식 날 앞에서 멈춘다: 졸업식은 감독이 직접 치른다
+    while (!career.finished && !today(career)?.userMatch && today(career)?.type !== 'graduation') {
       const names = teamNames(career);
       // 상대 분석을 하기로 해 뒀으면 분석할 수 있는 날은 AI 코치도 그 계획을 따른다
       const scout = S.program === 'scout' && today(career)?.prep?.canScout;
@@ -534,6 +541,7 @@ const actions = {
       growth.push(...report.growth);
       injuries.push(...report.injuries);
       openYearEnd(S, deliver(S, buildMessages(career, report, names, { training: false })));
+      if (report.farewell) S.farewell = report.farewell;
       if (report.yearEnd) { ended = true; break; }
       if (career.event) { S.screen = 'home'; break; } // 감독이 결정할 일이 생기면 거기서 멈춘다
     }
@@ -770,7 +778,7 @@ const actions = {
     S.match = null;
     const { fresh } = advance(S, { match: m });
     if (to === 'report') openMatchReport(S, fresh);
-    else if (!fresh.some((x) => x.kind === 'season')) { S.screen = 'home'; S.playerId = null; S.schoolId = null; } // 연말 평가가 떴으면 그대로 둔다
+    else if (!fresh.some(isYearEnd)) { S.screen = 'home'; S.playerId = null; S.schoolId = null; } // 연말 평가가 떴으면 그대로 둔다
     resumeAfterScouting(S);
     save(S);
   },

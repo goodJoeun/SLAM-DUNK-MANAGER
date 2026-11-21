@@ -310,7 +310,7 @@ export function rollEvent(state: Career, rng: Rng): CareerEvent | null {
   for (let tries = 0; tries < 6; tries++) {
     const key = EVENT_KEYS[rng.int(0, EVENT_KEYS.length - 1)];
     if (key === state.lastEventKey) continue;
-    if (key === 'friendly' && (!tomorrow || tomorrow.type !== 'training' || tomorrow.start)) continue;
+    if (key === 'friendly' && (!tomorrow || tomorrow.type !== 'training' || tomorrow.start || state.retired)) continue; // 3학년이 은퇴한 뒤에는 올해 경기를 더 잡지 않는다
     const def = EVENTS[key];
     const as = def.pickA(team);
     if (!as.length) continue;

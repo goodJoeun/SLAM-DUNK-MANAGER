@@ -7,6 +7,7 @@ import type { Today } from '@/game/types';
 import type { ScreenKey } from '@/state/useGame';
 import { Attr, CondBar, Crest, Icon, clubVars, mean, userTeam } from '@/components/shared/ui';
 import EventModal, { eventKey, resultKey } from './EventModal';
+import FarewellModal from './FarewellModal';
 import type { IconName, ViewProps } from '@/components/shared/ui';
 
 const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
@@ -65,12 +66,15 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   const [closed, setClosed] = useState<string | null>(null);
   const popupKey = eventKey(S) ?? resultKey(S);
   const popup = !inMatchNow(S) && popupKey != null && popupKey !== closed;
+  const farewell = !inMatchNow(S) ? S.farewell : null; // 3학년의 마지막 경기 (경기 결과 화면을 떠난 뒤에 띄운다)
 
   // 스페이스: 평소에는 '계속', 경기 중에는 진행/일시정지. 입력 칸이나 버튼에 초점이 있으면 건드리지 않는다.
   const onSpace = useRef<() => void>(() => {});
   onSpace.current = () => {
     if (S.match) {
       if (!S.match.game.finished) act(S.match.playing ? 'pause' : 'play');
+    } else if (S.farewell) {
+      act('dismissFarewell');
     } else if (S.career.event && !today(S.career)?.userMatch) {
       setClosed(null); // 결정을 미뤄 둔 사건이 있으면 하루를 넘기는 대신 창을 다시 연다
     } else if (today(S.career)) act('proceed');
@@ -101,15 +105,18 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
   const decision = Boolean(c.event) && !d?.userMatch; // 감독의 결정을 기다리는 사건: 고르기 전에는 하루가 넘어가지 않는다
   const training = S.program !== 'rest' && S.program !== 'scout';
   // 지친 채로 훈련을 이어 가려 할 때의 휴식 권고 (경기 전날은 기준을 높인다)
-  const restAdvice = !d || d.userMatch || decision || !training ? null
+  const ceremony = d?.type === 'graduation'; // 졸업식 날: 훈련 없이 '계속'으로 졸업식을 치른다
+  const restAdvice = !d || d.userMatch || decision || !training || ceremony ? null
     : cond < REST_ADVICE.low ? `컨디션 ${cond} · 휴식 권장`
       : d.daysToNextMatch === 1 && cond < REST_ADVICE.beforeMatch ? `내일 경기 · 컨디션 ${cond} · 휴식 권장` : null;
 
   // 하루를 넘기는 버튼들. 넓은 화면에서는 머리띠에, 휴대폰에서는 아래쪽 고정 줄에 놓인다
   const actions = !inMatch && d && (
     <>
-      {!d.userMatch && (
-        <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
+      {!d.userMatch && !ceremony && (
+        d.daysToNextMatch == null
+          ? <button className="btn ghost" onClick={() => act('auto')} title="올해 경기는 모두 끝났습니다. AI 코치가 학년이 끝나는 날까지 훈련을 맡습니다">졸업식까지 진행</button>
+          : <button className="btn ghost" onClick={() => act('auto')} title="AI 코치가 다음 경기일까지 훈련을 맡습니다">다음 경기까지</button>
       )}
       {restAdvice && (
         <button className="btn rest-today" onClick={() => act('restDay')} title="정해 둔 훈련 메뉴는 그대로 두고 오늘 하루만 쉽니다">오늘은 휴식</button>
@@ -119,8 +126,8 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
         onClick={() => (decision ? setClosed(null) : act('proceed'))}
         title={decision ? '"오늘의 결정"을 먼저 골라야 하루가 넘어갑니다. 누르면 결정 창을 다시 엽니다' : restAdvice ? '컨디션이 낮으면 훈련 효율이 떨어지고 다치기 쉬우며, 경기력도 떨어집니다. 훈련 화면에서 휴식을 고를 수 있습니다. (단축키: 스페이스)' : '단축키: 스페이스'}
       >
-        <span className="c-main">{d.userMatch ? '경기 시작' : decision ? '결정 필요' : '계속'}<Icon name="next" /></span>
-        <small>{d.userMatch ? d.userMatch.label : decision ? '오늘의 결정을 먼저 고르세요' : restAdvice ?? `훈련: ${plan}`}</small>
+        <span className="c-main">{d.userMatch ? '경기 시작' : decision ? '결정 필요' : ceremony ? '졸업식' : '계속'}<Icon name="next" /></span>
+        <small>{d.userMatch ? d.userMatch.label : decision ? '오늘의 결정을 먼저 고르세요' : ceremony ? '3학년을 떠나보냅니다' : restAdvice ?? `훈련: ${plan}`}</small>
       </button>
     </>
   );
@@ -198,7 +205,10 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
         )}
         {children}
       </div>
-      {popup && <EventModal S={S} act={act} onClose={() => setClosed(popupKey)} />}
+      {/* 은퇴 창이 먼저다: 닫고 나면 그날 아침의 결정 창이 이어서 뜬다 */}
+      {farewell
+        ? <FarewellModal f={farewell} onClose={() => act('dismissFarewell')} />
+        : popup && <EventModal S={S} act={act} onClose={() => setClosed(popupKey)} />}
     </div>
   );
 }

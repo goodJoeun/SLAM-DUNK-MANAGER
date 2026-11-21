@@ -44,6 +44,8 @@ export default function ScheduleView({ S, act }: ViewProps) {
       what = <>연습 경기{opp && <> · <SchoolName id={opp.id} name={opp.name} onPick={pick} /> <Attr v={teamOverall(opp)} /></>}</>;
     } else if (day.type === 'official') {
       what = past || !ours.has(i) ? <span className="faint">공식전 · 우리 경기 없음</span> : <b>공식전{day.start ? ' · 대회 첫날' : ''}</b>;
+    } else if (day.type === 'graduation') {
+      what = <b>졸업식 · 3학년 졸업, 다음 날 신입생 입학</b>;
     } else {
       what = <span className="faint">{day.camp ? '합숙 훈련' : '훈련'}</span>;
     }

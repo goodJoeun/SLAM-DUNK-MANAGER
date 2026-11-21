@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { today } from '@/game/career/season';
+import { isRetired, today } from '@/game/career/season';
 import { PROGRAMS, INTENSITY, RATING_LABEL } from '@/game/team/school';
 import { PREPARATION } from '@/game/career/season';
 import type { IntensityKey, PrepInfo, ProgramKey } from '@/game/types';
@@ -101,12 +101,14 @@ export default function TrainingView({ S, act }: ViewProps) {
               <div><small>팀 컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
               <div><small>오늘 소모 예상</small><b>{S.program === 'rest' ? '+18' : S.program === 'scout' ? '-2' : `-${I.cost}`}</b></div>
             </div>
-            {matchDay
+            {d?.type === 'graduation'
+              ? <p className="hint">오늘은 졸업식입니다. 훈련은 없고, 새 학년 첫날부터 다시 훈련합니다.</p>
+              : matchDay
               ? <p className="hint">오늘은 경기일입니다. 경기를 마친 뒤 다시 훈련할 수 있습니다.</p>
               : (
                 <div className="row">
                   <button className="btn primary" onClick={() => act('train')}>이 메뉴로 하루 진행</button>
-                  <button className="btn" onClick={() => act('auto')}>다음 경기까지 AI 코치에게 맡기기</button>
+                  <button className="btn" onClick={() => act('auto')}>{d?.daysToNextMatch == null ? '졸업식까지' : '다음 경기까지'} AI 코치에게 맡기기</button>
                 </div>
               )}
           </Panel>
@@ -133,10 +135,10 @@ export default function TrainingView({ S, act }: ViewProps) {
             <thead><tr><th className="check"><input type="checkbox" aria-label="모든 선수 선택" checked={allPicked} onChange={() => setChecked(allPicked ? new Set() : new Set(team.players.map((p) => p.id)))} /></th><th className="l">포지션</th><th className="l name">이름</th><th>컨디션</th><th className="l">개인 훈련</th></tr></thead>
             <tbody>
               {team.players.map((p) => (
-                <tr key={p.id} className={`${p.injuredDays ? 'dim' : ''} ${checked.has(p.id) ? 'picked' : ''}`}>
+                <tr key={p.id} className={`${p.injuredDays || (c.retired && isRetired(p)) ? 'dim' : ''} ${checked.has(p.id) ? 'picked' : ''}`}>
                   <td className="check"><input type="checkbox" aria-label={`${p.name} 선택`} checked={checked.has(p.id)} onChange={() => toggle(p.id)} /></td>
                   <td className="l"><PosBadge pos={p.pos} /></td>
-                  <td className="l name"><button className="name-link" title="선수 상세 보기" onClick={() => act('player', p.id)}>{p.name}</button>{p.injuredDays ? <span className="pill bad" style={{ marginLeft: 6 }}>부상 {p.injuredDays}일</span> : null}</td>
+                  <td className="l name"><button className="name-link" title="선수 상세 보기" onClick={() => act('player', p.id)}>{p.name}</button>{p.injuredDays ? <span className="pill bad" style={{ marginLeft: 6 }}>부상 {p.injuredDays}일</span> : null}{c.retired && isRetired(p) && <span className="pill" style={{ marginLeft: 6 }} title="올해 경기를 모두 마친 3학년은 졸업 때까지 팀 훈련에서 빠집니다">은퇴</span>}</td>
                   <td><span className="row" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}><span className="num">{Math.round(p.condition)}</span><CondBar value={p.condition} /></span></td>
                   <td className="l focus-cell">
                     <Select options={FOCUS_PROGRAMS} value={p.focus} onChange={(v) => act('playerFocus', p.id, v)}><option value="">없음</option></Select>

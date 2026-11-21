@@ -324,6 +324,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .calendar i { width: 8px; height: 18px; border-radius: 2px; background: var(--panel-3); }
 .calendar i.practice { background: var(--info); }
 .calendar i.official { background: var(--club); }
+.calendar i.graduation { background: var(--gold); }
 .calendar i.past { opacity: 0.3; }
 .calendar i.now { outline: 2px solid var(--text); outline-offset: 1px; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--muted); }

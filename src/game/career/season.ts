@@ -30,7 +30,7 @@ import type { Rng } from '../rng.ts';
 import type { Game } from '../match/engine.ts';
 import type {
   BoardRow, BoxTeam, CalendarDay, Career, Competition, CompetitionKey, DatasetKey, DayReport, DayType, Format, Group,
-  IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, DrawInfo, ProgramKey, Round, SeasonStat, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
+  Farewell, FarewellLine, GameLine, IntensityKey, Leader, LeaderKey, Match, NameStyle, Player, PrepInfo, DrawInfo, ProgramKey, Round, SeasonStat, Team, Today, TrainingChoice, UserMatchInfo, Prospect, YearReview, YearSummary,
 } from '../types.ts';
 
 // 직접 지휘하는 경기 (prepareUserMatch의 결과)
@@ -90,7 +90,7 @@ export const SEASON = {
     wintercup: { name: '윈터컵', format: ['group', 'playoff'], qualifiers: 1 },
   } as Record<CompetitionKey, { name: string; format: Format[]; qualifiers: number }>,
 
-  // 한 해 일정. T 훈련일, P 연습 경기, M 공식전.
+  // 한 해 일정. T 훈련일, P 연습 경기, M 공식전, G 졸업식(마지막 날: 이날 일과로 3학년이 졸업하고 새 학년이 시작된다).
   // 공식전(M) 수는 대회 구조와 맞아야 한다: 조별 3, 결승 리그 3, 플레이오프 2, 16강 토너먼트 4, 전국 대회 4 (인터하이는 64강 대진이라 6).
   calendar: [
     { phase: '봄 훈련', days: 'TTTPTTTPTTTPTT' },
@@ -103,6 +103,7 @@ export const SEASON = {
     { phase: '겨울 훈련', days: 'TTTPTT' },
     { phase: '윈터컵 현 예선', days: 'MTTMTTMTMTM', start: 'wintercup' },
     { phase: '윈터컵', days: 'MTMTMTM' },
+    { phase: '졸업식', days: 'G' },
   ] as CalendarBlock[],
 };
 
@@ -112,7 +113,7 @@ export const SEASON = {
 // perDay가 크면 '공식전 전에는 무조건 분석'이 정답이 된다. 3일을 다 써도 전술 선택과 비슷한 크기가 되게 둔다.
 export const PREPARATION = { perDay: 0.8, maxDays: 3, window: 3 };
 
-const DAY_TYPE: Record<string, DayType> = { T: 'training', P: 'practice', M: 'official' };
+const DAY_TYPE: Record<string, DayType> = { T: 'training', P: 'practice', M: 'official', G: 'graduation' };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const shuffle = <T>(rng: Rng, xs: T[]) => {
   for (let i = xs.length - 1; i > 0; i--) { const j = rng.int(0, i); [xs[i], xs[j]] = [xs[j], xs[i]]; }
@@ -313,6 +314,7 @@ function startSeason(state: Career) {
   delete state.bestFinish;
   state.prospects = makeProspects(state, rng);
   state.recruitTargets = [];
+  delete state.retired;
   for (const id of state.regionIds) {
     const team = state.teams[id];
     setLineup(team);
@@ -764,6 +766,46 @@ function nextMatchIn(state: Career) {
   return next == null ? null : next - state.dayIndex;
 }
 
+// 올해 내 팀의 경기가 모두 끝난 뒤 남은 날은, 다른 학교의 대회 이름 대신 다음 해를 준비하는 기간으로 보여 준다.
+// (임기 마지막 해에는 이런 날이 없다: playDay가 마지막 경기 뒤에 곧바로 임기를 끝낸다)
+export const NEW_TEAM_PHASE = '새 팀 훈련';
+const seasonOver = (state: Career) => nextMatchIn(state) == null;
+const phaseOf = (state: Career) => {
+  const day = state.calendar[state.dayIndex];
+  return day.type !== 'graduation' && seasonOver(state) && state.year < SEASON.campaignYears ? NEW_TEAM_PHASE : day.phase;
+};
+// 졸업식까지 남은 날 (0이면 오늘). 졸업식 날이 없는 예전 저장의 달력은 마지막 날 일과 뒤에 졸업한다
+function daysToGraduation(state: Career) {
+  const at = state.calendar.findIndex((d) => d.type === 'graduation');
+  return Math.max(0, (at < 0 ? state.calendar.length : at) - state.dayIndex);
+}
+
+// 은퇴한 3학년: 졸업 때까지 명단에는 남지만 팀 훈련에서 빠진다 (state.retired인 동안의 내 팀에만 쓴다)
+export const isRetired = (p: Player) => p.year >= 3;
+
+// 은퇴하는 3학년의 기록 (내 임기 중 공식전)
+function farewellOf(state: Career): Farewell {
+  const me = state.userTeamId;
+  const players: FarewellLine[] = state.teams[me].players.filter(isRetired).map((p) => {
+    const games = (state.gameLog?.[p.id] ?? []).filter((g) => g.official);
+    const avg = (k: 'pts' | 'reb' | 'ast') => (games.length ? games.reduce((sum, g) => sum + g[k], 0) / games.length : 0);
+    const best = games.reduce<GameLine | null>((top, g) => (!top || g.pts > top.pts ? g : top), null);
+    const first = p.joined?.ovr ?? state.trend?.[p.id]?.[0]?.ovr;
+    return {
+      id: p.id, name: p.name, pos: p.pos, ovr: overall(p),
+      from: first == null ? undefined : { ovr: first, joined: !!p.joined },
+      games: games.length, pts: avg('pts'), reb: avg('reb'), ast: avg('ast'),
+      best: best && best.pts > 0 ? { pts: best.pts, opponent: best.opponent, year: best.year } : undefined,
+    };
+  }).sort((a, b) => b.ovr - a.ovr);
+  return {
+    year: state.year, final: state.year >= SEASON.campaignYears,
+    finish: state.comp?.finish[me] ?? null,
+    daysLeft: daysToGraduation(state),
+    players,
+  };
+}
+
 // 오늘의 일정
 export function today(state: Career): Today | null {
   if (state.finished) return null;
@@ -779,10 +821,11 @@ export function today(state: Career): Today | null {
   }
   return {
     year: state.year, day: state.dayIndex + 1, of: state.calendar.length,
-    phase: day.phase, type: day.type, camp: day.camp, prep: upcomingOfficial(state),
+    phase: phaseOf(state), type: day.type, camp: day.camp, prep: upcomingOfficial(state),
     daysToNextMatch: nextMatchIn(state), // 0이면 오늘이 경기일. 남은 경기가 없으면 null
+    daysToGraduation: daysToGraduation(state),
     // 공식전 날인데 내 팀 경기가 없으면(탈락) 훈련일이 된다
-    userTrains: !pairing,
+    userTrains: !pairing && day.type !== 'graduation',
     userMatch,
   };
 }
@@ -824,7 +867,7 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
   const day = state.calendar[state.dayIndex];
   const upcoming = upcomingOfficial(state); // 오늘 상대 분석을 하면 이 상대에 대한 준비가 쌓인다
   const report: DayReport = {
-    year: state.year, day: state.dayIndex + 1, of: state.calendar.length, phase: day.phase, type: day.type,
+    year: state.year, day: state.dayIndex + 1, of: state.calendar.length, phase: phaseOf(state), type: day.type,
     round: null, practice: null, training: null, userBox: null, growth: [], injuries: [],
     competitionEnd: null, yearEnd: null, scout: null,
   };
@@ -841,7 +884,7 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
   // 경기가 없는 팀은 훈련한다. AI는 경기 전날이면 컨디션을 조절한다.
   const tomorrow = state.calendar[state.dayIndex + 1];
   for (const id of state.regionIds) {
-    if (ctx.played.has(id)) continue;
+    if (ctx.played.has(id) || day.type === 'graduation') continue; // 졸업식 날은 모두 쉰다
     const team = state.teams[id];
     const mine = id === state.userTeamId;
     const matchTomorrow = tomorrow?.type === 'official' || (mine && tomorrow?.type === 'practice');
@@ -849,7 +892,7 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
       ? { program: decision.program, intensity: decision.intensity ?? 'normal' }
       : aiTraining(ctx.rng, team, matchTomorrow);
     if (mine && state.forcedRest) choice = { program: 'rest', intensity: 'normal' }; // 사건의 결과로 오늘은 쉰다
-    const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp });
+    const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp, skip: mine && state.retired ? isRetired : undefined });
     if (mine) {
       moraleAfterTraining(team, choice.program, choice.intensity);
       if (choice.program === 'scout' && upcoming?.canScout) {
@@ -872,10 +915,23 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
   delete state.event; // 고르지 않고 넘어간 사건은 사라진다
   recordTrend(state, state.dayIndex + 1);
   state.dayIndex++;
+  // 올해 내 팀의 마지막 경기가 끝났다: 3학년은 이 경기를 끝으로 은퇴한다 (졸업으로 명단에서 빠지기 전에 돌아본다)
+  if (!state.retired && seasonOver(state)) {
+    state.retired = true;
+    const farewell = farewellOf(state);
+    if (farewell.players.length) report.farewell = farewell;
+  }
   if (state.dayIndex >= state.calendar.length) report.yearEnd = endYear(state, ctx.rng);
   else { const draw = announceDraw(state, ctx.rng); if (draw) report.draw = draw; }
+  // 임기 마지막 해: 내 팀의 마지막 경기가 끝났으면 남은 날의 훈련은 어디에도 쓰이지 않는다.
+  // 남은 대회만 마저 치르고 곧바로 임기를 끝낸다 (대회 결과와 임기 결산은 오늘의 보고에 싣는다).
+  if (!state.finished && state.year >= SEASON.campaignYears && seasonOver(state)) {
+    const rest = playDay(state, { events: false });
+    report.competitionEnd ??= rest?.competitionEnd ?? null;
+    report.yearEnd = rest?.yearEnd ?? null;
+  }
   // 새 날 아침: 경기가 없는 날이면 감독이 결정할 사건이 생길 수 있다
-  if (!state.finished && decision.events !== false && !userPairing(state)) {
+  if (!state.finished && decision.events !== false && !userPairing(state) && state.calendar[state.dayIndex].type !== 'graduation') {
     const event = rollEvent(state, ctx.rng);
     if (event) state.event = event;
   }
@@ -906,6 +962,7 @@ function endYear(state: Career, rng: Rng): YearSummary {
     team.prestige = Math.round(clamp(team.prestige + delta + (50 - team.prestige) * SEASON.prestigeRegression, 30, 75));
     if (mine) summary.prestige = [before, team.prestige];
 
+    if (mine) summary.farewell = farewellOf(state); // 명단에서 빠지기 전에 기록을 남긴다
     const leaving = team.players.filter((p) => p.year >= 3);
     team.players = team.players.filter((p) => p.year < 3);
     for (const p of team.players) { p.year++; p.condition = 100; p.injuredDays = 0; }

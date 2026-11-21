@@ -237,7 +237,7 @@ export interface TrainingChoice {
 
 // ---------- 대회·시즌 ----------
 
-export type DayType = 'training' | 'practice' | 'official';
+export type DayType = 'training' | 'practice' | 'official' | 'graduation'; // graduation: 졸업식 (한 해의 마지막 날. 훈련도 경기도 없다)
 export type CompetitionKey = 'interhigh' | 'kokutai' | 'wintercup';
 export type Format = 'group' | 'finalLeague' | 'playoff' | 'knockout';
 export type Stage = Format | 'national' | 'done';
@@ -401,6 +401,22 @@ export interface Career {
   gameLog?: Record<string, GameLine[]>; // 우리 선수별 경기 기록 (재학 중인 선수만 남긴다)
   trend?: Record<string, TrendPoint[]>; // 우리 선수별 종합 능력치 변화
   forcedRest?: boolean; // 사건의 결과로 오늘 훈련이 휴식으로 바뀐다
+  retired?: boolean; // 올해 내 팀의 경기가 모두 끝나 3학년이 은퇴했다 (졸업 때까지 팀 훈련에서 빠진다)
+}
+
+// 3학년의 마지막 경기: 올해 내 팀의 마지막 경기가 끝난 날, 은퇴하는 3학년을 돌아본다
+export interface FarewellLine {
+  id: string; name: string; pos: number; ovr: number;
+  from?: { ovr: number; joined: boolean }; // 처음 봤을 때의 종합 능력치. joined: 내 임기 중에 입학했다 (아니면 부임 때의 값)
+  games: number; pts: number; reb: number; ast: number; // 내 임기 중 공식전 출전 수와 경기당 평균
+  best?: { pts: number; opponent: string; year: number }; // 가장 많이 득점한 공식전
+}
+export interface Farewell {
+  year: number;
+  final: boolean; // 임기 마지막 해
+  finish: string | null; // 마지막 대회의 성적
+  daysLeft: number; // 졸업식까지 남은 날
+  players: FarewellLine[];
 }
 
 // 중학 유망주. level = 이 선수가 보통 진학할 학교의 수준 (우리 학교 수준이 이보다 낮을수록 데려오기 어렵다)
@@ -448,6 +464,7 @@ export interface Today {
   type: DayType;
   camp: boolean;
   daysToNextMatch: number | null; // 0이면 오늘이 경기일. 남은 경기가 없으면 null
+  daysToGraduation: number; // 졸업식까지 남은 날 (0이면 오늘)
   userTrains: boolean; // 공식전 날인데 내 팀 경기가 없으면(탈락) 훈련일이 된다
   userMatch: UserMatchInfo | null;
   prep: PrepInfo | null; // 다음 공식전 준비 상황 (상대가 정해지지 않았으면 null)
@@ -465,6 +482,7 @@ export interface YearSummary {
   starChance?: number; // 올해 성적으로 정해진, 신입생 한 명이 특급일 확률
   missed?: Player[]; // 영입 목표였지만 다른 학교로 간 유망주
   prestige?: [number, number]; // 우리 학교 수준 [올해, 내년]
+  farewell?: Farewell; // 졸업생들이 내 임기 중에 남긴 기록
 }
 
 // 대회 대진 발표
@@ -494,6 +512,7 @@ export interface DayReport {
   scout: PrepInfo | null; // 오늘 상대 분석을 했으면 그 결과
   draw?: DrawInfo; // 오늘 일과 뒤에 다음 대회의 대진이 발표됐으면 그 내용
   yearEnd: YearSummary | null;
+  farewell?: Farewell; // 오늘로 올해 내 팀의 경기가 모두 끝나 3학년이 은퇴했다
 }
 
 // ---------- 데이터 파일 ----------

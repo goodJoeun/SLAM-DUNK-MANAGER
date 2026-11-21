@@ -6,7 +6,7 @@ import { reviewMatch } from '@/game/match/review';
 import type { ScoutSection } from '@/game/coach/scouting';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/team/school';
 import { PREPARATION, RECRUITING, SEASON, prospectsOf, recruitChance, seasonGoal, today } from '@/game/career/season';
-import type { BoxTeam, Career, CompetitionResult, DayReport, GrowthEvent, InjuryEvent, YearReview } from '@/game/types';
+import type { BoxTeam, Career, CompetitionResult, DayReport, Farewell, GrowthEvent, InjuryEvent, YearReview } from '@/game/types';
 
 export type MessageKind = 'welcome' | 'match' | 'training' | 'round' | 'competition' | 'injury' | 'season' | 'scout' | 'event';
 
@@ -56,6 +56,7 @@ export interface Message {
   missed?: PlayerNote[]; // 영입 목표였지만 놓친 유망주
   starChance?: number; // 올해 성적으로 정해진 특급 신입생 확률 (신입생 한 명당)
   final?: boolean;
+  farewell?: Farewell; // 3학년의 마지막 경기 (은퇴)
   results?: CompetitionResult[];
   body?: string[];
   days?: number; // 훈련 보고: 이 보고에 묶인 훈련 일수
@@ -105,6 +106,20 @@ export function recruitMessage(career: Career): MessageDraft {
     ].filter(Boolean),
   };
 }
+
+// 3학년 은퇴를 알리는 글 (받은 소식과 은퇴 창이 같이 쓴다)
+// 받침에 맞춘 조사: "2위로", "탈락으로", "우승으로"
+const euro = (word: string) => {
+  const jong = (word.charCodeAt(word.length - 1) - 0xac00) % 28;
+  return `${word}${jong === 0 || jong === 8 ? '로' : '으로'}`;
+};
+export const farewellLead = (f: Farewell) =>
+  `${f.finish ? `${euro(f.finish)} ` : ''}올해 일정을 모두 마쳤습니다. 3학년 ${f.players.length}명이 유니폼을 벗습니다.`;
+export const farewellNext = (f: Farewell) => (f.final
+  ? '감독님의 3년 임기도 이 경기와 함께 끝났습니다.'
+  : f.daysLeft > 0
+    ? `졸업식까지 남은 ${f.daysLeft}일 동안 3학년은 팀 훈련에서 빠지고, 1·2학년이 새 팀을 준비합니다.`
+    : '곧 졸업식이 열리고, 새 학년이 시작됩니다.');
 
 export function buildMessages(
   career: Career,
@@ -212,6 +227,17 @@ export function buildMessages(
     });
   }
 
+  if (r.farewell) {
+    const f = r.farewell;
+    out.push({
+      ...when, kind: 'season', from: '코치진',
+      title: '3학년의 마지막 경기',
+      summary: farewellLead(f),
+      body: [farewellNext(f)],
+      farewell: f,
+    });
+  }
+
   // 학년이 끝나기 2주 전인데 영입 목표가 비어 있으면 한 번 알려 준다
   const left = career.calendar.length - career.dayIndex;
   if (!r.yearEnd && left === RECRUIT_REMINDER && career.year < SEASON.campaignYears && (career.recruitTargets?.length ?? 0) < RECRUITING.maxTargets) {
@@ -237,19 +263,29 @@ export function buildMessages(
         final: true, results: career.results, yearReview: y.review,
       });
     } else {
+      // 졸업식(지난 학년의 마지막 날)과 입학(새 학년 첫날)은 따로 알린다
+      const now = today(career);
+      const newYear = { year: now?.year ?? y.year + 1, day: now?.day ?? 1, phase: now?.phase ?? '' };
+      const send = y.farewell?.players.length ? y.farewell : undefined; // 임기 중의 기록이 있으면 이름만 적는 대신 함께 돌아본다
       out.push({
         ...when, kind: 'season', from: '교장',
-        title: `${y.year}년차 종료 — 새 학년이 시작됩니다`,
-        summary: `졸업 ${y.graduates.length}명 · 신입생 ${y.recruits.length}명${y.scouted?.length || y.missed?.length ? ` · 영입 목표 ${y.scouted?.length ?? 0}명 성공` : ''}`,
-        graduates: y.graduates.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p) })),
+        title: `졸업식 — ${y.year}년차를 마쳤습니다`,
+        summary: `3학년 ${y.graduates.length}명이 졸업했습니다. 올해의 평가와 대회 성적을 확인해 보세요.`,
+        farewell: send,
+        graduates: send ? undefined : y.graduates.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p) })),
+        results: y.results, yearReview: y.review, prestige: y.prestige,
+      });
+      out.push({
+        ...newYear, kind: 'season', from: '코치진',
+        title: `${y.year + 1}년차 시작 — 신입생 ${y.recruits.length}명이 입학했습니다`,
+        summary: `신입생 ${y.recruits.length}명${y.scouted?.length || y.missed?.length ? ` · 영입 목표 ${y.scouted?.length ?? 0}명 성공${y.missed?.length ? `, ${y.missed.length}명 실패` : ''}` : ''}`,
         recruits: y.recruits.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential, scouted: y.scouted?.includes(p.id), star: y.stars?.includes(p.id) })),
         starChance: y.starChance,
         missed: y.missed?.map((p) => ({ name: p.name, pos: p.pos, ovr: overall(p), potential: p.potential })),
-        results: y.results, yearReview: y.review, prestige: y.prestige,
       });
       if (career.year < SEASON.campaignYears) out.push(recruitMessage(career));
       out.push({
-        ...when, kind: 'season', from: '교장',
+        ...newYear, kind: 'season', from: '교장',
         title: `${y.year + 1}년차 목표: ${seasonGoal(career).label}`,
         summary: seasonGoal(career).times > 1 ? '세 대회 중 두 번 이상 이뤄야 달성입니다.' : '세 대회 중 한 번이라도 이루면 달성입니다.',
         body: [
