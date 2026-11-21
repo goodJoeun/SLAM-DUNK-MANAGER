@@ -90,7 +90,7 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
     const mine = teamOverall(team);
     const share = (100 * mine) / (mine + m.opponentOverall);
     return (
-      <Panel title={`오늘의 경기 · ${m.official ? '공식전' : '연습 경기'}`} className="span-8">
+      <Panel title={`오늘의 경기 · ${m.official ? '공식전' : '연습 경기'}`} className="h-today">
         <div className="versus">
           <div className="side"><Crest name={team.name} size={48} /><b>{team.name}</b><span className="muted">팀 전력 <Attr v={mine} /></span></div>
           <div className="vs">VS</div>
@@ -120,7 +120,7 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
   const plan = S.program === 'rest' || S.program === 'scout' ? PROGRAMS[S.program].label : `${PROGRAMS[S.program].label} · ${INTENSITY[S.intensity].label}`;
   const prep = d.prep;
   return (
-    <Panel title="오늘" className="span-8">
+    <Panel title="오늘" className="h-today">
       <div className="kv">
         <div><small>오늘의 훈련</small><b style={{ fontSize: 15 }}>{plan}</b></div>
         <div>
@@ -157,7 +157,7 @@ function CompetitionPanel({ c, act }: { c: Career; act: Act }) {
     const i = c.calendar.findIndex((day, idx) => idx >= c.dayIndex && day.start);
     const start = i >= 0 ? c.calendar[i].start : undefined;
     return (
-      <Panel title="대회" className="span-4">
+      <Panel title="대회" className="h-comp">
         <p className="muted">진행 중인 대회가 없습니다.</p>
         {start && <p>다음 대회: <b>{SEASON.competitions[start].name}</b> 현 예선 · {i - c.dayIndex}일 후</p>}
       </Panel>
@@ -168,7 +168,7 @@ function CompetitionPanel({ c, act }: { c: Career; act: Act }) {
   const showGroup = comp.stage === 'group' && group;
   const showLeague = comp.stage === 'finalLeague' && comp.league;
   return (
-    <Panel title={comp.name} className="span-4" action={<span className="pill club">{STAGE_SHORT[comp.stage]}</span>}>
+    <Panel title={comp.name} className="h-comp" action={<span className="pill club">{STAGE_SHORT[comp.stage]}</span>}>
       {comp.finish[me] && <div className="notice">우리 학교: {comp.finish[me]}</div>}
       {showGroup && <StandingsTable career={c} title={group.name} ids={group.ids} matches={group.matches} onPick={(id) => act('school', id)} />}
       {showLeague && <StandingsTable career={c} title="결승 리그" ids={comp.league!.ids} matches={comp.league!.matches} onPick={(id) => act('school', id)} />}
@@ -227,10 +227,47 @@ export default function HomeView({ S, act }: ViewProps) {
   const ours = new Set(userMatchDays(c).map((i) => i + 1)); // 우리 팀이 뛰는 날
   const targets = c.recruitTargets?.length ?? 0;
 
+  const recentPanel = (
+        <Panel title="최근 경기" className="h-recent" action={<FormPills results={matches.map((m) => Boolean(m.won))} />}>
+          {matches.length ? (
+            <ul className="lines">
+              {matches.slice(0, 5).map((m) => (
+                <li key={m.id} className="click" onClick={() => act('openMessage', m.id)}>
+                  <span className="ellipsis"><b>{m.title.replace(/^(승리|패배) · /, '')}</b></span>
+                  <span className={`pill ${m.won ? 'good' : 'bad'}`}>{m.won ? '승' : '패'}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="muted">아직 치른 경기가 없습니다.</p>}
+        </Panel>
+  );
+  const newsPanel = (
+        <Panel
+          title="최근 소식"
+          className="h-news"
+          action={<button className="btn small ghost" onClick={() => act('screen', 'inbox')}>모두 보기</button>}
+        >
+          <ul className="lines">
+            {S.inbox.slice(0, 6).map((m) => (
+              <li key={m.id} className="click" onClick={() => act('openMessage', m.id)}>
+                <span className="ellipsis">{m.unread && <span className="badge" style={{ marginRight: 6 }}>N</span>}<b>{m.title}</b> <span className="muted">· {m.from}</span></span>
+                <span className="faint num">{m.year}년차 {m.day}일</span>
+              </li>
+            ))}
+          </ul>
+          {(() => {
+            const last = S.inbox.find((m) => m.kind === 'round');
+            return last?.round ? <><h3 className="hint">{last.round.name}</h3><ResultList lines={last.round.matches.filter((x) => x.mine).concat(last.round.matches.filter((x) => !x.mine)).slice(0, 4)} /></> : null;
+          })()}
+        </Panel>
+  );
+
   return (
     <div className="page">
       <PageTitle title="홈" sub={`${d.year}년차 ${d.day}일째 · ${d.phase}`} />
-      <div className="dash">
+      {/* 왼쪽 넓은 칸에 오늘 할 일과 경기·소식, 오른쪽 좁은 칸에 팀 상태와 일정.
+          칸마다 따로 쌓여서 옆 상자의 높이 때문에 빈 자리가 생기지 않는다 */}
+      <div className="home">
         {c.year === 1 && c.dayIndex === 0 && (
           <Panel title="부임 첫날 · 먼저 할 일" className="span-12" action={<span className="hint">첫날에만 보입니다. 건너뛰고 바로 "계속"을 눌러도 됩니다.</span>}>
             <ol className="first-steps">
@@ -243,9 +280,17 @@ export default function HomeView({ S, act }: ViewProps) {
           </Panel>
         )}
         <EventPanel S={S} act={act} />
-        <NextMatchPanel S={S} act={act} d={d} team={team} />
+        <div className="home-main">
+          <NextMatchPanel S={S} act={act} d={d} team={team} />
+          <div className="home-pair">
+            {recentPanel}
+            <CompetitionPanel c={c} act={act} />
+          </div>
+          {newsPanel}
+        </div>
 
-        <Panel title="팀 상태" className="span-4">
+        <div className="home-side">
+        <Panel title="팀 상태" className="h-status">
           <div className="kv">
             <div><small>팀 전력</small><b><Attr v={teamOverall(team)} /></b></div>
             <div title="컨디션이 낮으면 경기 내내 능력이 떨어지고(60이면 약 5%) 더 빨리 지칩니다. 훈련 효율과 부상 위험에도 영향을 줍니다."><small>컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
@@ -277,22 +322,7 @@ export default function HomeView({ S, act }: ViewProps) {
           {!injured.length && !tired.length && <p className="hint">부상자 없음 · 선수단 상태 양호</p>}
         </Panel>
 
-        <Panel title="최근 경기" className="span-4" action={<FormPills results={matches.map((m) => Boolean(m.won))} />}>
-          {matches.length ? (
-            <ul className="lines">
-              {matches.slice(0, 5).map((m) => (
-                <li key={m.id} className="click" onClick={() => act('openMessage', m.id)}>
-                  <span className="ellipsis"><b>{m.title.replace(/^(승리|패배) · /, '')}</b></span>
-                  <span className={`pill ${m.won ? 'good' : 'bad'}`}>{m.won ? '승' : '패'}</span>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="muted">아직 치른 경기가 없습니다.</p>}
-        </Panel>
-
-        <CompetitionPanel c={c} act={act} />
-
-        <Panel title="다가오는 일정" className="span-4" action={<button className="btn ghost small" onClick={() => act('screen', 'schedule')}>전체 일정</button>}>
+        <Panel title="다가오는 일정" className="h-upcoming" action={<button className="btn ghost small" onClick={() => act('screen', 'schedule')}>전체 일정</button>}>
           <ul className="lines">
             {upcoming.map(({ day, n }) => (
               <li key={n}>
@@ -308,28 +338,10 @@ export default function HomeView({ S, act }: ViewProps) {
           </ul>
         </Panel>
 
-        <Panel
-          title="최근 소식"
-          className="span-8"
-          action={<button className="btn small ghost" onClick={() => act('screen', 'inbox')}>모두 보기</button>}
-        >
-          <ul className="lines">
-            {S.inbox.slice(0, 6).map((m) => (
-              <li key={m.id} className="click" onClick={() => act('openMessage', m.id)}>
-                <span className="ellipsis">{m.unread && <span className="badge" style={{ marginRight: 6 }}>N</span>}<b>{m.title}</b> <span className="muted">· {m.from}</span></span>
-                <span className="faint num">{m.year}년차 {m.day}일</span>
-              </li>
-            ))}
-          </ul>
-          {(() => {
-            const last = S.inbox.find((m) => m.kind === 'round');
-            return last?.round ? <><h3 className="hint">{last.round.name}</h3><ResultList lines={last.round.matches.filter((x) => x.mine).concat(last.round.matches.filter((x) => !x.mine)).slice(0, 4)} /></> : null;
-          })()}
-        </Panel>
-
-        <Panel title={`${c.year}년차 일정`} className="span-4">
+        <Panel title={`${c.year}년차 일정`} className="h-year">
           <CalendarStrip career={c} />
         </Panel>
+        </div>
       </div>
     </div>
   );

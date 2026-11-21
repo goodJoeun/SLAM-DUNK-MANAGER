@@ -1,6 +1,6 @@
 // 경기 화면에서 코트 양옆과 아래에 놓이는 현황 부품: 팀별 선수 기록 표, 점수 차 흐름, 쿼터별 점수, 부문별 1위.
 import type { BoxPlayer, BoxTeam, LogEvent, PlayerView, TeamView } from '@/game/types';
-import { POS, condClass } from '@/components/shared/ui';
+import { POS, attrClass, condClass } from '@/components/shared/ui';
 
 const TB_COLS: { label: string; title: string; cls?: string }[] = [
   { label: '분', title: '출전 시간(분)' },
@@ -43,6 +43,7 @@ export function TeamBoard({ team, stats, selected, numbered = false, denyId, tag
           {denyId === p.id && <i className="tb-tag bad" title="집중 마크를 걸어 둔 선수">마크</i>}
         </td>
         <td className="faint">{POS[p.pos]}</td>
+        <td><b className={`gv b ${attrClass(p.ovr)}`}>{p.ovr}</b></td>
         <td><b className={`en ${condClass(p.energy)}`}>{p.energy}</b></td>
         <td>{s ? Math.round(s.sec / 60) : 0}</td>
         <td><b>{s?.pts ?? 0}</b></td>
@@ -63,18 +64,18 @@ export function TeamBoard({ team, stats, selected, numbered = false, denyId, tag
     <table className="tb">
       <thead>
         <tr>
-          <th className="n">코트 위</th><th title="포지션">P</th><th title="체력 (낮을수록 지쳤다)">체력</th>
+          <th className="n">코트 위</th><th title="포지션">P</th><th title="종합 능력치">종합</th><th title="체력 (낮을수록 지쳤다)">체력</th>
           {TB_COLS.map((c) => <th key={c.label} title={c.title} className={c.cls}>{c.label}</th>)}
         </tr>
       </thead>
       <tbody>
         {team.court.map((p, i) => row(p, i))}
-        <tr className="tb-sep"><td colSpan={13}>벤치</td></tr>
+        <tr className="tb-sep"><td colSpan={14}>벤치</td></tr>
         {team.bench.map((p) => row(p, null))}
       </tbody>
       <tfoot>
         <tr>
-          <td className="n">팀 합계</td><td /><td />
+          <td className="n">팀 합계</td><td /><td /><td />
           <td>{Math.round(sum((s) => s.sec) / 60)}</td>
           <td>{sum((s) => s.pts)}</td><td>{sum((s) => s.orb + s.drb)}</td><td>{sum((s) => s.ast)}</td>
           <td className="x-wide">{sum((s) => s.stl)}</td><td className="x-wide">{sum((s) => s.blk)}</td>

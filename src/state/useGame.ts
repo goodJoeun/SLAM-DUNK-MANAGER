@@ -4,6 +4,7 @@
 // 엔진이 커리어 객체를 제자리에서 고치기 때문에, 상태는 하나의 변경 가능한 객체로 두고
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { createCareer, today, playDay, playableSchoolIds, prepareUserMatch, toggleRecruitTarget } from '@/game/career/season';
 import { setLineup, upgradeCareer } from '@/game/team/school';
 import { resolveEvent } from '@/game/team/people';
@@ -775,6 +776,13 @@ const actions = {
   },
 };
 
+let transitions = 0; // 지금까지 시작한 화면 전환 수 (마지막 전환을 가려내는 데 쓴다)
+// 지금 어떤 화면을 보고 있는지. 이 값이 바뀌는 입력은 화면 전환으로 본다 (같은 화면 안의 탭·선택은 넣지 않는다)
+const viewKey = (S: GameState) => [
+  S.career ? 'game' : S.stage, S.screen, S.playerId ?? '', S.schoolId ?? '',
+  S.match ? (S.match.game.finished ? 'result' : 'match') : '',
+].join('|');
+
 type Actions = typeof actions;
 type ActionArgs<K extends keyof Actions> = Actions[K] extends (ctx: Ctx, ...args: infer A) => void ? A : never;
 
@@ -789,8 +797,28 @@ export function useGame(): { S: GameState; act: Act } {
   useEffect(() => () => stopMatchTimer(S), [S]);
 
   const act: Act = (name, ...args) => {
+    const before = viewKey(S);
     (actions[name] as (ctx: Ctx, ...rest: unknown[]) => void)({ S, rerender }, ...args);
     saveMatch(S);
+    // 화면이 바뀌는 입력이면 이전 화면에서 새 화면으로 부드럽게 넘긴다 (브라우저의 화면 전환 기능).
+    // 지원하지 않는 브라우저이거나 움직임을 줄이도록 설정했으면 바로 바꾼다.
+    if (viewKey(S) !== before && typeof document.startViewTransition === 'function' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const root = document.documentElement;
+      const turn = ++transitions;
+      root.dataset.vt = '1'; // 전환 중에만 화면 조각에 이름을 붙인다 (theme.css)
+      // 전환이 끝나면 이름을 뗀다. 연달아 눌러 앞의 전환이 건너뛰어졌으면 마지막 전환이 끝날 때 뗀다
+      const done = () => { if (turn === transitions) delete root.dataset.vt; };
+      try {
+        const t = document.startViewTransition(() => { flushSync(rerender); });
+        t.ready.catch(() => { /* 연달아 누르면 앞의 전환은 건너뛴다 */ });
+        t.finished.then(done, done);
+        setTimeout(done, 1200); // 화면이 가려져 있어 전환이 끝났다는 신호가 늦어져도 이름은 뗀다
+      } catch {
+        done();
+        rerender();
+      }
+      return;
+    }
     rerender();
   };
 

@@ -650,7 +650,6 @@ input[type='checkbox'] { accent-color: var(--club); }
   .fullcourt .nm { font-size: 0.78px; transform: translateY(0.46px); }
   .fullcourt .caption { font-size: 0.9px; }
 }
-@media (min-width: 1280px) and (max-width: 1339px) { .tb .x-wide { display: none; } }
 
 /* 팀 현황 표 */
 .team-board > .panel-h h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -691,3 +690,66 @@ input[type='checkbox'] { accent-color: var(--club); }
 .leaders li > span:last-child { text-align: right; }
 .leaders .ld { white-space: nowrap; }
 .leaders small { font-size: 10.5px; }
+
+/* ---------- 화면 전환 ----------
+   화면이 바뀌는 입력마다 이전 화면이 살짝 떠오르며 사라지고 새 화면이 아래에서 올라온다 (useGame.ts의 act).
+   머리띠·메뉴·아래 고정 줄은 제자리에 두고 내용 칸만 움직인다. 이름은 전환 중(html[data-vt])에만 붙인다:
+   늘 붙여 두면 내용 칸이 따로 쌓이는 층이 되어 그 안의 창이 머리띠 아래로 깔린다. */
+@keyframes vt-out { to { opacity: 0; transform: translateY(-8px) scale(0.992); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(14px); } }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+html[data-vt] .app-header { view-transition-name: app-header; }
+html[data-vt] .sidebar { view-transition-name: app-sidebar; }
+html[data-vt] .dock { view-transition-name: app-dock; }
+html[data-vt] .content { view-transition-name: screen; }
+::view-transition-old(screen) { animation: vt-out 0.14s ease-in both; }
+::view-transition-new(screen) { animation: vt-in 0.3s cubic-bezier(0.2, 0.75, 0.2, 1) 0.06s both; }
+/* 표지·학교 선택처럼 틀이 통째로 바뀌는 화면은 전체를 부드럽게 겹쳐 바꾼다 */
+::view-transition-old(root) { animation: vt-fade-out 0.18s ease-in both; }
+::view-transition-new(root) { animation: vt-fade-in 0.32s ease-out both; }
+::view-transition-group(app-header), ::view-transition-group(app-sidebar), ::view-transition-group(app-dock) { animation-duration: 0.2s; }
+/* 경기가 끝나 결과 화면으로 넘어갈 때 (입력 없이 넘어가므로 따로 넣는다) */
+@media (prefers-reduced-motion: no-preference) {
+  .result { animation: vt-in 0.35s cubic-bezier(0.2, 0.75, 0.2, 1) both; }
+}
+
+/* ---------- 홈 화면: 두 칸 배치 ---------- */
+.home { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.home > .span-12 { grid-column: 1 / -1; }
+.home-main, .home-side { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.home-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; min-width: 0; }
+/* 상자 제목을 조금 강조한다: 크고 또렷하게, 학교 색 띠를 굵게 */
+.home .panel-h { min-height: 46px; padding: 9px 16px; box-shadow: inset 5px 0 0 var(--club); background: linear-gradient(90deg, color-mix(in srgb, var(--club) 42%, transparent), transparent 70%); }
+.home .panel-h h2 { font-size: 15px; font-weight: 900; letter-spacing: 0.01em; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / 0.4); }
+.home .panel-b { padding: 16px; }
+.home .panel.flush > .panel-b { padding: 0; }
+@media (max-width: 1100px) {
+  /* 좁은 화면: 칸을 풀어 중요한 순서대로 다시 놓는다 (오늘 → 팀 상태 → 최근 경기 · 대회 → 일정 → 소식) */
+  .home { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-main, .home-side, .home-pair { display: contents; }
+  .home .h-today { order: 1; grid-column: 1 / -1; }
+  .home .h-status { order: 2; }
+  .home .h-upcoming { order: 3; }
+  .home .h-recent { order: 4; }
+  .home .h-comp { order: 5; }
+  .home .h-news { order: 6; grid-column: 1 / -1; }
+  .home .h-year { order: 7; grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .home { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .home > *, .home .panel { grid-column: 1 / -1; }
+  .home .h-recent { order: 3; }
+  .home .h-comp { order: 4; }
+  .home .h-upcoming { order: 5; }
+  .home .panel-h h2 { font-size: 15.5px; }
+  .home .panel-b { padding: 14px; }
+}
+
+/* ---------- 경기 화면의 팀 표: 줄을 조금 높이고, 칸이 좁으면 스틸·블록 열을 접는다 ---------- */
+.tb td { height: 32px; }
+.tb th { height: 28px; }
+.tb .tb-sep td { height: 24px; }
+.tb tfoot td { height: 34px; }
+.team-board { container-type: inline-size; }
+@container (max-width: 450px) { .tb .x-wide { display: none; } }

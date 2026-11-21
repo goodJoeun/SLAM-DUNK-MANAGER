@@ -1,5 +1,5 @@
 // 화면 틀: 위쪽 학교 머리띠(날짜·다음 경기·계속 버튼)와 왼쪽 메뉴
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { today } from '@/game/career/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/team/school';
@@ -57,8 +57,9 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
     return () => ro.disconnect();
   }, [inMatchNow(S)]);
 
-  // 화면을 바꾸면 맨 위에서 시작한다 (이전 화면의 스크롤 위치가 남아 제목이 가려지지 않게)
-  useEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, S.schoolId, inMatchNow(S)]);
+  // 화면을 바꾸면 맨 위에서 시작한다 (이전 화면의 스크롤 위치가 남아 제목이 가려지지 않게).
+  // 화면 전환 효과가 새 화면을 찍기 전에 올려야 하므로 그리기 전에(layout effect) 한다
+  useLayoutEffect(() => { window.scrollTo(0, 0); }, [S.screen, S.playerId, S.schoolId, inMatchNow(S)]);
 
   // 오늘의 결정 팝업: 닫은 사건·결과의 이름을 기억해 둔다 (새 사건이 생기면 다시 뜬다)
   const [closed, setClosed] = useState<string | null>(null);
