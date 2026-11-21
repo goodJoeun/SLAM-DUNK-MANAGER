@@ -813,7 +813,11 @@ export function useGame(): { S: GameState; act: Act } {
     if (viewKey(S) !== before && typeof document.startViewTransition === 'function' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const root = document.documentElement;
       const turn = ++transitions;
-      root.dataset.vt = '1'; // 전환 중에만 화면 조각에 이름을 붙인다 (theme.css)
+      // 화면 틀(머리띠·메뉴)이 그대로인 전환이면 내용 칸만 움직이도록 조각에 이름을 붙인다 (theme.css).
+      // 경기 화면처럼 틀이 달라지는 전환은 이름 없이 화면 전체를 겹쳐 바꾼다: 조각을 따로 움직이면 크기가 달라 늘어져 보인다
+      const shell = (key: string) => key.startsWith('game|') && key.endsWith('|');
+      if (shell(before) && shell(viewKey(S))) root.dataset.vt = '1';
+      else delete root.dataset.vt;
       // 전환이 끝나면 이름을 뗀다. 연달아 눌러 앞의 전환이 건너뛰어졌으면 마지막 전환이 끝날 때 뗀다
       const done = () => { if (turn === transitions) delete root.dataset.vt; };
       try {
