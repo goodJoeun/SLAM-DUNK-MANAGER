@@ -93,7 +93,22 @@ export function clubHue(name: string) {
   for (const ch of name) h = (h * 31 + (ch.codePointAt(0) ?? 0)) % 360;
   return h;
 }
-export const clubColor = (name: string) => `hsl(${clubHue(name)} 62% 46%)`;
+// 학교 색의 밝기: 그 위에 흰 글씨를 올려도 읽히도록(명암 대비 4.5 이상) 색상마다 밝기를 맞춘다.
+// 파랑·보라는 46% 그대로, 노랑·연두·청록처럼 원래 밝은 색상은 더 어둡게 잡는다.
+const CLUB_SATURATION = 62;
+const CLUB_MAX_LUMINANCE = 0.15;
+function luminance(h: number, s: number, l: number) {
+  const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+  const f = (n: number) => { const k = (n + h / 30) % 12; return l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(f(0)) + 0.7152 * lin(f(8)) + 0.0722 * lin(f(4));
+}
+function clubLightness(hue: number) {
+  let l = 46;
+  while (l > 20 && luminance(hue, CLUB_SATURATION, l) > CLUB_MAX_LUMINANCE) l -= 1;
+  return l;
+}
+export const clubColor = (name: string) => { const h = clubHue(name); return `hsl(${h} ${CLUB_SATURATION}% ${clubLightness(h)}%)`; };
 // 경기 화면의 양 팀 색. 두 학교 색이 비슷하면 상대(mySide가 아닌 쪽)를 어두운 원정 유니폼 색으로 바꿔 구분한다.
 export function matchColors(names: [string, string], mySide: number): [string, string] {
   const hues = names.map(clubHue);
