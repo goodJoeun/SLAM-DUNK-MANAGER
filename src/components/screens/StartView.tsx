@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createCareer, goalFor, goalLabel, nationalRivalOveralls, playablePrefectures, qualifiersFor } from '@/game/career/season';
+import { PLAYABLE_SCHOOLS, createCareer, goalFor, goalLabel, nationalRivalOveralls, playablePrefectures, playableSchoolIds, qualifiersFor } from '@/game/career/season';
 import { teamOverall } from '@/game/team/school';
 import { overall } from '@/game/match/engine';
 import { SLOTS } from '@/state/useGame';
 import type { Act, GameState } from '@/state/useGame';
-import { Attr, Crest, NAME_STYLE, PosBadge, Seg, Stars, clubVars } from '@/components/shared/ui';
+import { Attr, Crest, Icon, NAME_STYLE, PosBadge, Seg, Stars, clubVars } from '@/components/shared/ui';
 import type { Career } from '@/game/types';
 
 // 카드에 적는 짧은 목표 (자세한 문장은 goalLabel)
 const GOAL_SHORT = ['', '현 예선 8강', '현 예선 최종 단계', '전국 대회 진출', '전국 8강', '전국 우승'];
 // 목표를 이루려면 현 안에서 대략 몇 위 안에 들어야 하는가
 const GOAL_NEEDS = [16, 8, 4, 2, 2, 1];
-const PREFECTURES = Object.fromEntries(playablePrefectures('original').map((name) => [name, name]));
+const PREFECTURES = playablePrefectures('original');
 const DIFFICULTY = ['쉬움', '보통', '어려움', '매우 어려움'];
-const SORTS = { base: '기본', ovr: '전력순', easy: '쉬운 순', hard: '어려운 순' };
-type Sort = keyof typeof SORTS;
 
 // 목표 순위 밖의 가장 강한 학교보다 전력이 이만큼 앞서면, 순위에 여유가 없어도(현 내 1위라 더 올라갈 데가 없어도) 쉬운 것으로 본다
 const SAFE_MARGIN = 5;
@@ -52,50 +50,131 @@ function schoolInfo(p: Career, id: string, rivals: number[]) {
 }
 const prestigeStars = (prestige: number) => Math.max(0.5, Math.min(5, Math.round(((prestige - 35) / 7) * 2) / 2));
 
+// 학교 선택 화면: 위에 현 탭, 왼쪽에 고를 수 있는 학교의 로고 격자, 오른쪽에 고른 학교의 정보와 시작 버튼.
+// 로고를 누르면 바로 시작하지 않고 오른쪽에 정보를 보여 준 뒤, 시작 버튼으로 확정한다.
 export default function StartView({ S, act }: { S: GameState; act: Act }) {
   const { startSeed, nameStyle, startPrefecture } = S;
   const p = useMemo(() => createCareer({ seed: startSeed, dataset: 'original', nameStyle, prefecture: startPrefecture }), [startSeed, nameStyle, startPrefecture]);
   const spots = qualifiersFor(p, 'interhigh');
-  // 학교를 누르면 바로 시작하지 않고, 한 번 확인한다
-  const [picked, setPicked] = useState<number | null>(null);
-  const chosen = picked == null ? null : p.teams[p.regionIds[picked]];
   const info = useMemo(() => {
     const rivals = nationalRivalOveralls(p);
     return Object.fromEntries(p.regionIds.map((id) => [id, schoolInfo(p, id, rivals)]));
   }, [p]);
+  // 고를 수 있는 학교: 현 내 전력 상위 학교만, 강한 순서로. 고른 학교는 현 안의 원래 순번(picked)으로 기억한다.
+  const choices = useMemo(() => playableSchoolIds(p).map((id) => p.regionIds.indexOf(id)), [p]);
+  const [picked, setPicked] = useState<number | null>(null);
+  const chosen = picked != null && choices.includes(picked) ? p.teams[p.regionIds[picked]] : null;
   const ci = chosen ? info[chosen.id] : null;
-  // 학교를 고르면 확인 창의 시작 버튼으로 초점을 옮긴다 (키보드로 이어서 누를 수 있게)
+  // 학교를 고르면 시작 버튼으로 초점을 옮긴다 (키보드로 이어서 누를 수 있게)
   const startRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (picked != null) startRef.current?.focus({ preventScroll: true }); }, [picked]);
-  // 보여 주는 순서만 바꾼다. 고른 학교는 원래 순번(picked)으로 기억한다.
-  const [sort, setSort] = useState<Sort>('base');
-  const order = useMemo(() => {
-    const idx = p.regionIds.map((_, i) => i);
-    const of = (i: number) => info[p.regionIds[i]];
-    if (sort === 'ovr') idx.sort((a, b) => of(b).ovr - of(a).ovr);
-    if (sort === 'easy') idx.sort((a, b) => of(a).level - of(b).level || of(b).ovr - of(a).ovr);
-    if (sort === 'hard') idx.sort((a, b) => of(b).level - of(a).level || of(a).ovr - of(b).ovr);
-    return idx;
-  }, [p, info, sort]);
+  // 좁은 화면에서는 정보 칸이 격자 아래에 있으므로, 고르면 그 칸이 보이게 내려 준다
+  const detailRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (picked == null) return;
+    startRef.current?.focus({ preventScroll: true });
+    if (window.matchMedia('(max-width: 860px)').matches) detailRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [picked]);
+  // 현 탭이 화면보다 길면(휴대폰) 고른 현이 보이는 자리까지 옆으로 민다
+  const tabsRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    tabsRef.current?.querySelector('.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [p.prefecture]);
+  const canon = chosen ? chosen.players.filter((x) => x.fixed).sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((x) => x.name).join(', ') : '';
+
   return (
-    <div className="start">
-      <div className="start-hero">
-        <div className="row between"><span className="eyebrow">새 커리어</span><button className="btn ghost small" onClick={() => act('title')}>표지로 돌아가기</button></div>
-        <h1>고교 농구 매니저</h1>
-        <p>{p.prefecture}의 고교 농구부 감독이 되어 3년 동안 팀을 이끕니다. 매일 훈련을 정하고, 경기를 직접 지휘하고, 인터하이·국민체육대회·윈터컵 우승에 도전하세요.</p>
-        <div className="row">
-          <span className="muted">이름 표기</span>
-          <Seg options={NAME_STYLE} value={nameStyle} onChange={(v) => { if (v !== nameStyle) act('namestyle'); }} />
-          <span className="hint">학교와 선수 이름을 한국어판 또는 일본 원작 이름으로 보여 줍니다. 같은 학교·같은 선수이고, 시작한 뒤에는 바꿀 수 없습니다.</span>
+    <div className="pick">
+      <header className="pick-top">
+        <button className="btn ghost small pick-back" onClick={() => act('title')}><Icon name="back" />표지로</button>
+        <div className="pick-brand">
+          <h1>고교 농구 <em>매니저</em></h1>
+          <span>감독으로 부임할 학교를 고르세요</span>
         </div>
-        <div className="row">
-          <span className="muted">현</span>
-          <Seg options={PREFECTURES} value={p.prefecture} onChange={(v) => { if (v !== p.prefecture) { setPicked(null); act('prefecture', v); } }} />
-          <span className="hint">원작에 나오는 학교가 있는 현입니다. {p.prefecture}에서는 인터하이에 {spots}곳, 국민체육대회와 윈터컵에 1곳이 전국 대회에 나갑니다.</span>
-        </div>
-      </div>
+      </header>
+
+      <nav ref={tabsRef} className="pick-tabs" role="tablist" aria-label="현 선택">
+        {PREFECTURES.map((name) => (
+          <button
+            key={name}
+            role="tab"
+            aria-selected={name === p.prefecture}
+            className={name === p.prefecture ? 'on' : ''}
+            onClick={() => { if (name !== p.prefecture) { setPicked(null); act('prefecture', name); } }}
+          >
+            {name}
+          </button>
+        ))}
+      </nav>
+
+      <main className="pick-main">
+        <section className="pick-half" aria-label={`${p.prefecture}의 학교`}>
+          <h2>{p.prefecture}</h2>
+          <p className="pick-sub">전력 상위 {PLAYABLE_SCHOOLS}개교 · 강한 순서</p>
+          <div className="logo-grid">
+            {choices.map((i, order) => {
+              const { t, ovr } = info[p.regionIds[i]];
+              return (
+                <button
+                  key={t.id}
+                  className={`logo-btn ${picked === i ? 'on' : ''}`}
+                  aria-pressed={picked === i}
+                  style={clubVars(t.name)}
+                  title={`${t.name} · 팀 전력 ${ovr} (현 내 ${order + 1}위)`}
+                  onClick={() => setPicked(i)}
+                >
+                  <span className="logo-ring"><Crest name={t.name} size={46} /></span>
+                  <b>{t.name}</b>
+                  <i>전력 {ovr}</i>
+                </button>
+              );
+            })}
+          </div>
+          <p className="hint pick-note">
+            현 예선에는 {p.regionIds.length}개교가 모두 나옵니다. 인터하이는 {spots}곳, 국민체육대회와 윈터컵은 1곳이 전국 대회에 나갑니다.
+          </p>
+        </section>
+
+        <section ref={detailRef} className="pick-half pick-detail" aria-live="polite" style={chosen ? clubVars(chosen.name) : undefined}>
+          {chosen && ci && picked != null ? (
+            <>
+              <div className="pd-head">
+                <span className="logo-ring big"><Crest name={chosen.name} size={64} /></span>
+                <div>
+                  <span className="eyebrow">{p.prefecture} · 전력 {ci.rank}위</span>
+                  <h2>{chosen.name}</h2>
+                  <span className="muted">{canon || '자체 선발 선수단'}</span>
+                </div>
+              </div>
+              <div className="pd-stats">
+                <div><small>팀 전력</small><Attr v={ci.ovr} big /></div>
+                <div><small>학교 수준</small><Stars value={prestigeStars(chosen.prestige)} /></div>
+                <div><small>난이도</small><b className={`diff d${ci.level}`}>{DIFFICULTY[ci.level]}</b></div>
+                <div><small>주축 중 3학년</small><b title="능력치 상위 5명 중 올해를 끝으로 졸업하는 선수">{ci.seniors}명</b></div>
+              </div>
+              <ul className="lines pd-lines">
+                <li><span className="muted">에이스</span><span className="pd-ace"><PosBadge pos={ci.ace.pos} /><b>{ci.ace.name}</b><span className="muted">{ci.ace.year}학년</span><Attr v={overall(ci.ace)} /></span></li>
+                <li><span className="muted">올해 목표</span><span>{goalLabel(ci.goal)}</span></li>
+              </ul>
+              <p className="muted pd-why">{ci.why}</p>
+              <div className="pd-cta">
+                <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
+                <button ref={startRef} className="btn primary" disabled={!S.slot} title={S.slot ? `${S.slot}번 칸에 저장됩니다` : '빈 세이브 칸이 없습니다'} onClick={() => act('start', picked)}>
+                  {chosen.name} 감독으로 시작<Icon name="next" />
+                </button>
+              </div>
+              <p className="hint">시작한 뒤에는 학교를 바꿀 수 없습니다.</p>
+            </>
+          ) : (
+            <div className="pd-empty">
+              <Icon name="squad" />
+              <b>학교를 골라 주세요</b>
+              <p className="muted">로고를 누르면 전력, 난이도, 올해 목표를 여기에서 보여 줍니다. 3년 동안 매일 훈련을 정하고 경기를 직접 지휘해 인터하이·국민체육대회·윈터컵 우승에 도전합니다.</p>
+            </div>
+          )}
+        </section>
+      </main>
+
       {S.slots.some(Boolean) && (
-        <section className="slots" aria-label="세이브 칸">
+        <section className="slots pick-slots" aria-label="세이브 칸">
           {SLOTS.map((n, i) => {
             const s = S.slots[i];
             return s ? (
@@ -115,54 +194,17 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
           })}
         </section>
       )}
-      {!S.slot && <div className="notice bad">세이브 칸이 모두 찼습니다. 새 게임을 시작하려면 위에서 칸 하나를 지워야 합니다.</div>}
-      <div className="page-title">
-        <div><h1>학교 선택</h1><p>난이도는 지금 전력이 올해 목표에 얼마나 못 미치는지로 정해집니다. 학교 수준(별)은 매년 성적에 따라 오르내리고, 목표와 신입생의 질을 좌우합니다.</p></div>
-        <div className="row"><span className="muted">정렬</span><Seg options={SORTS} value={sort} onChange={(v) => setSort(v as Sort)} />
+
+      <footer className="pick-foot">
+        <div className="pick-opts">
+          <span className="muted">이름 표기</span>
+          <Seg options={NAME_STYLE} value={nameStyle} onChange={(v) => { if (v !== nameStyle) act('namestyle'); }} />
           <button className="btn small" title="원작에 나오지 않는 학교와 선수들을 새로 만듭니다. 원작 선수는 그대로입니다." onClick={() => { setPicked(null); act('reroll'); }}>선수 구성 다시 뽑기</button>
         </div>
-      </div>
-      {chosen && ci && picked != null && (
-        <div className="notice start-confirm" style={clubVars(chosen.name)}>
-          <Crest name={chosen.name} size={40} />
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <b style={{ fontSize: 16 }}>{chosen.name} 감독으로 시작할까요?</b>
-            <p className="muted" style={{ margin: '2px 0 0' }}>
-              난이도 <b>{DIFFICULTY[ci.level]}</b> · {ci.why}
-            </p>
-            <p className="muted" style={{ margin: '2px 0 0' }}>
-              <span className="hide-phone">올해 목표: {goalLabel(ci.goal)}. </span>시작한 뒤에는 학교를 바꿀 수 없습니다.
-            </p>
-          </div>
-          <button className="btn" onClick={() => setPicked(null)}>다시 고르기</button>
-          <button ref={startRef} className="btn primary" disabled={!S.slot} title={S.slot ? `${S.slot}번 칸에 저장됩니다` : '빈 세이브 칸이 없습니다'} onClick={() => act('start', picked)}>이 학교로 시작</button>
-        </div>
-      )}
-      <div className="school-grid">
-        {order.map((i) => {
-          const id = p.regionIds[i];
-          const { t, ovr, rank, goalShort, level, ace, why, seniors } = info[id];
-          const stars = t.players.filter((x) => x.fixed).sort((a, b) => overall(b) - overall(a)).slice(0, 3).map((x) => x.name).join(', ');
-          return (
-            <button key={id} className={`school-card ${picked === i ? 'on' : ''}`} aria-pressed={picked === i} style={clubVars(t.name)} onClick={() => setPicked(i)}>
-              <Crest name={t.name} size={40} />
-              <div className="sc-body">
-                <b>{t.name}</b>
-                <span>{stars || '자체 선발 선수단'}</span>
-              </div>
-              <div className="sc-ace">
-                <small>에이스</small><PosBadge pos={ace.pos} /><b>{ace.name}</b><span className="muted">{ace.year}학년</span><Attr v={overall(ace)} />
-              </div>
-              <div className="sc-stats">
-                <span><small>팀 전력</small><span className="sc-ovr"><Attr v={ovr} /><i>{rank}위</i></span></span>
-                <span><small>학교 수준</small><Stars value={prestigeStars(t.prestige)} /></span>
-                <span title={why}><small>난이도</small><b className={`diff d${level}`}>{DIFFICULTY[level]}</b></span>
-              </div>
-              <div className="sc-goal"><span><small>올해 목표</small>{goalShort}</span><span title="능력치 상위 5명 중 올해를 끝으로 졸업하는 선수"><small>주축 중 3학년</small>{seniors}명</span></div>
-            </button>
-          );
-        })}
-      </div>
+        <span className={`pick-save ${S.slot ? 'ok' : 'full'}`}>
+          {S.slot ? `${S.slot}번 칸에 자동 저장` : '세이브 칸이 모두 찼습니다 · 칸 하나를 지워야 시작할 수 있습니다'}
+        </span>
+      </footer>
     </div>
   );
 }

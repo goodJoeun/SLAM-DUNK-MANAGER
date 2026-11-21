@@ -156,6 +156,16 @@ export function createCareer({ seed = 1, userTeamIndex = 0, dataset = null, name
 }
 
 // 내 학교를 고를 수 있는 현 (데이터의 기본 현이 맨 앞)
+// 감독으로 부임할 수 있는 학교: 현 안에서 지금 전력이 높은 순으로 이만큼 (같으면 학교 수준이 높은 쪽).
+// 고르는 화면을 줄이려는 것일 뿐, 나머지 학교도 현 예선과 연습 경기에는 그대로 나온다.
+export const PLAYABLE_SCHOOLS = 10;
+export function playableSchoolIds(state: Career): string[] {
+  const t = (id: string) => state.teams[id];
+  return [...state.regionIds]
+    .sort((a, b) => teamOverall(t(b)) - teamOverall(t(a)) || t(b).prestige - t(a).prestige)
+    .slice(0, PLAYABLE_SCHOOLS);
+}
+
 export function playablePrefectures(dataset: DatasetKey): string[] {
   const data = DATASETS[dataset];
   return [data.prefecture, ...(data.regions ?? []).map((r) => r.prefecture)];

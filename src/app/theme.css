@@ -147,8 +147,6 @@ input[type='checkbox'] { accent-color: var(--club); }
 .attr { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ac) 45%, transparent); }
 .school-card, .slot { border-color: var(--edge); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 3px 0 var(--deep); }
 .school-card.on { box-shadow: inset 0 0 0 1px var(--club), 0 0 0 1px var(--club), 0 10px 22px color-mix(in srgb, var(--club) 30%, transparent); }
-.start-hero { border-color: var(--edge); box-shadow: 0 10px 26px rgb(0 0 0 / 0.35); }
-.start-hero h1 { font-style: italic; font-weight: 900; }
 
 /* ---------- 경기 화면 ---------- */
 
@@ -336,4 +334,104 @@ input[type='checkbox'] { accent-color: var(--club); }
   .match-side .bench-row.has-info { grid-template-columns: 30px minmax(0, 1fr) 40px 32px 26px auto; }
   .match-side .bench-row .portrait { display: none; }
   .match-side .bench-row .cond { width: 100%; }
+}
+
+/* ---------- 학교 선택 화면 ----------
+   위에서부터 제목 띠, 현 탭, 가운데 선으로 나뉜 두 칸(왼쪽 로고 격자 · 오른쪽 고른 학교), 아래 띠. */
+.pick { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.pick-top, .pick-foot { background: rgb(5 8 16 / 0.62); }
+.pick-top { position: relative; display: grid; place-items: center; padding: 18px 16px; border-bottom: 1px solid var(--line-soft); }
+.pick-back { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); }
+.pick-brand { display: grid; gap: 4px; justify-items: center; text-align: center; }
+.pick-brand h1 { font-size: 26px; font-weight: 900; font-style: italic; letter-spacing: 0.04em; }
+.pick-brand h1 em { font-style: inherit; color: var(--hot); }
+.pick-brand span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.2em; color: var(--muted); }
+.pick-tabs { display: flex; gap: 4px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; scrollbar-width: none; }
+.pick-tabs::-webkit-scrollbar { display: none; }
+.pick-tabs > :first-child { margin-left: auto; }
+.pick-tabs > :last-child { margin-right: auto; }
+.pick-tabs button { flex: none; padding: 8px 14px; border: 1px solid transparent; border-radius: 999px; background: none; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.pick-tabs button:hover { color: var(--text); background: var(--panel-2); }
+.pick-tabs button.on { color: #fff; border-color: var(--hot); background: color-mix(in srgb, var(--hot) 18%, transparent); }
+
+.pick-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.pick-half { display: grid; align-content: center; justify-items: center; gap: 10px; min-width: 0; padding: 32px 24px; }
+.pick-half + .pick-half { border-left: 1px solid var(--line-soft); }
+.pick-half > h2 { font-size: 20px; font-weight: 800; }
+.pick-sub { margin: -4px 0 14px; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
+.pick-note { max-width: 460px; margin-top: 18px; text-align: center; }
+
+/* 원형 로고 버튼 */
+.logo-grid { display: grid; grid-template-columns: repeat(5, 94px); justify-content: center; gap: 22px 8px; }
+.logo-btn { display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); }
+.logo-ring {
+  display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%;
+  border: 1px solid var(--line); background: radial-gradient(circle at 50% 30%, #121a2b, #05070d);
+  box-shadow: 0 0 0 5px rgb(255 255 255 / 0.02), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.logo-ring.big { flex: none; width: 96px; height: 96px; border-color: var(--club); box-shadow: 0 0 0 1px var(--club), 0 0 30px color-mix(in srgb, var(--club) 45%, transparent); }
+.logo-btn b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.logo-btn i { font-style: normal; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.logo-btn:hover .logo-ring { transform: translateY(-3px); border-color: var(--club); }
+.logo-btn:hover b, .logo-btn.on b { color: #fff; }
+.logo-btn.on .logo-ring { border-color: var(--club); box-shadow: 0 0 0 2px var(--club), 0 0 26px color-mix(in srgb, var(--club) 55%, transparent); }
+.logo-btn:focus-visible { outline: none; }
+.logo-btn:focus-visible .logo-ring { outline: 2px solid var(--gold); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .logo-ring { transition: none; } }
+
+/* 고른 학교 */
+.pick-detail { justify-items: stretch; gap: 14px; padding-inline: max(24px, calc((50% - 480px) / 2)); }
+.pd-head { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.pd-head > div { display: grid; gap: 2px; min-width: 0; }
+.pd-head h2 { font-size: 26px; font-weight: 900; font-style: italic; }
+.pd-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.pd-stats > div { display: grid; gap: 4px; justify-items: start; align-content: start; min-width: 0; padding: 10px; border-radius: 7px; background: var(--panel-2); }
+.pd-stats small { font-size: 11px; color: var(--muted); }
+.pd-ace { display: inline-flex; align-items: center; gap: 6px; }
+.pd-lines li > span:last-child { text-align: right; }
+.pd-why { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.pd-cta { display: flex; gap: 8px; }
+.pd-cta .btn { min-height: 44px; }
+.pd-cta .btn.primary { flex: 1; justify-content: center; font-size: 15px; }
+.pd-empty { display: grid; justify-items: center; gap: 8px; max-width: 380px; margin: 0 auto; text-align: center; }
+.pd-empty svg { width: 40px; height: 40px; color: var(--faint); }
+.pd-empty b { font-size: 16px; }
+.pd-empty p { margin: 0; line-height: 1.5; }
+
+.pick-slots { width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 24px 16px; }
+.pick-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 16px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.pick-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pick-save { font-weight: 700; letter-spacing: 0.04em; }
+.pick-save::before { content: "●"; margin-right: 6px; font-size: 9px; vertical-align: 1px; }
+.pick-save.ok { color: var(--good); }
+.pick-save.full { color: var(--bad); }
+
+@media (max-width: 860px) {
+  .pick-top { justify-items: stretch; gap: 4px; padding: 10px 12px 12px; }
+  .pick-back { position: static; transform: none; justify-self: start; }
+  .pick-brand h1 { font-size: 22px; }
+  .pick-brand span { letter-spacing: 0.08em; }
+  .pick-tabs { padding: 8px 12px; }
+  .pick-tabs button { min-height: 40px; }
+  .pick-main { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .pick-half { align-content: start; padding: 20px 12px; }
+  .pick-half + .pick-half { border-left: 0; border-top: 1px solid var(--line-soft); }
+  .logo-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px 2px; width: 100%; }
+  .logo-ring { width: 58px; height: 58px; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.02); }
+  .logo-ring > img, .logo-ring > svg { width: 38px; height: auto; }
+  .logo-ring.big { width: 76px; height: 76px; }
+  .logo-ring.big > img, .logo-ring.big > svg { width: 50px; }
+  .logo-btn b { font-size: 12px; letter-spacing: -0.03em; }
+  .pick-detail { padding-inline: 16px; }
+  .pd-head h2 { font-size: 22px; }
+  .pd-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* 시작 버튼은 화면 아래에 붙여, 정보가 길어도 바로 누를 수 있게 한다 */
+  .pd-cta {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgb(0 0 0 / 0.3);
+  }
+  .pick:has(.pd-cta) { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  .pick-slots { padding: 0 12px 12px; }
+  .pick-foot { justify-content: center; text-align: center; }
 }

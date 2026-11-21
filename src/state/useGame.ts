@@ -4,7 +4,7 @@
 // 엔진이 커리어 객체를 제자리에서 고치기 때문에, 상태는 하나의 변경 가능한 객체로 두고
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
-import { createCareer, today, playDay, prepareUserMatch, toggleRecruitTarget } from '@/game/career/season';
+import { createCareer, today, playDay, playableSchoolIds, prepareUserMatch, toggleRecruitTarget } from '@/game/career/season';
 import { setLineup, upgradeCareer } from '@/game/team/school';
 import { resolveEvent } from '@/game/team/people';
 import type { DayDecision } from '@/game/career/season';
@@ -421,6 +421,7 @@ const actions = {
   start({ S }: Ctx, index: number) {
     if (!S.slot || slotInfo(S.slot)) return; // 빈 칸이 있어야 시작한다 (다른 게임을 덮어쓰지 않는다)
     const career = createCareer({ seed: S.startSeed, userTeamIndex: index, dataset: 'original', nameStyle: S.nameStyle, prefecture: S.startPrefecture });
+    if (!playableSchoolIds(career).includes(career.userTeamId)) return; // 고를 수 있는 학교(현 내 전력 상위)만 맡을 수 있다
     Object.assign(S, { career, inbox: [], screen: 'home', messageId: null, playerId: null, dayNote: null });
     deliver(S, [welcomeMessage(career), recruitMessage(career)]);
     removeKey(matchKey(S.slot));
