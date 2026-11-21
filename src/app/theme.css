@@ -44,8 +44,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   border-bottom: 2px solid var(--club);
   box-shadow: 0 8px 26px rgb(0 0 0 / 0.5);
 }
-.club b { font-style: italic; font-weight: 900; letter-spacing: -0.01em; text-shadow: 0 2px 0 rgb(0 0 0 / 0.45); }
-.hdr-date b { font-style: italic; font-weight: 800; }
+.club b { font-weight: 900; letter-spacing: -0.01em; text-shadow: 0 2px 0 rgb(0 0 0 / 0.45); }
+.hdr-date b { font-weight: 800; }
 .sidebar { background: linear-gradient(180deg, #111725, #0b1019); border-color: var(--line); }
 .nav-item { font-weight: 700; transition: background 0.12s, color 0.12s; }
 .nav-item.on { background: linear-gradient(90deg, var(--club), color-mix(in srgb, var(--club) 12%, transparent)); color: #fff; text-shadow: 0 1px 0 rgb(0 0 0 / 0.35); }
@@ -67,9 +67,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   border-bottom-color: var(--line); border-radius: 6px 6px 0 0;
   box-shadow: inset 4px 0 0 var(--club);
 }
-.panel-h h2 { color: var(--text); font-weight: 800; font-style: italic; letter-spacing: 0.03em; }
+.panel-h h2 { color: var(--text); font-weight: 800; letter-spacing: 0.03em; }
 .panel.event { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 10px 30px rgb(255 201 60 / 0.14); }
-.page-title h1 { padding-left: 12px; border-left: 5px solid var(--club); font-style: italic; font-weight: 900; letter-spacing: -0.01em; }
+.page-title h1 { padding-left: 12px; border-left: 5px solid var(--club); font-weight: 900; letter-spacing: -0.01em; }
 .kv > div { background: linear-gradient(180deg, var(--panel-3), var(--panel-2)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
 .notice { border-radius: 5px; }
 
@@ -93,7 +93,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   background: linear-gradient(180deg, color-mix(in srgb, var(--club) 80%, #fff), var(--club) 52%, color-mix(in srgb, var(--club) 76%, #000));
   filter: brightness(1.14);
 }
-.btn.continue .c-main { font-style: italic; letter-spacing: 0.01em; }
+.btn.continue .c-main { letter-spacing: 0.01em; }
 .btn.continue.alert { box-shadow: 0 0 0 2px var(--warn), 0 8px 18px rgb(240 173 58 / 0.3); }
 .btn.ghost { background: transparent; border-color: var(--line); box-shadow: none; }
 .btn.ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--club) 16%, transparent); }
@@ -156,8 +156,8 @@ input[type='checkbox'] { accent-color: var(--club); }
   border-color: #2a3348; border-top: 3px solid var(--gold);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04), 0 12px 30px rgb(0 0 0 / 0.55);
 }
-.sb-team .nm { color: #fff; font-style: italic; }
-.sb-score { color: #fff; font-style: italic; text-shadow: 0 0 20px rgb(255 255 255 / 0.28), 0 2px 0 rgb(0 0 0 / 0.6); }
+.sb-team .nm { color: #fff; }
+.sb-score { color: #fff; text-shadow: 0 0 20px rgb(255 255 255 / 0.28), 0 2px 0 rgb(0 0 0 / 0.6); }
 .sb-mid .clock { color: var(--gold); letter-spacing: 0.04em; text-shadow: 0 0 14px rgb(255 201 60 / 0.5); }
 .sb-mid .q { color: #c9d2e0; letter-spacing: 0.04em; }
 @media (min-width: 861px) {
@@ -195,7 +195,7 @@ input[type='checkbox'] { accent-color: var(--club); }
   .break-over { display: block; position: absolute; left: 10px; right: 10px; top: 50px; z-index: 6; }
   .break-over .break-panel { border-color: var(--gold); background: rgb(12 16 26 / 0.96); box-shadow: 0 0 0 1px var(--gold), 0 18px 40px rgb(0 0 0 / 0.65); }
 }
-.break-head h2 { font-style: italic; font-weight: 900; }
+.break-head h2 { font-weight: 900; }
 
 /* 개인 지시: 내린 지시는 꼬리표로, 고른 선수는 버튼으로 펼친다 */
 .role-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 14px 7px 54px; }
@@ -310,7 +310,7 @@ input[type='checkbox'] { accent-color: var(--club); }
 .pick-top { position: relative; display: grid; place-items: center; padding: 18px 16px; border-bottom: 1px solid var(--line-soft); }
 .pick-back { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); }
 .pick-brand { display: grid; gap: 4px; justify-items: center; text-align: center; }
-.pick-brand h1 { font-size: 26px; font-weight: 900; font-style: italic; letter-spacing: 0.04em; }
+.pick-brand h1 { font-size: 26px; font-weight: 900; letter-spacing: 0.04em; }
 .pick-brand h1 em { font-style: inherit; color: var(--hot); }
 .pick-brand span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.2em; color: var(--muted); }
 .pick-tabs { display: flex; gap: 4px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; scrollbar-width: none; }
@@ -351,7 +351,7 @@ input[type='checkbox'] { accent-color: var(--club); }
 .pick-detail { justify-items: stretch; gap: 14px; padding-inline: max(24px, calc((50% - 480px) / 2)); }
 .pd-head { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .pd-head > div { display: grid; gap: 2px; min-width: 0; }
-.pd-head h2 { font-size: 26px; font-weight: 900; font-style: italic; }
+.pd-head h2 { font-size: 26px; font-weight: 900; }
 .pd-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .pd-stats > div { display: grid; gap: 4px; justify-items: start; align-content: start; min-width: 0; padding: 10px; border-radius: 7px; background: var(--panel-2); }
 .pd-stats small { font-size: 11px; color: var(--muted); }
@@ -507,7 +507,7 @@ input[type='checkbox'] { accent-color: var(--club); }
 .rs-who { display: grid; justify-items: end; min-width: 0; }
 .rs-team.away .rs-who { justify-items: start; }
 .rs-who b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 20px; font-weight: 800; color: color-mix(in srgb, var(--club) 62%, #fff); }
-.rs-score { font-size: 46px; font-weight: 900; font-style: italic; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px rgb(255 255 255 / 0.25); }
+.rs-score { font-size: 46px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 0 22px rgb(255 255 255 / 0.25); }
 .rs-team.lost .rs-score { color: var(--faint); text-shadow: none; }
 .rs-team.lost .rs-who b { opacity: 0.6; }
 .rs-mid { display: grid; justify-items: center; gap: 8px; }
@@ -754,3 +754,35 @@ html[data-vt] .content { view-transition-name: screen; }
 .tb tfoot td { height: 34px; }
 .team-board { container-type: inline-size; }
 @container (max-width: 450px) { .tb .x-wide { display: none; } }
+
+/* ---------- 글꼴 ----------
+   본문은 Pretendard, 점수·시계·큰 숫자·제목은 전광판 같은 좁은 글꼴(Barlow Condensed).
+   좁은 글꼴에는 한글이 없어 숫자와 영문에만 쓰이고, 한글은 뒤에 적은 Pretendard로 나온다. */
+:root {
+  --font-ui: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font-num: var(--font-display), var(--font-ui);
+}
+body { font-family: var(--font-ui); font-feature-settings: "ss05"; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+/* 점수와 시계 */
+.sb-score, .sb-mid .clock, .rs-score, .end-score .num { font-family: var(--font-num); letter-spacing: 0.01em; }
+.sb-score { font-size: 46px; }
+.sb-mid .clock { font-size: 26px; }
+.rs-score { font-size: 54px; }
+/* 큰 숫자: 종합 능력치 상자, 요약 숫자, 날짜 */
+.attr, .attr.big, .kv b, .load b, .rating, .hdr-date b, .next-chip b, .rank, .slot-no, .gv, .tb .en, .strength > span { font-family: var(--font-num); }
+.attr { font-size: 1.08em; letter-spacing: 0.01em; }
+.kv b { font-size: 21px; }
+.gv, .tb .en { font-size: 1.1em; }
+/* 제목과 이름표: 숫자와 영문만 좁은 글꼴이 된다 */
+.page-title h1, .panel-h h2, .pick-brand h1, .cover-item b, .break-head h2, .rs-who b, .pd-head h2, .eyebrow, .rs-pill, .sheet-title b { font-family: var(--font-num); }
+.eyebrow, .rs-pill { font-size: 1.05em; }
+/* 표 머리글의 영문·숫자 */
+.gt thead th, .tb th, .qt th, .rs-quarters th { font-family: var(--font-num); font-size: 11.5px; }
+@media (max-width: 860px) {
+  .match .sb-score { font-size: 32px; }
+  .match .sb-mid .clock { font-size: 23px; }
+  .rs-score { font-size: 40px; }
+}
+
+/* 기울임은 쓰지 않는다. <i>, <em>은 꾸밈용 조각으로만 쓰므로 똑바로 세운다 */
+i, em { font-style: normal; }
