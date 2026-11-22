@@ -488,6 +488,7 @@ export function releaseCoach(state: Career, id: string) {
 }
 
 function playMatch(state: Career, ctx: DayContext, home: string, away: string, official: boolean): Match {
+  if (away === state.userTeamId) [home, away] = [away, home]; // 내 팀은 늘 첫 번째(화면 왼쪽)에 둔다. 홈·원정의 유불리는 없다
   const pre = ctx.pre && ctx.pre.home === home && ctx.pre.away === away ? ctx.pre.game : null;
   const prep = prepFor(state, home, away, official);
   const g = pre
@@ -707,7 +708,12 @@ function userPairing(state: Career): { home: string; away: string; official: boo
 }
 
 // 대회 진행 상황으로 본 내 팀의 다음 공식전 대진 (대회 중이 아니거나 탈락했으면 null)
+// 내 팀을 늘 첫 번째(home)로 놓는다: 경기 화면·점수판·기록에서 우리 팀이 항상 왼쪽에 온다 (playMatch도 같은 순서로 맞춘다)
 function officialPairing(state: Career): { home: string; away: string; official: boolean; label: string } | null {
+  const p = officialPairingRaw(state);
+  return p && p.away === state.userTeamId ? { ...p, home: p.away, away: p.home } : p;
+}
+function officialPairingRaw(state: Career): { home: string; away: string; official: boolean; label: string } | null {
   const me = state.userTeamId;
   const c = state.comp;
   if (!c) return null;
