@@ -5,7 +5,7 @@
 // 입력을 처리할 때마다 다시 그리도록 알린다.
 import { useEffect, useReducer, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { createCareer, today, playDay, playableSchoolIds, prepareUserMatch, toggleRecruitTarget } from '@/game/career/season';
+import { createCareer, hireCoach, releaseCoach, today, playDay, playableSchoolIds, prepareUserMatch, toggleRecruitTarget } from '@/game/career/season';
 import { setLineup, upgradeCareer } from '@/game/team/school';
 import { resolveEvent } from '@/game/team/people';
 import type { DayDecision } from '@/game/career/season';
@@ -594,6 +594,9 @@ const actions = {
     setLineup(team);
     save(S);
   },
+  // 코치진: 후보를 영입하거나 지금 코치를 내보낸다
+  hireCoach({ S }: Ctx, id: string) { if (S.career && hireCoach(S.career, id)) save(S); },
+  releaseCoach({ S }: Ctx, id: string) { if (S.career) { releaseCoach(S.career, id); save(S); } },
   // 신입생 스카우트: 영입 목표를 켜고 끈다
   recruitTarget({ S }: Ctx, id: string) {
     if (S.career && toggleRecruitTarget(S.career, id)) save(S);

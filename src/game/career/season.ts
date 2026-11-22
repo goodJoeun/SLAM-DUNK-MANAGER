@@ -25,6 +25,7 @@ import {
 import { bracketOrder, roundRobin, standings, roundName, BYE } from './competition.ts';
 import { DATASETS, SUCCESSION, buildSchool } from '../team/dataset.ts';
 import { keyMoments, playerRating } from '../match/review.ts';
+import { aiStaffEffects, hireBlock, makeCandidates, staffEffects, starterStaff } from '../coach/staff.ts';
 import { moraleAfterMatch, moraleAfterTraining, moraleOvernight, rollEvent } from '../team/people.ts';
 import type { Rng } from '../rng.ts';
 import type { Game } from '../match/engine.ts';
@@ -313,6 +314,8 @@ function startSeason(state: Career) {
   delete state.bestTier;
   delete state.bestFinish;
   state.prospects = makeProspects(state, rng);
+  state.staff ??= starterStaff(state, rng);
+  state.coachPool = makeCandidates(state, rng); // 코치 후보는 해마다 새로 나온다
   state.recruitTargets = [];
   delete state.retired;
   for (const id of state.regionIds) {
@@ -457,7 +460,31 @@ function prepFor(state: Career, home: string, away: string, official: boolean): 
 
 // 분석 일수 × 하루 보너스
 function prepBonus(state: Career, opponentId: string) {
-  return Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0) * PREPARATION.perDay;
+  return Math.min(PREPARATION.maxDays, state.prep?.[opponentId] ?? 0) * PREPARATION.perDay * staffEffects(state.staff ?? []).prep;
+}
+
+// ---------- 코치진 ----------
+// 우리 학교 코치진과 올해의 영입 후보 (예전 저장에는 없으므로 그 자리에서 만든다)
+export function staffOf(state: Career) {
+  state.staff ??= starterStaff(state, rngFor(state));
+  return state.staff;
+}
+export function coachPoolOf(state: Career) {
+  state.coachPool ??= makeCandidates(state, rngFor(state));
+  return state.coachPool;
+}
+// 후보를 영입한다. 자리가 없거나 학교 수준이 모자라면 false
+export function hireCoach(state: Career, id: string) {
+  const pool = coachPoolOf(state);
+  const c = pool.find((x) => x.id === id);
+  if (!c || hireBlock(state, staffOf(state), c)) return false;
+  state.coachPool = pool.filter((x) => x.id !== id);
+  state.staff = [...staffOf(state), c];
+  return true;
+}
+// 코치를 내보낸다 (돌아오지 않는다)
+export function releaseCoach(state: Career, id: string) {
+  state.staff = staffOf(state).filter((x) => x.id !== id);
 }
 
 function playMatch(state: Career, ctx: DayContext, home: string, away: string, official: boolean): Match {
@@ -892,7 +919,8 @@ export function playDay(state: Career, decision: DayDecision = {}): DayReport | 
       ? { program: decision.program, intensity: decision.intensity ?? 'normal' }
       : aiTraining(ctx.rng, team, matchTomorrow);
     if (mine && state.forcedRest) choice = { program: 'rest', intensity: 'normal' }; // 사건의 결과로 오늘은 쉰다
-    const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp, skip: mine && state.retired ? isRetired : undefined });
+    const coach = mine ? staffEffects(state.staff ?? []) : aiStaffEffects(team.prestige);
+    const result = trainTeam(ctx.rng, team, choice.program, choice.intensity, { camp: day.camp, skip: mine && state.retired ? isRetired : undefined, coach });
     if (mine) {
       moraleAfterTraining(team, choice.program, choice.intensity);
       if (choice.program === 'scout' && upcoming?.canScout) {

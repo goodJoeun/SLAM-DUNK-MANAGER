@@ -5,9 +5,12 @@
 //   idle    아무것도 하지 않는다: 훈련은 AI 코치, 전술은 부임 때 그대로, 상대 분석·영입 없음
 //   casual  훈련을 직접 짜고(지치면 휴식), 공식전마다 코치 조언(분석 없이)대로 전술을 바꾸고, 유망주 2명을 고른다
 //   skilled casual + 공식전 전 훈련일을 상대 분석에 쓰고, 분석을 반영한 조언대로 전술을 정한다
+// casual·skilled는 해마다 코치도 영입한다: 빈 자리를 별이 많은 후보로 채우고, 더 나은 후보가 있으면 가장 약한 코치와 바꾸고, 코치가 있는 메뉴를 더 자주 훈련한다.
+//   COACH=0 이면 코치를 영입하지 않는다 (부임 때 있던 코치만).
 // 경기는 모두 자동 진행이다 (직접 지휘하는 교체·작전 타임·경기 중 전술 변경은 재지 않는다).
 import { readFileSync } from 'node:fs';
-import { createCareer, playDay, playablePrefectures, prospectsOf, recruitChance, seasonGoal, today, toggleRecruitTarget } from '../../src/game/career/season.ts';
+import { coachPoolOf, createCareer, hireCoach, playDay, playablePrefectures, prospectsOf, recruitChance, releaseCoach, seasonGoal, staffOf, today, toggleRecruitTarget } from '../../src/game/career/season.ts';
+import { hireBlock, needFor, slotsFor } from '../../src/game/coach/staff.ts';
 import { adviseTactics } from '../../src/game/coach/advice.ts';
 import { overall } from '../../src/game/match/engine.ts';
 import { PROGRAMS, setLineup, teamOverall } from '../../src/game/team/school.ts';
@@ -27,6 +30,7 @@ function campaign(pref: string, index: number, seed: number, level: Level): Row 
   const row: Row = { pref, team: me(s).name, index, rank, ovr0: teamOverall(me(s)), level, seed, years: [] };
   const menu = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'rest' && k !== 'scout');
   let turn = 0;
+  let cycle: ProgramKey[] = menu;
   let cur: YearRow | null = null;
   while (!s.finished) {
     const day = today(s)!;
@@ -36,6 +40,18 @@ function campaign(pref: string, index: number, seed: number, level: Level): Row 
         // 올 가능성과 실력을 함께 보고 유망주 2명을 고른다
         const picks = [...prospectsOf(s)].sort((a, b) => recruitChance(s, b) * overall(b.player) - recruitChance(s, a) * overall(a.player)).slice(0, 2);
         for (const p of picks) toggleRecruitTarget(s, p.player.id);
+        if (process.env.COACH !== '0') {
+          for (const c of [...coachPoolOf(s)].sort((a, b) => b.stars - a.stars)) {
+            if (hireBlock(s, staffOf(s), c) === '코치 자리가 없습니다') {
+              const weakest = [...staffOf(s)].sort((a, b) => a.stars - b.stars)[0];
+              if (weakest && weakest.stars < c.stars && me(s).prestige >= needFor(c.stars)) releaseCoach(s, weakest.id);
+            }
+            if (!hireBlock(s, staffOf(s), c)) hireCoach(s, c.id);
+          }
+          const coached = staffOf(s).map((c) => c.role).filter((r) => (menu as string[]).includes(r)) as ProgramKey[];
+          cycle = [...coached, ...coached, ...menu];
+        }
+        void slotsFor;
       }
     }
     let decision: DayDecision = { events: false };
@@ -46,8 +62,8 @@ function campaign(pref: string, index: number, seed: number, level: Level): Row 
         const cond = fit.reduce((sum, p) => sum + p.condition, 0) / fit.length;
         if (level === 'skilled' && day.prep?.canScout) decision = { events: false, program: 'scout' };
         else if (cond < 55) decision = { events: false, program: 'rest' };
-        else if (day.daysToNextMatch === 1) decision = cond < 85 ? { events: false, program: 'rest' } : { events: false, program: menu[turn++ % menu.length], intensity: 'light' };
-        else decision = { events: false, program: menu[turn++ % menu.length], intensity: 'normal' };
+        else if (day.daysToNextMatch === 1) decision = cond < 85 ? { events: false, program: 'rest' } : { events: false, program: cycle[turn++ % cycle.length], intensity: 'light' };
+        else decision = { events: false, program: cycle[turn++ % cycle.length], intensity: 'normal' };
       } else if (day.userMatch?.official) {
         const opp = s.teams[day.userMatch.opponentId];
         const days = s.prep?.[opp.id] ?? 0;

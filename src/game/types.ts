@@ -395,6 +395,8 @@ export interface Career {
   trust?: number; // 교장의 신임 0~100 (목표 달성 여부에 따라 해마다 변한다)
   prospects?: Prospect[]; // 올해 눈여겨볼 중학 유망주 (우리 학교가 영입을 시도할 수 있는 후보)
   recruitTargets?: string[]; // 영입 목표로 정한 유망주의 선수 id
+  staff?: Coach[]; // 우리 학교 코치진 (coach/staff.ts)
+  coachPool?: Coach[]; // 올해 영입할 수 있는 코치 후보
   event?: CareerEvent; // 오늘 감독이 결정해야 하는 사건 (고르기 전에는 하루를 진행할 수 없다)
   lastEventDay?: number;
   lastEventKey?: EventKey;
@@ -420,6 +422,11 @@ export interface Farewell {
 }
 
 // 중학 유망주. level = 이 선수가 보통 진학할 학교의 수준 (우리 학교 수준이 이보다 낮을수록 데려오기 어렵다)
+// 코치: 한 분야를 맡는다. 훈련 메뉴 여섯 가지와 트레이너·분석 코치
+export type CoachRole = ProgramKeyTraining | 'trainer' | 'analyst';
+type ProgramKeyTraining = 'shooting' | 'inside' | 'ballwork' | 'defense' | 'physical' | 'tactics';
+export interface Coach { id: string; name: string; role: CoachRole; stars: number } // stars 1~5
+
 export interface Prospect {
   player: Player;
   level: number;

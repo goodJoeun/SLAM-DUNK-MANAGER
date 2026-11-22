@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { isRetired, today } from '@/game/career/season';
 import { PROGRAMS, INTENSITY, RATING_LABEL } from '@/game/team/school';
+import { coachPoolOf, staffOf } from '@/game/career/season';
+import { COACH_ROLES, STAFF, coachEffect, hireBlock, needFor, slotsFor, staffEffects } from '@/game/coach/staff';
+import type { Career, Coach } from '@/game/types';
+import type { Act } from '@/components/shared/ui';
 import { PREPARATION } from '@/game/career/season';
 import type { IntensityKey, PrepInfo, ProgramKey } from '@/game/types';
 import { CondBar, Icon, PageTitle, Panel, PosBadge, Select, mean, userTeam } from '@/components/shared/ui';
@@ -9,6 +13,45 @@ import type { ViewProps } from '@/components/shared/ui';
 const PROGRAM_KEYS = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'scout'); // 상대 분석은 따로 보여 준다
 const INTENSITY_KEYS = Object.keys(INTENSITY) as IntensityKey[];
 const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) => k !== 'rest' && k !== 'scout').map(([k, v]) => [k, v.label]));
+
+const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
+
+// 코치진: 지금 있는 코치와 올해의 영입 후보. 자리 수와 영입 가능 여부는 학교 수준이 정한다
+function StaffPanel({ career, act }: { career: Career; act: Act }) {
+  const staff = staffOf(career);
+  const pool = coachPoolOf(career);
+  const prestige = career.teams[career.userTeamId].prestige;
+  const slots = slotsFor(prestige);
+  const row = (c: Coach, action: React.ReactNode, note?: string) => (
+    <li key={c.id} className="coach-row">
+      <div>
+        <b>{COACH_ROLES[c.role].label}</b> <span className="coach-stars" aria-label={`별 ${c.stars}개`}>{stars(c.stars)}</span>
+        <div className="muted">{c.name} · {coachEffect(c)}{note ? ` · ${note}` : ''}</div>
+      </div>
+      {action}
+    </li>
+  );
+  return (
+    <Panel title="코치진" action={<span className="pill club">{staff.length} / {slots}자리</span>}>
+      <ul className="coach-list">
+        {staff.length
+          ? staff.map((c) => row(c, <button className="btn ghost small" onClick={() => act('releaseCoach', c.id)} title="내보낸 코치는 돌아오지 않습니다">내보내기</button>))
+          : <li className="muted">코치가 없습니다. 아래 후보 중에서 영입하세요.</li>}
+      </ul>
+      <div className="sub-hint" style={{ paddingInline: 0 }}>올해의 영입 후보</div>
+      <ul className="coach-list">
+        {pool.length ? pool.map((c) => {
+          const block = hireBlock(career, staff, c);
+          return row(c, <button className="btn small primary" disabled={!!block} onClick={() => act('hireCoach', c.id)} title={block ?? '영입하면 바로 효과가 적용됩니다'}>영입</button>, block ?? undefined);
+        }) : <li className="muted">남은 후보가 없습니다. 새 후보는 다음 해에 나옵니다.</li>}
+      </ul>
+      <p className="hint">
+        훈련 코치는 맡은 메뉴의 성장을 별 하나당 {Math.round(100 * STAFF.gainPerStar)}% 올립니다(개인 훈련에도 적용). 능력치가 낮은 선수일수록 코치의 효과가 커집니다(60 아래부터, 35 이하에서 2.5배). 같은 분야에 여럿이면 가장 뛰어난 코치만 효과가 있습니다.
+        자리는 기본 2개, 학교 수준 {STAFF.slots[0][0]}부터 3개이고, 별이 많은 코치일수록 학교 수준이 높아야 옵니다(★3은 {needFor(3)}, ★5는 {needFor(5)}). 후보는 해마다 바뀝니다.
+      </p>
+    </Panel>
+  );
+}
 
 // 다음 공식전 상대 분석: 경기 3일 전부터 하루씩, 최대 3일
 function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: boolean; onPick: () => void }) {
@@ -62,6 +105,8 @@ export default function TrainingView({ S, act }: ViewProps) {
   // 고른 선수들의 개인 훈련이 모두 같으면 그 값을, 섞여 있으면 고르기 전 상태를 보여 준다
   const shared = picked.length && picked.every((p) => p.focus === picked[0].focus) ? picked[0].focus ?? '' : 'mixed';
 
+  const coach = staffEffects(staffOf(S.career));
+
   return (
     <div className="page">
       <PageTitle title="훈련" sub="정해 둔 메뉴는 상단의 계속 버튼을 누를 때마다 적용됩니다." />
@@ -76,6 +121,7 @@ export default function TrainingView({ S, act }: ViewProps) {
                   <button key={k} className={`opt ${S.program === k ? 'on' : ''}`} onClick={() => act('program', k)}>
                     <b>{p.label}</b>
                     <span>{p.keys.length ? p.keys.map((x) => RATING_LABEL[x]).join(' · ') : `컨디션 회복`}{k === 'physical' && ' (스피드·점프는 천천히 오릅니다)'}</span>
+                    {(coach.gain[k] ?? 1) > 1 && <span className="good">코치 효과 +{Math.round(100 * ((coach.gain[k] ?? 1) - 1))}%</span>}
                   </button>
                 );
               })}
@@ -96,6 +142,7 @@ export default function TrainingView({ S, act }: ViewProps) {
               <p className="hint">강하게 훈련할수록 빨리 크지만 지치고 다치기 쉽고, 노력파가 아닌 선수는 사기가 떨어집니다. 지치거나 사기가 낮은 선수는 같은 훈련을 해도 덜 성장합니다. 휴식은 컨디션과 사기를 함께 회복합니다. 컨디션이 낮은 채로 경기에 나서면 경기 내내 능력이 떨어지고(컨디션 60이면 약 5%) 더 빨리 지칩니다.</p>
             </Panel>
           )}
+          <StaffPanel career={S.career} act={act} />
           <Panel title="오늘 진행">
             <div className="kv">
               <div><small>팀 컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>

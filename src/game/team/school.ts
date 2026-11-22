@@ -251,7 +251,15 @@ function maybeInjure(rng: Rng, p: Player, chance: number, report: { injuries: In
 }
 
 // 하루 훈련. program: PROGRAMS의 키, intensity: INTENSITY의 키
-export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: IntensityKey = 'normal', { camp = false, skip }: { camp?: boolean; skip?: (p: Player) => boolean } = {}) {
+// 코치의 지도는 기본기가 부족한 선수에게 더 잘 듣는다: 능력치가 from보다 낮을수록 코치의 성장 보너스가 커져, from - span 이하에서는 (1 + extra)배가 된다.
+// (능력치가 높은 강팀 선수는 원래 성장이 느려 코치 효과가 작고, 약팀은 좋은 코치를 데려오기 어렵다. 약팀이 코치로 따라잡을 여지를 준다)
+export const COACH_LOW = { from: 60, span: 25, extra: 1.5 };
+const coachGain = (base: number | undefined, rating: number) =>
+  1 + ((base ?? 1) - 1) * (1 + COACH_LOW.extra * clamp((COACH_LOW.from - rating) / COACH_LOW.span, 0, 1));
+
+// coach: 코치진의 효과 (coach/staff.ts). gain 메뉴별 성장 배율, injury 부상 확률 배율, cost 컨디션 소모 배율
+export interface CoachEffects { gain?: Partial<Record<ProgramKey, number>>; injury?: number; cost?: number }
+export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: IntensityKey = 'normal', { camp = false, skip, coach }: { camp?: boolean; skip?: (p: Player) => boolean; coach?: CoachEffects } = {}) {
   const report = { program, intensity, growth: [] as GrowthEvent[], injuries: [] as InjuryEvent[] };
   const P = PROGRAMS[program];
   const I = INTENSITY[intensity];
@@ -268,13 +276,13 @@ export function trainTeam(rng: Rng, team: Team, program: ProgramKey, intensity: 
     }
     // 지쳐 있으면 같은 훈련을 해도 덜 는다
     const effort = talent(p) * trainingFactor(p) * (0.5 + 0.5 * (p.condition / 100)) * I.gain * (camp ? GROWTH.campBonus : 1) * (0.7 + 0.6 * rng.next());
-    for (const k of P.keys) gain(p, k, (GROWTH.sessionPoints / P.keys.length) * effort, report.growth);
+    for (const k of P.keys) gain(p, k, (GROWTH.sessionPoints / P.keys.length) * effort * coachGain(coach?.gain?.[program], p.ratings[k]), report.growth);
     const own = p.focus ? PROGRAMS[p.focus] : undefined;
     if (own?.keys.length) {
-      for (const k of own.keys) gain(p, k, (GROWTH.sessionPoints / own.keys.length) * effort * GROWTH.individualShare, report.growth);
+      for (const k of own.keys) gain(p, k, (GROWTH.sessionPoints / own.keys.length) * effort * GROWTH.individualShare * coachGain(coach?.gain?.[p.focus!], p.ratings[k]), report.growth);
     }
-    p.condition = Math.max(0, p.condition - I.cost * (camp ? GROWTH.campCost : 1) * staminaCost(p));
-    maybeInjure(rng, p, I.injury, report);
+    p.condition = Math.max(0, p.condition - I.cost * (camp ? GROWTH.campCost : 1) * staminaCost(p) * (coach?.cost ?? 1));
+    maybeInjure(rng, p, I.injury * (coach?.injury ?? 1), report);
   }
   return report;
 }
