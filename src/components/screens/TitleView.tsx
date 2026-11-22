@@ -18,7 +18,7 @@ export default function TitleView({ S, act }: { S: GameState; act: Act }) {
       <div className="cover-art" aria-hidden="true" />
 
       <div className="cover-inner">
-        <h1 className="cover-title">슬램덩크 농구 매니저</h1>
+        <h1 className="cover-title">SLAM BASKETBALL MANAGER</h1>
 
         <nav className="cover-menu" aria-label="시작 메뉴">
           {last && (

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { denyOutlook, tacticLoad } from '@/game/match/engine';
+import { aceIndex, denyOutlook, tacticLoad } from '@/game/match/engine';
 import { today } from '@/game/career/season';
 import type { BoxPlayer, BoxTeam, PlayerRole, PlayerView, RatingKey, Tactics, TeamView } from '@/game/types';
 import type { ActiveMatch } from '@/state/useGame';
@@ -314,7 +314,13 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);
   const started = m.feed.length > 0 || m.possessions > 0;
   const everyone = Object.fromEntries([...mine.court, ...mine.bench].map((p) => [p.id, p.name]));
-  const rivals = Object.fromEntries([...opp.court, ...opp.bench].map((p) => [p.id, `${p.name} (${p.pts}점)`]));
+  // 집중 마크 대상: 코트 위 상대 중 공격이 가장 몰리는 에이스를 ★로 표시하고 맨 위에 둔다
+  const oppRoster = S.career.teams[opp.id ?? '']?.players ?? [];
+  const oppCourtSrc = opp.court.map((p) => oppRoster.find((x) => x.id === p.id));
+  const aceId = oppCourtSrc.every(Boolean) ? opp.court[aceIndex(oppCourtSrc as Player[])]?.id : undefined;
+  const rivals: [string, string][] = [...opp.court, ...opp.bench]
+    .map((p) => [p.id, `${p.id === aceId ? '★ ' : ''}${p.name} (${p.pts}점)${p.id === aceId ? ' · 에이스' : ''}`] as [string, string])
+    .sort((a, b) => Number(b[0] === aceId) - Number(a[0] === aceId));
   const t = mine.tactics;
   // 집중 마크 담당 후보: 코트 위 선수를 먼저, 대상을 막을 때의 수비력과 함께 보여 준다
   const denyTarget = t.denyPlayerId ? S.career.teams[opp.id ?? '']?.players.find((p) => p.id === t.denyPlayerId) : undefined;
@@ -356,6 +362,10 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
     act('feedMode', k as FeedMode);
   };
   const outgoing = v.finished ? undefined : mine.court.find((p) => p.id === m.selected);
+  // 교체 후보: 뛸 수 있는 선수 먼저, 나가는 선수와 포지션이 가까운 순, 같으면 능력 순. 고른 선수가 없으면 원래 순서
+  const benchFor = (out?: PlayerView) => (out
+    ? [...mine.bench].sort((a, b) => Number(a.out) - Number(b.out) || Math.abs(a.pos - out.pos) - Math.abs(b.pos - out.pos) || b.ovr - a.ovr)
+    : mine.bench);
   const [confirmSkip, setConfirmSkip] = useState(false);
   // 능력치 창에 띄운 선수 (내 선수·상대 선수)
   const [infoId, setInfoId] = useState<string | null>(null);
@@ -471,8 +481,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                   </div>
                 )}
                 <RoleEdit role={t.roles?.[outgoing.id]} onChange={(kind, value) => act('playerRole', outgoing.id, kind, value)} />
-                <div className="sub-hint">대신 들어갈 선수 · 누르면 교체</div>
-                {mine.bench.map((p) => (
+                <div className="sub-hint">대신 들어갈 선수 · 누르면 교체 · 포지션이 가까운 순</div>
+                {benchFor(outgoing).map((p) => (
                   <PlayerRow key={p.id} faces={faces} player={p} onClick={() => act('pick', 'bench', p.id)} onInfo={info} />
                 ))}
               </Panel>
@@ -748,8 +758,8 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
           {mine.court.map((p) => (
             <PlayerRow key={p.id} faces={faces} player={p} selected={m.selected === p.id} tags={tags(p)} onClick={() => act('pick', 'court', p.id)} onInfo={info} />
           ))}
-          <div className="sub-hint">벤치</div>
-          {mine.bench.map((p) => (
+          <div className="sub-hint">벤치{outgoing ? ` · ${outgoing.name}와 포지션이 가까운 순` : ''}</div>
+          {benchFor(outgoing).map((p) => (
             <PlayerRow key={p.id} faces={faces} player={p} tags={tags(p)} onClick={() => act('pick', 'bench', p.id)} onInfo={info} />
           ))}
         </Panel>

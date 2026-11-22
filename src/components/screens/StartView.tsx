@@ -86,7 +86,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
       <header className="pick-top">
         <button className="btn ghost small pick-back" onClick={() => act('title')}><Icon name="back" />표지로</button>
         <div className="pick-brand">
-          <h1>고교 농구 <em>매니저</em></h1>
+          <h1>SLAM BASKETBALL <em>MANAGER</em></h1>
           <span>감독으로 부임할 학교를 고르세요</span>
         </div>
       </header>

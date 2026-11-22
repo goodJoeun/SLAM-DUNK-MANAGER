@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { composites, denyOutlook, energyPerSecond, overall, startEnergy, tacticLoad } from '@/game/match/engine';
+import { aceIndex, composites, denyOutlook, energyPerSecond, overall, startEnergy, tacticLoad } from '@/game/match/engine';
 import { teamOverall } from '@/game/team/school';
 import type { Composites, Defense, Focus, Player } from '@/game/types';
 import Court from '@/components/court/Court';
@@ -156,7 +156,11 @@ export default function TacticsView({ S, act }: ViewProps) {
     const miss = o ? [o.slower ? '느림' : '', o.smaller ? '작음' : '', o.weaker ? '힘 부족' : ''].filter(Boolean).join('·') : '';
     return `${recommend?.id === p.id ? '★ ' : ''}${p.name}${o ? ` · 마크 효과 ${Math.round(o.power * 100)}${miss ? ` (${miss})` : ''}` : ''}${benched ? ' [벤치]' : ''}`;
   };
-  const denyTargets: [string, string][] = (denyOpp?.players ?? []).map((p, i) => [p.id, `${POS[p.pos]} ${p.name} · 종합 ${overall(p)}${i < 5 ? '' : ' [벤치]'}`]);
+  // 막기 좋은 상대(선발 중 공격이 가장 몰리는 에이스)를 ★로 표시하고 맨 위에 둔다
+  const denyAce = denyOpp ? aceIndex(denyOpp.players.slice(0, 5)) : -1;
+  const denyTargets: [string, string][] = (denyOpp?.players ?? [])
+    .map((p, i) => [p.id, `${i === denyAce ? '★ ' : ''}${POS[p.pos]} ${p.name} · 종합 ${overall(p)}${i === denyAce ? ' · 에이스' : i < 5 ? '' : ' [벤치]'}`] as [string, string]);
+  if (denyAce > 0) denyTargets.unshift(...denyTargets.splice(denyAce, 1));
   const denyMarkers: [string, string][] = [...starters.map((p) => [p.id, markerLabel(p, false)] as [string, string]), ...bench.filter(fit).map((p) => [p.id, markerLabel(p, true)] as [string, string])];
   // 지금 고른 수비·템포의 부담: 체력 소모 배율과, 선발이 체력 저하 알림 기준까지 버티는 시간(쉬지 않고 뛸 때)
   const load = tacticLoad(defense, Number(pace));

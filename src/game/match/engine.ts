@@ -253,6 +253,14 @@ export function composites(p: BasePlayer): Composites {
   return c;
 }
 
+// 집중 마크하기 좋은 상대: 선수들 가운데 공격이 가장 많이 몰리는 선수(에이스)의 순번. 엔진이 슛을 나눠 주는 기준(usage)과 같다
+export function aceIndex(players: BasePlayer[]) {
+  let top = -1;
+  let best = -1;
+  players.forEach((p, i) => { const u = composites(p).usage; if (u > best) { best = u; top = i; } });
+  return top;
+}
+
 export function overall(p: BasePlayer) {
   const c = composites(p);
   const offense = Math.max(c.rim, c.post, c.mid, c.three) * 0.6 + (c.ballHandling + c.passing) * 0.2;

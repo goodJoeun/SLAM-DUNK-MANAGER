@@ -10,7 +10,7 @@ import './theme.css'; // 게임풍 겉모습 (globals.css 위에 덧입힌다)
 const display = Barlow_Condensed({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-display', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: '고교 농구 매니저',
+  title: 'SLAM BASKETBALL MANAGER',
 };
 
 export const viewport: Viewport = {

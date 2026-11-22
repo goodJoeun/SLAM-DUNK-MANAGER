@@ -137,7 +137,7 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
               </g>
             ) : <text className="no" y="0.15">{p.slot + 1}</text>}
             {/* 이름표가 겹치지 않게 상대는 공을 가진 선수만 이름을 보여 준다 (나머지는 마우스를 올리면 보인다) */}
-            {(mine || hasBall) && <text className={`nm ${mine ? 'mine' : ''}`} y="1.0">{labels[p.id] ?? ''}</text>}
+            <text className={`nm ${mine ? 'mine' : ''}`} y="1.0">{labels[p.id] ?? ''}</text>
             <title>{labels[p.id] ?? ''}</title>
           </g>
         );
