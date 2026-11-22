@@ -313,7 +313,14 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const clock = `${Math.floor(v.clock / 60)}:${String(v.clock % 60).padStart(2, '0')}`;
   const status = v.finished ? '경기 종료' : m.interlude ?? (m.playing ? periodLabel(v.period) : `${periodLabel(v.period)} · 일시정지`);
   const started = m.feed.length > 0 || m.possessions > 0;
-  const everyone = Object.fromEntries([...mine.court, ...mine.bench].map((p) => [p.id, p.name]));
+  // 에이스 후보: 코트 위에서 공격이 가장 잘 풀리는 선수(엔진이 슛을 나눠 주는 기준)를 ★ 추천으로 표시하고 맨 위에 둔다.
+  // 진짜 에이스에게 몰아주면 조금 이득이고, 아닌 선수를 고르면 본전이다 (scripts/balance/coach-impact.ts)
+  const mineSrc = S.career.teams[mine.id ?? '']?.players ?? [];
+  const courtSrc = mine.court.map((p) => mineSrc.find((x) => x.id === p.id));
+  const keyPick = courtSrc.every(Boolean) ? mine.court[aceIndex(courtSrc as Player[])]?.id : undefined;
+  const everyone: [string, string][] = [...mine.court, ...mine.bench]
+    .map((p, i) => [p.id, `${p.id === keyPick ? '★ ' : ''}${p.name} (${p.pts}점)${p.id === keyPick ? ' · 추천' : i >= mine.court.length ? ' [벤치]' : ''}`] as [string, string])
+    .sort((x, y) => Number(y[0] === keyPick) - Number(x[0] === keyPick));
   // 집중 마크 대상: 코트 위 상대 중 공격이 가장 몰리는 에이스를 ★로 표시하고 맨 위에 둔다
   const oppRoster = S.career.teams[opp.id ?? '']?.players ?? [];
   const oppCourtSrc = opp.court.map((p) => oppRoster.find((x) => x.id === p.id));
