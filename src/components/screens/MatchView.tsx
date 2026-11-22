@@ -404,10 +404,10 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   ].filter(Boolean).join(' · ');
   const heavy = load.drain > 1.2;
   // 넓은 화면: 코트 아래 칸에 보여 줄 것
-  const [centerTab, setCenterTab] = useState<CenterTab>('feed');
+  const [centerTab, setCenterTab] = useState<CenterTab>('tactics');
   const setDeny = (id: string) => act('matchTactic', 'denyPlayerId', id);
   // 휴대폰 화면: 코트 아래 내용을 탭으로 나눠 보고, 덜 쓰는 조작은 '더보기'에 접어 둔다
-  const [tab, setTab] = useState<MatchTab>('feed');
+  const [tab, setTab] = useState<MatchTab>('tactics');
   const [moreOpen, setMoreOpen] = useState(false);
   // 쿼터 사이 휴식 화면은 맨 위에 뜨므로, 아래쪽을 보고 있었다면 위로 올린다
   const onBreak = Boolean(m.pause && m.breakInfo);
