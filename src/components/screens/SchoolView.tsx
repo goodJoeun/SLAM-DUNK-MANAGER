@@ -9,6 +9,7 @@ import { standings } from '@/game/career/competition';
 import type { Team } from '@/game/types';
 import { Attr, Crest, Icon, Panel, PosBadge, ResultList, clubVars, linesOf, userTeam } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
+import Portrait, { licensedPortrait } from '@/components/shared/Portrait';
 
 export default function SchoolView({ S, act, team }: ViewProps & { team: Team }) {
   const c = S.career;
@@ -71,7 +72,7 @@ export default function SchoolView({ S, act, team }: ViewProps & { team: Team })
                 {roster.map((p) => (
                   <tr key={p.id}>
                     <td className="l"><PosBadge pos={p.pos} /></td>
-                    <td className="l name">{p.name}{top.has(p.name) && <span className="pill club" style={{ marginLeft: 6 }}>주요 선수</span>}</td>
+                    <td className="l name"><span className="name-cell"><Portrait name={p.name} src={S.portraits[p.name] ?? licensedPortrait(p)} size={26} round /><span>{p.name}{top.has(p.name) && <span className="pill club" style={{ marginLeft: 6 }}>주요 선수</span>}</span></span></td>
                     <td>{p.year}학년</td>
                     <td>{top.has(p.name) ? <Attr v={overall(p)} /> : <span className="faint">?</span>}</td>
                   </tr>
