@@ -68,6 +68,11 @@ const Lines = memo(function Lines() {
   );
 });
 
+// 연결된 원작 이미지(정사각형 상반신)에서 얼굴만 원 안에 오도록 놓는 자리.
+// 이미지에서 머리는 가로 가운데, 세로로 위에서 3~47% 사이에 있다: 그 중심(27%)을 원의 중심에 맞추고, 머리가 원을 거의 채우도록 키운다.
+const FACE = { size: 1.8, centerY: 0.27 };
+const FACE_BOX = { x: -FACE.size / 2, y: -FACE.size * FACE.centerY, width: FACE.size, height: FACE.size };
+
 export default function FullCourt({ anim, scene, colors, labels, faces, mySide, selected, onPick, onInfo }: {
   anim: CourtAnimation | null;
   scene: Scene;
@@ -113,7 +118,7 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
         const mine = p.side === mySide;
         const hasBall = ball.holder === p.id;
         const face = faces?.[p.id];
-        // 연결된 원작 이미지는 세로로 긴 상반신(4:5)이라 위쪽 얼굴 부분만, 올린 이미지는 정사각형 그대로 원 안에 넣는다
+        // 연결된 원작 이미지는 상반신이라 얼굴 부분만 키워 넣고(FACE_BOX), 올린 이미지는 정사각형 그대로 원 안에 넣는다
         const tall = face?.startsWith('/portraits/');
         const press = mine && onPick ? () => onPick(p.id) : onInfo ? () => onInfo(p.id) : undefined;
         return (
@@ -129,7 +134,7 @@ export default function FullCourt({ anim, scene, colors, labels, faces, mySide, 
             <circle className="body" r="0.44" fill={colors[p.side]} />
             {face ? (
               <g className="face">
-                <image href={face} clipPath="url(#fc-face)" preserveAspectRatio="xMidYMin slice" {...(tall ? { x: -0.75, y: -0.44, width: 1.5, height: 1.875 } : { x: -0.44, y: -0.44, width: 0.88, height: 0.88 })} />
+                <image href={face} clipPath="url(#fc-face)" preserveAspectRatio="xMidYMin slice" {...(tall ? FACE_BOX : { x: -0.44, y: -0.44, width: 0.88, height: 0.88 })} />
                 <circle className="ring" r="0.44" stroke={colors[p.side]} />
                 {/* 사진 오른쪽 아래에 팀 색 번호 배지 */}
                 <circle className="badge" cx="0.36" cy="0.34" r="0.21" fill={colors[p.side]} />
