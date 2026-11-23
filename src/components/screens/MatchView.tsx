@@ -430,6 +430,12 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const unpaired = outs.filter((p) => !pairs.some(([out]) => out.id === p.id));
   const pickNext = outs.find((p) => p.id !== m.selected);
   const fixShown = outs.length > 0 || fix?.kind === 'timeout';
+  // 자동 정지 알림: 새로 멈출 때마다 가운데 창을 띄운다. 쿼터 사이 휴식만으로 멈췄으면 휴식 화면이 대신한다
+  const pauseShown = Boolean(m.pause) && !v.finished && !(m.breakInfo && !fixShown);
+  const pauseKey = m.pause ? `${m.pause}|${m.possessions}` : null;
+  const [seenPause, setSeenPause] = useState<string | null>(null);
+  const pauseSeen = pauseKey != null && seenPause === pauseKey;
+  const markPauseSeen = () => setSeenPause(pauseKey);
 
   // 마지막 공격권 연출까지 끝난 뒤에 종료 창을 띄운다
   const ended = live.finished && !m.pending;
@@ -572,7 +578,39 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
       </div>
 
       {/* 쿼터 사이 휴식만으로 멈췄으면 아래 휴식 화면이 같은 내용을 보여 주므로 띠는 생략한다 */}
-      {m.pause && !v.finished && !(m.breakInfo && !fixShown) && (
+      {pauseShown && !pauseSeen && (
+        <div className="modal-backdrop pause-backdrop">
+          <div className="modal pause-modal" role="alertdialog" aria-modal="true" aria-labelledby="pause-title">
+            <span className="eyebrow"><Icon name="alert" /> 경기를 멈췄습니다</span>
+            <h2 id="pause-title">{m.pause}</h2>
+            {pairs.length > 1 && <p className="muted">추천 교체: {pairs.map(([out, sub]) => `${out.name} → ${sub.name}`).join(' · ')}</p>}
+            {pairs.length === 1 && <p className="muted">추천 교체: {pairs[0][0].name} → {pairs[0][1].name} (종합 {pairs[0][1].ovr} · 체력 {pairs[0][1].energy} · 파울 {pairs[0][1].pf})</p>}
+            {unpaired.length > 0 && (
+              <p className="muted">
+                {unpaired.map((p) => p.name).join(', ')}: 벤치에 {subFix?.reason === 'tired' ? `체력 ${FRESH_ENERGY} 이상인` : '파울 여유가 있는'} 교체 선수가 없습니다.
+                {subFix?.reason === 'tired' && ' 작전 타임이나 느린 템포로 숨을 돌리게 할 수 있습니다.'}
+              </p>
+            )}
+            <div className="pause-actions">
+              {pairs.length > 0 && (
+                <button className="btn primary" onClick={() => { markPauseSeen(); act('swap', pairs.map(([out, sub]) => [out.id, sub.id] as [string, string])); }}>
+                  {pairs.length === 1 ? `${pairs[0][0].name} → ${pairs[0][1].name} 교체` : `${pairs.length}명 한꺼번에 교체`}
+                </button>
+              )}
+              {pickNext && (
+                <button className="btn" onClick={() => { markPauseSeen(); act('pick', 'court', pickNext.id); }}>{outs.length > 1 ? `${pickNext.name} 교체 직접 고르기` : '교체 선수 직접 고르기'}</button>
+              )}
+              {m.pauseFix?.kind === 'timeout' && (
+                <button className="btn primary" disabled={!mine.timeoutsLeft} onClick={() => { markPauseSeen(); act('timeout'); }}>작전 타임 ({mine.timeoutsLeft})</button>
+              )}
+              <button className="btn" onClick={markPauseSeen} title="창을 닫고 전술·선수를 살펴봅니다. 경기는 멈춘 채로 있습니다">닫고 살펴보기</button>
+              <button className={`btn ${fixShown ? '' : 'primary'}`} onClick={() => act('play')}>계속 진행</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 멈춘 순간에는 화면 가운데 창으로 알리고, 창을 닫은 뒤에는 이 띠가 남는다 */}
+      {pauseShown && pauseSeen && (
         <div className="pause-banner">
           <Icon name="alert" />
           <div>

@@ -25,7 +25,7 @@ export const BREAK_MS = 1500; // 쿼터 사이 휴식
 export type AlertKey = 'period' | 'foul' | 'tired' | 'run' | 'clutch';
 export const ALERTS: Record<AlertKey, string> = {
   period: '쿼터 종료·하프타임',
-  foul: '우리 선수 파울 4개',
+  foul: '우리 선수 파울 트러블',
   tired: '우리 선수 체력 저하',
   run: '상대 연속 8점',
   clutch: '4쿼터 막판 접전',
@@ -198,6 +198,9 @@ export function beginPossession(m: ActiveMatch, prefs: MatchPrefs): { pending: P
   return { pending, ms };
 }
 
+// 이 쿼터에서 파울이 몇 개면 파울 트러블로 보는가
+export const foulTroubleAt = (period: number) => Math.min(4, period + 1);
+
 // 한 공격권이 끝난 뒤 상황을 살펴 알림을 남긴다. 멈춰야 하면 그 이유를 돌려준다.
 function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogEvent[]): string | null {
   const me = after.teams[m.side];
@@ -211,9 +214,15 @@ function review(m: ActiveMatch, prefs: MatchPrefs, after: GameView, events: LogE
     if (pause && !stop) { stop = text; m.pauseFix = fix; }
   };
 
+  // 파울 트러블: 1쿼터에 2개, 2쿼터에 3개, 후반에 4개 (AI 감독이 선수를 아끼는 기준과 같다). 파울이 더 쌓이면 다시 알린다
+  const troubleAt = foulTroubleAt(after.period);
   for (const p of me.court) {
-    if (p.pf >= 4 && !p.out) {
-      raise(`pf4:${p.id}`, 'warn', `${p.name} 파울 4개 — 한 번 더 하면 퇴장입니다.`, prefs.alerts.foul && manual, { kind: 'sub', reason: 'foul', playerIds: [p.id] });
+    if (p.pf >= troubleAt && !p.out) {
+      const when = after.period > 4 ? '연장' : after.period <= 2 && p.pf < 4 ? (after.period === 1 ? '1쿼터에' : '전반에') : '';
+      const text = p.pf >= 4
+        ? `${p.name} 파울 트러블 — 파울 4개, 한 번 더 하면 퇴장입니다.`
+        : `${p.name} 파울 트러블 — ${when} 벌써 파울 ${p.pf}개입니다. 잠시 쉬게 할지 정하세요.`;
+      raise(`pf:${p.id}:${p.pf}`, 'warn', text, prefs.alerts.foul && manual, { kind: 'sub', reason: 'foul', playerIds: [p.id] });
     }
   }
   // 체력: 선수마다 따로 멈추지 않고, 지친 선수들을 한 번에 묶어 알린다

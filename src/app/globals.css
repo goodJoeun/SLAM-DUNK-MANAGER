@@ -949,3 +949,13 @@ button, select, summary, label, [role="tab"], tr.click, li.click, .bench-row, .m
 .coach-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; }
 .coach-row > div { min-width: 0; }
 .coach-stars { color: var(--gold); letter-spacing: 1px; }
+
+/* 경기 자동 정지 알림: 화면 가운데 창 */
+.pause-backdrop { z-index: 60; }
+.modal.pause-modal { width: min(520px, 100%); border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn), 0 18px 50px rgb(0 0 0 / 0.5); }
+.modal.pause-modal h2 { font-size: 20px; line-height: 1.35; }
+.modal.pause-modal .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--warn); }
+.modal.pause-modal .eyebrow svg { width: 16px; height: 16px; }
+.modal.pause-modal p { margin: 0; }
+.pause-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pause-actions .btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
