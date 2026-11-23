@@ -5,6 +5,3 @@ out/
 next-env.d.ts
 *.tsbuildinfo
 
-# 원작 초상화 이미지 (사용 허락 범위를 확인하기 전까지 커밋하지 않는다. public/portraits/README.md 참고)
-public/portraits/*
-!public/portraits/README.md
