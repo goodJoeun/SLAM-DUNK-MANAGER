@@ -10,6 +10,53 @@ import type { Team } from '@/game/types';
 import { Attr, Crest, Icon, Panel, PosBadge, ResultList, clubVars, linesOf, userTeam } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 import Portrait, { licensedPortrait } from '@/components/shared/Portrait';
+import { useEffect, useState } from 'react';
+import { TRAITS, traitOf } from '@/game/team/people';
+import { POS_NAME } from '@/components/shared/ui';
+import type { Player } from '@/game/types';
+
+// 다른 학교 선수 한 명을 크게 보는 창: 사진을 크게 보여 주고, 좌우로 넘겨 명단을 훑어볼 수 있다.
+// 능력치는 명단과 같은 규칙으로, 알려진 선수(주요 선수)만 종합을 보여 준다.
+function PlayerPhoto({ player: p, team, src, known, index, total, onMove, onClose }: {
+  player: Player; team: Team; src?: string; known: boolean; index: number; total: number; onMove: (d: number) => void; onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft') onMove(-1);
+      else if (e.key === 'ArrowRight') onMove(1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, onMove]);
+  const trait = TRAITS[traitOf(p)];
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal photo-card" role="dialog" aria-modal="true" aria-labelledby="photo-name" style={clubVars(team.name)} onClick={(e) => e.stopPropagation()}>
+        <div className="photo-frame"><Portrait key={p.id} name={p.name} src={src} size={320} /></div>
+        <div className="photo-info">
+          <span className="eyebrow">{team.name} · {index + 1} / {total}</span>
+          <h2 id="photo-name">{p.name}</h2>
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <PosBadge pos={p.pos} /><span>{POS_NAME[p.pos]} · {p.year}학년</span>
+            {p.fixed && <span className="pill">원작 선수</span>}
+            <span className="pill club" title={trait.info}>{trait.label}</span>
+          </div>
+          <div className="photo-ovr">
+            <small>종합</small>
+            {known ? <Attr v={overall(p)} big /> : <b className="faint" title="상대 분석을 하면 주요 선수의 능력치를 알 수 있습니다">?</b>}
+          </div>
+        </div>
+        <div className="row photo-nav">
+          <button className="btn" onClick={() => onMove(-1)} aria-label="이전 선수"><Icon name="back" />이전</button>
+          <button className="btn" onClick={() => onMove(1)} aria-label="다음 선수">다음<Icon name="next" /></button>
+          <span className="spacer" />
+          <button className="btn primary" onClick={onClose}>닫기</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SchoolView({ S, act, team }: ViewProps & { team: Team }) {
   const c = S.career;
@@ -22,6 +69,10 @@ export default function SchoolView({ S, act, team }: ViewProps & { team: Team })
   const report = scoutReport(team, days);
   const top = new Set(report.players.map((p) => p.name));
   const roster = [...team.players].sort((a, b) => a.pos - b.pos || b.year - a.year);
+  // 크게 보고 있는 선수 (명단에서의 순번)
+  const [viewing, setViewing] = useState<number | null>(null);
+  const shown = viewing != null ? roster[viewing] : undefined;
+  const move = (d: number) => setViewing((i) => (i == null ? i : (i + d + roster.length) % roster.length));
 
   // 진행 중인 대회에서의 위치와 치른 경기
   const comp = c.comp;
@@ -63,14 +114,18 @@ export default function SchoolView({ S, act, team }: ViewProps & { team: Team })
         </div>
       </div>
 
+      {shown && (
+        <PlayerPhoto player={shown} team={team} src={S.portraits[shown.name] ?? licensedPortrait(shown)} known={top.has(shown.name)}
+          index={viewing!} total={roster.length} onMove={move} onClose={() => setViewing(null)} />
+      )}
       <div className="split">
         <div className="stack">
-          <Panel title="선수 명단" flush action={<span className="hint">능력치는 주요 선수 3명만 알려져 있습니다</span>}>
+          <Panel title="선수 명단" flush action={<span className="hint">선수를 누르면 크게 봅니다 · 능력치는 주요 선수 3명만 알려져 있습니다</span>}>
             <div className="table-wrap"><table className="data">
               <thead><tr><th className="l">포지션</th><th className="l name">이름</th><th>학년</th><th>종합</th></tr></thead>
               <tbody>
-                {roster.map((p) => (
-                  <tr key={p.id}>
+                {roster.map((p, i) => (
+                  <tr key={p.id} className="click" onClick={() => setViewing(i)} title="누르면 사진을 크게 봅니다">
                     <td className="l"><PosBadge pos={p.pos} /></td>
                     <td className="l name"><span className="name-cell"><Portrait name={p.name} src={S.portraits[p.name] ?? licensedPortrait(p)} size={26} round /><span>{p.name}{top.has(p.name) && <span className="pill club" style={{ marginLeft: 6 }}>주요 선수</span>}</span></span></td>
                     <td>{p.year}학년</td>

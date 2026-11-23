@@ -959,3 +959,31 @@ button, select, summary, label, [role="tab"], tr.click, li.click, .bench-row, .m
 .modal.pause-modal p { margin: 0; }
 .pause-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pause-actions .btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
+
+/* 다른 학교 선수를 크게 보는 창 */
+.modal.photo-card { width: min(380px, 100%); padding: 0; overflow: hidden; gap: 0; border-color: var(--club, var(--line)); }
+.photo-frame { background: #1b1d24; }
+.photo-frame .portrait { display: block; width: 100% !important; height: auto !important; aspect-ratio: 1; border-radius: 0; }
+.photo-frame .portrait > img { object-position: 50% 0; }
+.photo-info { position: relative; display: grid; gap: 8px; padding: 16px 18px 6px; }
+.photo-info h2 { font-size: 26px; margin: 0; }
+.photo-ovr { position: absolute; right: 18px; top: 14px; display: grid; justify-items: center; gap: 2px; }
+.photo-ovr b { font-size: 22px; }
+.photo-nav { padding: 10px 18px 16px; gap: 8px; }
+
+/* 선수 사진 크기: 내 선수 상세는 휴대폰에서 조금 작게, 다른 학교 선수 창은 휴대폰에서 화면을 덮지 않게 */
+@media (max-width: 860px) {
+  /* 내 선수 상세: 사진 왼쪽, 이름·포지션 등 정보는 오른쪽, 능력치 요약은 그 아래 한 줄 */
+  .profile-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px 14px; padding: 14px; }
+  .profile-photo .portrait { width: 128px !important; height: 128px !important; }
+  .profile-head .who .row { flex-wrap: wrap; }
+  .profile-head .ratings-sum { grid-column: 1 / -1; margin-left: 0; }
+  /* 다른 학교 선수 창: 사진 왼쪽, 정보 오른쪽, 버튼은 아래 */
+  .modal.photo-card { width: min(400px, 100%); display: grid; grid-template-columns: 150px minmax(0, 1fr); }
+  .photo-frame { align-self: stretch; }
+  .photo-frame .portrait { height: 100% !important; aspect-ratio: auto; min-height: 150px; }
+  .photo-info { padding: 14px 14px 8px; align-content: start; }
+  .photo-info h2 { font-size: 20px; }
+  .photo-ovr { position: static; justify-items: start; grid-auto-flow: column; align-items: center; gap: 8px; }
+  .photo-nav { grid-column: 1 / -1; padding: 10px 14px 14px; }
+}

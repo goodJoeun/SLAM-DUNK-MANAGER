@@ -174,7 +174,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
 
       <div className="profile-head">
         <div className="profile-photo">
-          <Portrait name={p.name} src={portraits[p.name] ?? licensedPortrait(p)} size={112} />
+          <Portrait name={p.name} src={portraits[p.name] ?? licensedPortrait(p)} size={176} />
           <PortraitEditor
             hasCustom={Boolean(portraits[p.name])}
             onSet={(url) => act('setPortrait', p.name, url)}
