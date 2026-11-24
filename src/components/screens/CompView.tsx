@@ -53,7 +53,7 @@ export default function CompView({ S, act }: ViewProps) {
         <Panel title="대회 방식">
           <ul className="lines">
             {(Object.keys(SEASON.competitions) as CompetitionKey[]).map((key) => ({ key, ...SEASON.competitions[key] })).map((x) => (
-              <li key={x.name}><b>{x.name}</b><span className="muted">{x.format.map((f) => STAGE[f]).join(' → ')} → 전국 대회 · 현 대표 {qualifiersFor(career, x.key)}곳</span></li>
+              <li key={x.name}><b>{x.name}</b><span className="muted">{x.format.map((f) => STAGE[f]).join(' → ')} → 전국 대회 · <span className="nowrap">현 대표 {qualifiersFor(career, x.key)}곳</span></span></li>
             ))}
           </ul>
         </Panel>

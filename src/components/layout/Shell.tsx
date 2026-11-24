@@ -159,7 +159,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
           {/* 넓은 화면: 메뉴 맨 위에 우리 학교 (머리띠의 학교 표시는 숨긴다) */}
           <div className="side-club">
             <Crest name={team.name} size={46} />
-            <div><b>{team.name}</b><span>{c.prefecture} · 학교 수준 {team.prestige}</span></div>
+            <div><b>{team.name}</b><span>{c.prefecture} · <span className="nowrap">학교 수준 {team.prestige}</span></span></div>
           </div>
           {NAV.map((n) => (
             <button key={n.key} className={`nav-item ${n.key === 'leaders' ? 'sep' : ''} ${S.screen === n.key && !S.schoolId ? 'on' : ''}`} onClick={() => act('screen', n.key)}>

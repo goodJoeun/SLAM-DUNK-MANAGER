@@ -34,8 +34,13 @@ body {
   color: var(--text);
   font: 13.5px/1.5 "Pretendard", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* 한국어는 기본값이면 글자 단위로 꺾여 '목/표', '진/출'처럼 단어가 쪼개진다. 띄어쓰기에서만 꺾고, 한 단어가 칸보다 길 때만 쪼갠다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 button, select, input { font: inherit; color: inherit; }
+/* '현 대표 2곳'처럼 함께 읽어야 하는 말을 한 줄에 묶는다 */
+.nowrap { white-space: nowrap; }
 button { cursor: pointer; }
 h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
 p { margin: 0; }
@@ -198,6 +203,10 @@ select {
 .panel { display: flex; flex-direction: column; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .panel-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); }
 .panel-h h2 { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
+/* 제목 옆 안내가 길어도 제목('선수 명단' 등)은 한 줄을 지키고, 안내 쪽이 줄어 여러 줄로 간다 */
+.panel-h > h2 { flex-shrink: 0; white-space: nowrap; }
+.panel-h > h2 ~ * { min-width: 0; }
+.panel-h > h2 + .hint { text-align: right; }
 .panel-b { display: grid; gap: 12px; align-content: start; padding: 14px; }
 .panel.flush > .panel-b { padding: 0; gap: 0; }
 
@@ -290,6 +299,8 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; }
 .kv > div { display: grid; gap: 4px; align-content: start; padding: 10px; border-radius: 7px; background: var(--panel-2); }
 .kv small { color: var(--muted); font-size: 11.5px; }
+/* 숫자 아래 보조 설명: 휴대폰의 큰 본문 글자로는 '대회에서 살아남는 동안'이 반쪽 카드에서 두 줄로 꺾인다 */
+.kv > div > .muted { font-size: 13px; }
 .kv b { font-size: 18px; font-variant-numeric: tabular-nums; }
 
 .notice { padding: 10px 12px; border-radius: 7px; border-left: 3px solid var(--club); background: color-mix(in srgb, var(--club) 14%, transparent); font-weight: 600; }
@@ -310,6 +321,10 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .lines { display: grid; margin: 0; padding: 0; list-style: none; }
 .lines li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); min-width: 0; }
 .lines li:last-child { border-bottom: 0; }
+/* 이름표(왼쪽 흐린 글자)는 값이 길어도 줄어들지 않게 하고, 긴 값은 오른쪽 정렬로 여러 줄에 걸친다 */
+.lines li > .muted:first-child:not(:only-child),
+.lines li > b:first-child:not(:only-child) { flex: none; white-space: nowrap; }
+.lines li > .muted:first-child:not(:only-child) + * { min-width: 0; text-align: right; }
 .lines li.click { cursor: pointer; }
 .lines li.click:hover b { color: var(--club); }
 .lines .ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -462,9 +477,11 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .cmp-bar i:first-child { background: var(--home); }
 .cmp-bar i:last-child { background: var(--away); }
 .bench-row {
-  display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 34px 30px; gap: 8px; align-items: center;
+  /* 마지막 칸(학년·부상)이 30px이면 '2학년'처럼 폭 넓은 숫자에서 '2학/년'으로 꺾인다 */
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) 56px 34px 38px; gap: 8px; align-items: center;
   padding: 6px 14px; border-top: 1px solid var(--line-soft); font-size: 12.5px; cursor: pointer;
 }
+.bench-row > .faint:last-child { white-space: nowrap; }
 .bench-row:hover { background: var(--panel-2); }
 .bench-row.sel { background: color-mix(in srgb, var(--gold) 14%, transparent); }
 .bench-row.off { opacity: 0.4; cursor: default; }

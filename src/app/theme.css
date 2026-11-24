@@ -653,7 +653,7 @@ input[type='checkbox'] { accent-color: var(--club); }
 }
 
 /* 팀 현황 표 */
-.team-board > .panel-h h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-board > .panel-h h2 { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-col.mine > .team-board { border-top: 2px solid var(--club); }
 .tb { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .tb th, .tb td { padding: 0 3px; text-align: center; white-space: nowrap; }
@@ -814,12 +814,13 @@ i, em { font-style: normal; }
     overflow-y: auto; scrollbar-width: none;
   }
   .side-club {
-    display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 26px 22px 24px;
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 26px 18px 24px;
     border-bottom: 1px solid rgb(255 255 255 / 0.14); background: rgb(0 0 0 / 0.12);
   }
   .side-club > div { display: grid; gap: 3px; min-width: 0; }
   .side-club b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 19px; font-weight: 900; color: #fff; letter-spacing: 0.01em; }
-  .side-club span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; color: rgb(255 255 255 / 0.86); white-space: nowrap; }
+  /* '가나가와현 · 학교 수준 52'가 한 줄로 사이드바 폭을 넘어가지 않게 자간을 줄이고, 그래도 넘치면 '학교 수준 N'을 통째로 다음 줄에 둔다 */
+  .side-club span { font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em; color: rgb(255 255 255 / 0.86); }
   .sidebar .nav-item {
     width: auto; margin: 0 12px; padding: 11px 14px; gap: 14px; border-radius: 8px;
     color: rgb(255 255 255 / 0.9); font-size: 13.5px; font-weight: 700; letter-spacing: 0.01em;
