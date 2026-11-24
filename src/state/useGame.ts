@@ -638,8 +638,8 @@ const actions = {
   dismissEnd({ S }: Ctx) { matchOf(S).endSeen = true; },
   // 경기 시작 전에는 경기 화면을 나갈 수 있다 (경기일은 그대로라 다시 들어오면 된다)
   leaveMatch({ S }: Ctx) {
-    const m = matchOf(S);
-    if (m.possessions > 0 || m.feed.length) return;
+    const m = S.match;
+    if (!m || m.possessions > 0 || m.feed.length) return; // 이미 나갔으면(두 번 누름) 그대로 둔다
     stopMatchTimer(S);
     S.match = null;
     S.screen = 'home';
@@ -776,7 +776,8 @@ const actions = {
   },
   // 경기 결과를 반영하고 결과 화면을 떠난다. to: 'home'이면 홈으로, 'report'면 받은 소식의 경기 보고서로
   finish({ S }: Ctx, to: 'home' | 'report' = 'report') {
-    const m = matchOf(S);
+    if (!S.match) return; // 이미 반영했다 (결과 화면의 버튼을 두 번 누른 경우)
+    const m = S.match;
     stopMatchTimer(S);
     S.match = null;
     const { fresh } = advance(S, { match: m });
@@ -788,6 +789,11 @@ const actions = {
 };
 
 let transitions = 0; // 지금까지 시작한 화면 전환 수 (마지막 전환을 가려내는 데 쓴다)
+// 화면 전환을 시작했지만 새 화면을 아직 그리지 않은 동안의 그 입력 (이름과 인자). 이때는 옛 화면의 버튼이 그대로 눌리므로
+// 같은 버튼을 두 번 누르면('홈으로 이동', '계속' 등) 같은 입력이 두 번 들어간다. 똑같은 입력만 버리고,
+// 다른 메뉴를 연달아 누르는 것은 그대로 받아 마지막 화면으로 간다
+let swapping: string | null = null;
+const inputKey = (name: string, args: unknown[]) => { try { return JSON.stringify([name, ...args]); } catch { return name; } };
 // 지금 어떤 화면을 보고 있는지. 이 값이 바뀌는 입력은 화면 전환으로 본다 (같은 화면 안의 탭·선택은 넣지 않는다)
 const viewKey = (S: GameState) => [
   S.career ? 'game' : S.stage, S.screen, S.playerId ?? '', S.schoolId ?? '',
@@ -808,6 +814,8 @@ export function useGame(): { S: GameState; act: Act } {
   useEffect(() => () => stopMatchTimer(S), [S]);
 
   const act: Act = (name, ...args) => {
+    const input = inputKey(name, args);
+    if (swapping === input) return;
     const before = viewKey(S);
     (actions[name] as (ctx: Ctx, ...rest: unknown[]) => void)({ S, rerender }, ...args);
     saveMatch(S);
@@ -822,9 +830,10 @@ export function useGame(): { S: GameState; act: Act } {
       if (shell(before) && shell(viewKey(S))) root.dataset.vt = '1';
       else delete root.dataset.vt;
       // 전환이 끝나면 이름을 뗀다. 연달아 눌러 앞의 전환이 건너뛰어졌으면 마지막 전환이 끝날 때 뗀다
-      const done = () => { if (turn === transitions) delete root.dataset.vt; };
+      const done = () => { if (turn !== transitions) return; swapping = null; delete root.dataset.vt; };
       try {
-        const t = document.startViewTransition(() => { flushSync(rerender); });
+        swapping = input;
+        const t = document.startViewTransition(() => { try { flushSync(rerender); } finally { if (turn === transitions) swapping = null; } });
         t.ready.catch(() => { /* 연달아 누르면 앞의 전환은 건너뛴다 */ });
         t.finished.then(done, done);
         setTimeout(done, 1200); // 화면이 가려져 있어 전환이 끝났다는 신호가 늦어져도 이름은 뗀다
