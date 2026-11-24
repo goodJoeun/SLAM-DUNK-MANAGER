@@ -283,7 +283,6 @@ input[type='checkbox'] { accent-color: var(--club); }
   .mu-line { padding-left: 14px; font-size: 13px; }
   .mu-line .btn { min-height: 34px; padding: 5px 12px; font-size: 13px; }
   .opp-brief { padding-block: 8px; font-size: 13.5px; }
-  .match[data-tab="opp"] .mt:not(.mt-opp) { display: none; }
   .match-tabs button { padding: 0 2px; white-space: nowrap; }
   /* 명단 줄: 체력 막대와 간격을 줄여 이름 자리를 넓힌다 */
   .match .bench-row { gap: 6px; padding-inline: 12px; }
@@ -882,3 +881,51 @@ i, em { font-style: normal; }
 .opt .opt-tags .pill { font-size: 12px; }
 .opt .opt-tags .pill.bad { color: #ff8b80; }
 .badge { font-size: 12px; min-width: 20px; height: 20px; border-radius: 10px; }
+
+/* ---------- 휴대폰: 시즌 운영과 경기에 꼭 필요한 것만 ---------- */
+@media (max-width: 860px) {
+  /* 받은 소식은 탭 대신 머리띠 오른쪽 아이콘 */
+  .hdr-inbox {
+    position: relative; display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0;
+    border: 0; border-radius: 10px; background: rgb(255 255 255 / 0.12); color: #fff;
+  }
+  .hdr-inbox svg { width: 22px; height: 22px; }
+  .hdr-inbox.on { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.75); }
+  .hdr-inbox .badge { position: absolute; top: -4px; right: -4px; font-style: normal; }
+
+  .home-exit { justify-self: center; color: var(--muted); }
+  .home .h-status .kv { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* 선수 목록·신입생 목록: 표 대신 한 줄 */
+  .roster { margin: 0; padding: 0; list-style: none; }
+  .roster-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+    width: 100%; min-height: 58px; padding: 8px 14px; border: 0; border-bottom: 1px solid var(--line-soft);
+    background: none; color: inherit; font: inherit; text-align: left;
+  }
+  .roster > li:last-child .roster-row, .roster > li.roster-row:last-child { border-bottom: 0; }
+  button.roster-row:active { background: var(--panel-3); }
+  .roster-row.dim { opacity: 0.6; }
+  .rr-who { display: grid; gap: 3px; min-width: 0; }
+  .rr-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rr-who small { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--muted); font-size: 12.5px; }
+  .rr-cond { display: grid; gap: 4px; width: 74px; }
+  .rr-cond small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .rr-cond .cond { width: 100%; }
+
+  /* 접어 두는 세부 설정 */
+  .m-fold > summary {
+    display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; list-style: none;
+    color: var(--muted); font-weight: 700;
+  }
+  .m-fold > summary::-webkit-details-marker { display: none; }
+  .m-fold > summary::after { content: '▾'; margin-left: auto; transition: transform 0.15s; }
+  .m-fold[open] > summary::after { transform: rotate(180deg); }
+  .m-fold[open] { display: grid; gap: 8px; }
+  .match-side > .m-fold { padding: 0 14px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+
+  /* 결과 화면의 간단한 선수 기록: 가로로 밀지 않는다 */
+  .rs-compact { width: 100%; table-layout: auto; }
+  .rs-compact th, .rs-compact td { padding-inline: 6px; text-align: center; }
+  .rs-compact th.l, .rs-compact td.l { padding-left: 12px; text-align: left; }
+}

@@ -1,7 +1,7 @@
 import { standings } from '@/game/career/competition';
 import { SEASON, qualifiersFor } from '@/game/career/season';
 import type { Career, Competition, CompetitionKey, Match, Stage } from '@/game/types';
-import { CalendarStrip, PageTitle, Panel, ResultList, SchoolName, isUser, linesOf, teamName } from '@/components/shared/ui';
+import { CalendarStrip, PageTitle, Panel, ResultList, SchoolName, isUser, linesOf, teamName, usePhone } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
 const STAGE: Record<Stage, string> = {
@@ -39,6 +39,7 @@ function Stepper({ career, c }: { career: Career; c: Competition }) {
 }
 
 export default function CompView({ S, act }: ViewProps) {
+  const phone = usePhone(); // 휴대폰: 다른 조 순위와 지난 라운드는 빼고, 우리 학교의 자리와 방금 끝난 라운드만
   const pick = (id: string) => act('school', id);
   const career = S.career;
   const c = career.comp;
@@ -61,20 +62,22 @@ export default function CompView({ S, act }: ViewProps) {
   }
   const me = career.userTeamId;
   const mine = c.finish[me];
-  const rounds = [...c.rounds].reverse();
+  const allRounds = [...c.rounds].reverse();
+  const rounds = phone ? allRounds.slice(0, 1) : allRounds;
+  const groups = phone ? (c.stage === 'group' ? c.groups?.filter((g) => g.ids.includes(me)) : undefined) : c.groups;
   return (
     <div className="page">
-      <PageTitle title={c.name} sub={`${career.year}년차 · 현 대표 ${c.qualifiers}곳이 전국 대회에 나갑니다 · 학교 이름을 누르면 학교 정보`} />
+      <PageTitle title={c.name} sub={phone ? `현 대표 ${c.qualifiers}곳이 전국 대회에 나갑니다` : `${career.year}년차 · 현 대표 ${c.qualifiers}곳이 전국 대회에 나갑니다 · 학교 이름을 누르면 학교 정보`} />
       <Panel title="진행 단계"><Stepper career={career} c={c} />{mine && <div className="notice">우리 학교: {mine}</div>}</Panel>
       <div className="split">
         <div className="stack">
           {c.league && (
             <Panel title="결승 리그" flush><StandingsTable career={career} title="학교" ids={c.league.ids} matches={c.league.matches} onPick={pick} /></Panel>
           )}
-          {c.groups && (
-            <Panel title="조별 리그" flush>
+          {groups && groups.length > 0 && (
+            <Panel title={phone ? '우리 조' : '조별 리그'} flush>
               <div className="groups">
-                {c.groups.map((g) => (
+                {groups.map((g) => (
                   <div key={g.name}><StandingsTable career={career} title={g.name} ids={g.ids} matches={g.matches} onPick={pick} /></div>
                 ))}
               </div>
@@ -88,7 +91,7 @@ export default function CompView({ S, act }: ViewProps) {
             </Panel>
           )}
         </div>
-        <Panel title="경기 결과">
+        <Panel title={phone ? '최근 라운드' : '경기 결과'}>
           {rounds.length
             ? rounds.map((r, i) => <div key={rounds.length - i} className="stack" style={{ gap: 6 }}><h3 className="hint">{r.name}</h3><ResultList lines={linesOf(career, r.matches)} onPick={pick} /></div>)
             : <p className="muted">아직 치른 경기가 없습니다.</p>}

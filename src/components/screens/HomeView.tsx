@@ -5,7 +5,7 @@ import type { Act, PlayingState } from '@/state/useGame';
 import { overall } from '@/game/match/engine';
 import { StandingsTable } from './CompView';
 import {
-  Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, SchoolName, clubColor, mean, teamName, userTeam,
+  Attr, CalendarStrip, CondBar, Crest, DEFENSE, FOCUS, FormPills, Icon, PageTitle, Panel, PosBadge, ResultList, SchoolName, clubColor, mean, teamName, usePhone, userTeam,
 } from '@/components/shared/ui';
 import { scoutReport } from '@/game/coach/scouting';
 import { describeEvent, moraleLabel, teamMorale } from '@/game/team/people';
@@ -111,7 +111,8 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
         <OpponentBrief S={S} d={d} />
         <div className="row" style={{ justifyContent: 'center' }}>
           <button className="btn" onClick={() => act('screen', 'tactics')}><Icon name="tactics" />전술·선발 확인</button>
-          <button className="btn primary" onClick={() => act('command')}>벤치에서 직접 지휘</button>
+          {/* 휴대폰에서는 아래에 고정된 '경기 시작' 버튼이 같은 일을 한다 */}
+          <button className="btn primary d-only" onClick={() => act('command')}>벤치에서 직접 지휘</button>
           <button className="btn" onClick={() => act('simulate')}>결과만 보기</button>
         </div>
       </Panel>
@@ -169,7 +170,8 @@ function NextMatchPanel({ S, act, d, team }: { S: PlayingState; act: Act; d: Tod
           {S.program === 'scout' && <span className="pill club">오늘 분석 예정</span>}
         </div>
       )}
-      <div className="row">
+      {/* 휴대폰에서는 아래쪽 탭이 같은 곳으로 간다 */}
+      <div className="row d-only">
         <button className="btn" onClick={() => act('screen', 'training')}><Icon name="training" />훈련 설정</button>
         <button className="btn" onClick={() => act('screen', 'tactics')}><Icon name="tactics" />전술 확인</button>
       </div>
@@ -237,6 +239,7 @@ function EndView({ S, act }: ViewProps) {
 }
 
 export default function HomeView({ S, act }: ViewProps) {
+  const phone = usePhone();
   const c = S.career;
   const d = today(c);
   if (!d) return <EndView S={S} act={act} />;
@@ -294,7 +297,15 @@ export default function HomeView({ S, act }: ViewProps) {
       {/* 왼쪽 넓은 칸에 오늘 할 일과 경기·소식, 오른쪽 좁은 칸에 팀 상태와 일정.
           칸마다 따로 쌓여서 옆 상자의 높이 때문에 빈 자리가 생기지 않는다 */}
       <div className="home">
-        {c.year === 1 && c.dayIndex === 0 && (
+        {c.year === 1 && c.dayIndex === 0 && (phone ? (
+          <Panel title="부임 첫날 · 이렇게 진행합니다" className="span-12">
+            <ol className="first-steps">
+              <li><button onClick={() => act('screen', 'tactics')}><b>전술과 선발 보기</b><span>코치 추천을 그대로 써도 됩니다.</span></button></li>
+              <li><button onClick={() => act('screen', 'training')}><b>훈련 메뉴 고르기</b><span>어떤 능력을 키울지 정합니다.</span></button></li>
+              <li><div><b>아래 "계속" 누르기</b><span>훈련하고 다음 날로 넘어갑니다. 경기일이 오면 버튼이 "경기 시작"으로 바뀝니다.</span></div></li>
+            </ol>
+          </Panel>
+        ) : (
           <Panel title="부임 첫날 · 먼저 할 일" className="span-12" action={<span className="hint">첫날에만 보입니다. 건너뛰고 바로 "계속"을 눌러도 됩니다.</span>}>
             <ol className="first-steps">
               <li><button onClick={() => act('screen', 'squad')}><b>선수단 살펴보기</b><span>누가 주전인지, 능력치와 컨디션을 확인합니다.</span></button></li>
@@ -304,15 +315,15 @@ export default function HomeView({ S, act }: ViewProps) {
               <li><div><b>"계속"으로 하루 보내기</b><span>오른쪽 위의 계속 버튼(스페이스)을 누르면 훈련하고 다음 날로 넘어갑니다.</span></div></li>
             </ol>
           </Panel>
-        )}
+        ))}
         <EventPanel S={S} act={act} />
         <div className="home-main">
           <NextMatchPanel S={S} act={act} d={d} team={team} />
           <div className="home-pair">
-            {recentPanel}
+            {!phone && recentPanel}
             <CompetitionPanel c={c} act={act} />
           </div>
-          {newsPanel}
+          {!phone && newsPanel}
         </div>
 
         <div className="home-side">
@@ -332,7 +343,7 @@ export default function HomeView({ S, act }: ViewProps) {
           {c.year < SEASON.campaignYears && (
             <div className="notice click" style={{ marginTop: 8, cursor: 'pointer' }} onClick={() => act('recruit')}>
               <b>신입생 스카우트</b> · 영입 목표 {targets}/{RECRUITING.maxTargets}명<br />
-              <span className="muted">{targets < RECRUITING.maxTargets ? '중학 유망주 중 데려올 선수를 정하세요. 학년이 바뀔 때 결과가 나옵니다.' : '학년이 바뀔 때 영입 결과가 나옵니다.'}</span>
+              <span className="muted">{targets < RECRUITING.maxTargets ? (phone ? '내년에 데려올 선수를 정하세요.' : '중학 유망주 중 데려올 선수를 정하세요. 학년이 바뀔 때 결과가 나옵니다.') : '학년이 바뀔 때 영입 결과가 나옵니다.'}</span>
             </div>
           )}
           {injured.length > 0 && (
@@ -348,6 +359,8 @@ export default function HomeView({ S, act }: ViewProps) {
           {!injured.length && !tired.length && <p className="hint">부상자 없음 · 선수단 상태 양호</p>}
         </Panel>
 
+        {!phone && (
+          <>
         <Panel title="다가오는 일정" className="h-upcoming" action={<button className="btn ghost small" onClick={() => act('screen', 'schedule')}>전체 일정</button>}>
           <ul className="lines">
             {upcoming.map(({ day, n }) => (
@@ -369,8 +382,12 @@ export default function HomeView({ S, act }: ViewProps) {
         <Panel title={`${c.year}년차 일정`} className="h-year">
           <CalendarStrip career={c} />
         </Panel>
+          </>
+        )}
         </div>
       </div>
+      {/* 휴대폰: 게임을 나가는 버튼은 눈에 덜 띄게 홈 맨 아래에 둔다 */}
+      <button className="btn ghost small home-exit m-only" title="지금 게임은 그대로 저장됩니다" onClick={() => act('menu')}><Icon name="back" />표지로 나가기 · 게임은 저장됩니다</button>
     </div>
   );
 }

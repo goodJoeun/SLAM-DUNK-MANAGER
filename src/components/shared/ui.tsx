@@ -1,5 +1,5 @@
 // 여러 화면이 함께 쓰는 작은 부품과 표기 규칙.
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { ORIGINAL } from '@/game/data/original';
 import { playerRating } from '@/game/match/review';
 import type { BoxTeam, Career, Defense, Focus, GrowthEvent, Match, NameStyle, RatingKey, Tactics } from '@/game/types';
@@ -12,6 +12,15 @@ export interface ViewProps {
   S: PlayingState;
   act: Act;
 }
+
+// 휴대폰 화면인가 (CSS의 860px 기준과 같다). 휴대폰에서는 시즌 운영과 경기에 꼭 필요한 것만 보여 준다
+const PHONE_QUERY = '(max-width: 860px)';
+const onPhoneChange = (notify: () => void) => {
+  const query = window.matchMedia(PHONE_QUERY);
+  query.addEventListener('change', notify);
+  return () => query.removeEventListener('change', notify);
+};
+export const usePhone = () => useSyncExternalStore(onPhoneChange, () => window.matchMedia(PHONE_QUERY).matches, () => false);
 
 export const NAME_STYLE: Record<NameStyle, string> = { kr: '한국어판', jp: '원작' };
 export const POS = ['', 'PG', 'SG', 'SF', 'PF', 'C'];

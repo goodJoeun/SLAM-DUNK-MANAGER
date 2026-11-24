@@ -8,11 +8,13 @@ import type { ActiveMatch } from '@/state/useGame';
 import { KEY_EVENT } from '@/state/live';
 import { quarterScores } from './MatchBoards';
 import Portrait from '@/components/shared/Portrait';
-import { Attr, Crest, Icon, PosBadge, Rating, Seg, clubVars, condClass } from '@/components/shared/ui';
+import { Attr, Crest, Icon, PosBadge, Rating, Seg, clubVars, condClass, usePhone } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
 type Tab = 'box' | 'shots' | 'log' | 'review';
 const TABS: [Tab, string][] = [['box', '박스스코어'], ['shots', '슛 분포'], ['log', '중계 기록'], ['review', '코치 총평']];
+// 휴대폰: 왜 이기고 졌는지(총평)를 먼저, 선수 기록은 핵심 칸만
+const PHONE_TABS: [Tab, string][] = [['review', '코치 총평'], ['box', '선수 기록']];
 const SHOTS: [ShotType, string][] = [['rim', '골밑슛'], ['post', '포스트업'], ['mid', '미들슛'], ['three', '3점슛']];
 
 const pctText = (made: number, tried: number) => (tried ? `${((100 * made) / tried).toFixed(1)}%` : '-');
@@ -28,6 +30,27 @@ function shotMix(log: LogEvent[]) {
     else if (i.kind === 'block') mix[1 - e.side][i.shot].tried++;
   }
   return mix;
+}
+
+// 휴대폰의 선수 기록: 뛴 선수만, 가로로 밀지 않아도 되는 다섯 칸
+function CompactBox({ team, faces, mvp, mine }: { team: BoxTeam; faces: Record<string, string>; mvp: string | null; mine: boolean }) {
+  const played = team.players.filter((p) => p.sec > 0).sort((a, b) => b.pts - a.pts);
+  return (
+    <section className={`rs-panel ${mine ? 'mine' : ''}`} style={clubVars(team.name)}>
+      <header><Crest name={team.name} size={26} /><b>{team.name}</b>{mine && <span className="pill club">우리 팀</span>}</header>
+      <table className="gt rs-table rs-compact">
+        <thead><tr className="gcols solo"><th className="l">선수</th><th>득점</th><th>리바</th><th>어시</th><th>평점</th></tr></thead>
+        <tbody>
+          {played.map((p) => (
+            <tr key={p.id} className={mvp === p.id ? 'mvp' : ''}>
+              <td className="l"><span className="name-cell"><Portrait name={p.name} src={faces[p.id]} size={24} round /><span className="gt-name"><b>{p.name}{mvp === p.id && <i className="rs-mvp"> MVP</i>}</b></span></span></td>
+              <td><b>{p.pts}</b></td><td>{p.orb + p.drb}</td><td>{p.ast}</td><td><Rating v={playerRating(p)} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
 }
 
 function BoxTable({ team, energy, faces, mvp, mine }: { team: BoxTeam; energy: Record<string, number>; faces: Record<string, string>; mvp: string | null; mine: boolean }) {
@@ -96,7 +119,10 @@ export default function ResultView({ S, act, match: m, faces }: ViewProps & { ma
   const log = result.log;
   const mine = view.teams[m.side];
   const won = mine.score > view.teams[1 - m.side].score;
-  const [tab, setTab] = useState<Tab>('box');
+  const phone = usePhone();
+  const [pickedTab, setTab] = useState<Tab | null>(null);
+  const tabs = phone ? PHONE_TABS : TABS;
+  const tab = pickedTab && tabs.some(([k]) => k === pickedTab) ? pickedTab : tabs[0][0];
   const [keyOnly, setKeyOnly] = useState(true);
   const quarters = useMemo(() => quarterScores(log, [h.score, a.score]), [log, h.score, a.score]);
   const mix = useMemo(() => shotMix(log), [log]);
@@ -135,11 +161,13 @@ export default function ResultView({ S, act, match: m, faces }: ViewProps & { ma
       </header>
 
       <nav className="rs-tabs" role="tablist">
-        {TABS.map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}
+        {tabs.map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}
       </nav>
 
       <div className="rs-body">
-        {tab === 'box' && box.map((t, i) => <BoxTable key={t.name} team={t} energy={energy} faces={faces} mvp={mvp} mine={i === m.side} />)}
+        {tab === 'box' && box.map((t, i) => (phone
+          ? <CompactBox key={t.name} team={t} faces={faces} mvp={mvp} mine={i === m.side} />
+          : <BoxTable key={t.name} team={t} energy={energy} faces={faces} mvp={mvp} mine={i === m.side} />))}
 
         {tab === 'shots' && (
           <section className="rs-panel">
@@ -209,7 +237,7 @@ export default function ResultView({ S, act, match: m, faces }: ViewProps & { ma
       </div>
 
       <footer className="rs-cta">
-        <button className="btn" onClick={() => act('finish', 'report')}>받은 소식에서 보고서 보기</button>
+        <button className="btn d-only" onClick={() => act('finish', 'report')}>받은 소식에서 보고서 보기</button>
         <button className="btn primary rs-go" autoFocus onClick={() => act('finish', 'home')}>홈으로 이동<Icon name="next" /></button>
       </footer>
     </div>

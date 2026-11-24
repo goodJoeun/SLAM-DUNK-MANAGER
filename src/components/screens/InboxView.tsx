@@ -3,7 +3,7 @@ import { PREPARATION } from '@/game/career/season';
 import type { Career } from '@/game/types';
 import type { Message, MessageKind } from '@/state/inbox';
 import type { Act } from '@/state/useGame';
-import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, Seg, isUser, potentialStars, Stars } from '@/components/shared/ui';
+import { Attr, BoxTable, GrowthList, Icon, PageTitle, PosBadge, ResultList, Seg, isUser, potentialStars, Stars, usePhone } from '@/components/shared/ui';
 import type { IconName, ViewProps } from '@/components/shared/ui';
 import { FarewellList } from '@/components/layout/FarewellModal';
 
@@ -139,14 +139,15 @@ function MessageView({ m, career, act }: { m: Message; career: Career; act: Act 
 }
 
 export default function InboxView({ S, act }: ViewProps) {
+  const phone = usePhone(); // 휴대폰: 분류 필터 없이 최신순으로만 본다
   const selected = S.inbox.find((m) => m.id === S.messageId) ?? null;
   const unread = S.inbox.filter((m) => m.unread).length;
   const [filter, setFilter] = useState<FilterKey>('all');
-  const list = filter === 'all' ? S.inbox : S.inbox.filter((m) => FILTER_OF[m.kind] === filter);
+  const list = phone || filter === 'all' ? S.inbox : S.inbox.filter((m) => FILTER_OF[m.kind] === filter);
   return (
     <div className="page">
       <PageTitle title="받은 소식" sub={unread ? `읽지 않은 소식 ${unread}건` : '모두 읽었습니다'}>
-        <Seg options={FILTERS} value={filter} onChange={(v) => setFilter(v as FilterKey)} />
+        {!phone && <Seg options={FILTERS} value={filter} onChange={(v) => setFilter(v as FilterKey)} />}
         {unread > 0 && <button className="btn small" onClick={() => act('readAll')}>모두 읽음</button>}
       </PageTitle>
       <div className={`inbox ${selected ? 'has-sel' : ''}`}>

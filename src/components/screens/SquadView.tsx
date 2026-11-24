@@ -8,8 +8,8 @@ import type { Career, Player, RatingKey, TrendPoint } from '@/game/types';
 import type { Act } from '@/state/useGame';
 import Portrait, { PortraitEditor, licensedPortrait } from '@/components/shared/Portrait';
 import {
-  ATTR_GROUPS, Attr, CondBar, Crest, Icon, Panel, POS_NAME, PosBadge, RATING_SHORT, Rating, Seg, Select, Sheet, Stars,
-  abilityStars, attrClass, pct, potentialStars, userTeam,
+  ATTR_GROUPS, Attr, CondBar, Crest, Icon, PageTitle, Panel, POS_NAME, PosBadge, RATING_SHORT, Rating, Seg, Select, Sheet, Stars,
+  abilityStars, attrClass, pct, potentialStars, usePhone, userTeam,
 } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
@@ -21,6 +21,7 @@ type View = keyof typeof VIEWS;
 
 // 신입생 스카우트: 중학 유망주 가운데 영입 목표를 고른다. 결과는 학년이 바뀔 때 정해진다.
 function RecruitPanel({ c, act }: { c: Career; act: Act }) {
+  const phone = usePhone();
   const team = userTeam(c);
   if (c.year >= SEASON.campaignYears) {
     // 마지막 해에는 뽑을 신입생이 없으므로, 임기 중에 들어온 선수들이 얼마나 컸는지 돌아본다
@@ -66,6 +67,23 @@ function RecruitPanel({ c, act }: { c: Career; act: Act }) {
   return (
     <>
       <Panel title="신입생 스카우트" flush action={<span className="hint">영입 목표 {targets.length}/{RECRUITING.maxTargets}명</span>}>
+        {phone ? (
+          <ul className="roster">
+            {prospects.map((x) => {
+              const p = x.player;
+              const on = targets.includes(p.id);
+              const chance = Math.round(recruitChance(c, x) * 100);
+              return (
+                <li key={p.id} className="roster-row">
+                  <PosBadge pos={p.pos} />
+                  <span className="rr-who"><b>{p.name}</b><small><Stars value={potentialStars(p.potential)} /> 영입 {chance}%</small></span>
+                  <Attr v={overall(p)} />
+                  <button className={`btn small ${on ? 'primary' : ''}`} aria-pressed={on} disabled={!on && targets.length >= RECRUITING.maxTargets} onClick={() => act('recruitTarget', p.id)}>{on ? '해제' : '목표'}</button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
         <div className="table-wrap"><table className="data">
           <thead><tr>
             <th className="l">포지션</th><th className="l name">이름</th><th className="c">잠재력</th><th>종합</th><th>영입 가능성</th><th className="c">영입 목표</th>
@@ -92,6 +110,7 @@ function RecruitPanel({ c, act }: { c: Career; act: Act }) {
             })}
           </tbody>
         </table></div>
+        )}
       </Panel>
       <Panel title="내년 선수단 전망">
         <p className="muted">3학년 {leaving.length}명이 졸업하고 신입생 {SCHOOL.classSize}명이 들어옵니다. 남는 선수의 포지션별 인원:</p>
@@ -99,7 +118,7 @@ function RecruitPanel({ c, act }: { c: Career; act: Act }) {
           {[1, 2, 3, 4, 5].map((pos) => <span key={pos} className="row" style={{ gap: 6 }}><PosBadge pos={pos} /><b>{staying.filter((p) => p.pos === pos).length}명</b></span>)}
         </div>
       </Panel>
-      <p className="hint">
+      <p className="hint d-only">
         영입 목표는 {RECRUITING.maxTargets}명까지 정할 수 있고, 학년이 바뀔 때 결과가 나옵니다. 학교 수준({team.prestige})이 높을수록, 교장의 신임({c.trust ?? 50})이 클수록 잘 옵니다.
         목표로 삼지 않은 자리와 영입에 실패한 자리는 코치가 부족한 포지션 위주로 채웁니다.
       </p>
@@ -150,6 +169,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
   act: Act;
   portraits: Record<string, string>;
 }) {
+  const phone = usePhone(); // 휴대폰: 사진 바꾸기·선수 비교·경기별 기록 표는 넓은 화면에서만
   const team = userTeam(c);
   const list = team.players;
   const prev = list[(index - 1 + list.length) % list.length];
@@ -175,11 +195,13 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
       <div className="profile-head">
         <div className="profile-photo">
           <Portrait name={p.name} src={portraits[p.name] ?? licensedPortrait(p)} size={176} />
-          <PortraitEditor
-            hasCustom={Boolean(portraits[p.name])}
-            onSet={(url) => act('setPortrait', p.name, url)}
-            onClear={() => act('clearPortrait', p.name)}
-          />
+          {!phone && (
+            <PortraitEditor
+              hasCustom={Boolean(portraits[p.name])}
+              onSet={(url) => act('setPortrait', p.name, url)}
+              onClear={() => act('clearPortrait', p.name)}
+            />
+          )}
         </div>
         <div className="who">
           <span className="row"><Crest name={team.name} size={20} /><span className="muted">{team.name}</span></span>
@@ -206,7 +228,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
         <div className="stack">
           <Panel
             title="능력치"
-            action={(
+            action={!phone && (
               <label className="compare-pick">비교
                 <select value={other ? compareId : ''} onChange={(e) => setCompareId(e.target.value)}>
                   <option value="">선택 안 함</option>
@@ -240,7 +262,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
                 : '색이 푸를수록 뛰어납니다. 능력치는 훈련과 경기 경험으로 오르고, 높을수록 올리기 어렵습니다.'}
             </p>
           </Panel>
-          <Panel title="최근 경기" flush action={games.length > 0 && <span className="hint">{games.length}경기 중 최근 {recent.length}경기</span>}>
+          {!phone && <Panel title="최근 경기" flush action={games.length > 0 && <span className="hint">{games.length}경기 중 최근 {recent.length}경기</span>}>
             {recent.length ? (
               <div className="table-wrap"><table className="data">
                 <thead><tr>
@@ -264,7 +286,7 @@ function PlayerProfile({ c, player: p, index, act, portraits }: {
                 </tbody>
               </table></div>
             ) : <p className="muted pad">아직 출전한 경기가 없습니다. 경기를 치르면 여기에 경기별 기록이 쌓입니다.</p>}
-          </Panel>
+          </Panel>}
         </div>
         <div className="stack">
           <Panel title="개인 훈련">
@@ -345,13 +367,49 @@ function status(p: Player, index: number) {
   return <span className="pill">벤치</span>;
 }
 
+// 휴대폰의 선수 목록: 26칸짜리 표 대신 한 줄에 이름·컨디션·종합만. 자세한 능력치는 선수를 누르면 나온다
+function RosterList({ players, portraits, act }: { players: Player[]; portraits: Record<string, string>; act: Act }) {
+  const row = (p: Player) => (
+    <li key={p.id}>
+      <button className={`roster-row ${p.injuredDays ? 'dim' : ''}`} onClick={() => act('player', p.id)}>
+        <Portrait name={p.name} src={portraits[p.name] ?? licensedPortrait(p)} size={36} round />
+        <span className="rr-who">
+          <b>{p.name}</b>
+          <small><PosBadge pos={p.pos} /> {p.year}학년{p.injuredDays ? <span className="bad"> · 부상 {p.injuredDays}일</span> : null}</small>
+        </span>
+        <span className="rr-cond"><small>컨디션 {Math.round(p.condition)}</small><CondBar value={p.condition} /></span>
+        <Attr v={overall(p)} />
+      </button>
+    </li>
+  );
+  return (
+    <>
+      <Panel title="주전 5명" flush action={<span className="hint">선발은 전술 탭에서</span>}><ul className="roster">{players.slice(0, 5).map(row)}</ul></Panel>
+      <Panel title={`벤치 ${players.length - 5}명`} flush><ul className="roster">{players.slice(5).map(row)}</ul></Panel>
+    </>
+  );
+}
+
+const PHONE_VIEWS = { attrs: '선수', recruit: '신입생 스카우트' };
+
 export default function SquadView({ S, act }: ViewProps) {
+  const phone = usePhone();
   const [view, setView] = useState<View>(S.squadTab === 'recruit' ? 'recruit' : 'attrs');
   const [sort, setSort] = useState<SortKey>('lineup');
   const c = S.career;
   const team = userTeam(c);
   const selectedIndex = team.players.findIndex((x) => x.id === S.playerId);
   if (selectedIndex >= 0) return <PlayerProfile c={c} player={team.players[selectedIndex]} index={selectedIndex} act={act} portraits={S.portraits} />;
+  if (phone) {
+    return (
+      <div className="page">
+        <PageTitle title="선수단" sub={`${team.players.length}명 · 팀 전력 ${teamOverall(team)} · 선수를 누르면 상세`}>
+          <Seg options={PHONE_VIEWS} value={view === 'recruit' ? 'recruit' : 'attrs'} onChange={(v) => setView(v as View)} />
+        </PageTitle>
+        {view === 'recruit' ? <RecruitPanel c={c} act={act} /> : <RosterList players={team.players} portraits={S.portraits} act={act} />}
+      </div>
+    );
+  }
 
   const rows = team.players.map((p, i) => ({ p, i }));
   if (sort !== 'lineup') {

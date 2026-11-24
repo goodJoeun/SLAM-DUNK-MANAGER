@@ -199,7 +199,7 @@ export default function StartView({ S, act }: { S: GameState; act: Act }) {
         <div className="pick-opts">
           <span className="muted">이름 표기</span>
           <Seg options={NAME_STYLE} value={nameStyle} onChange={(v) => { if (v !== nameStyle) act('namestyle'); }} />
-          <button className="btn small" title="원작에 나오지 않는 학교와 선수들을 새로 만듭니다. 원작 선수는 그대로입니다." onClick={() => { setPicked(null); act('reroll'); }}>선수 구성 다시 뽑기</button>
+          <button className="btn small d-only" title="원작에 나오지 않는 학교와 선수들을 새로 만듭니다. 원작 선수는 그대로입니다." onClick={() => { setPicked(null); act('reroll'); }}>선수 구성 다시 뽑기</button>
         </div>
         <span className={`pick-save ${S.slot ? 'ok' : 'full'}`}>
           {S.slot ? `${S.slot}번 칸에 자동 저장` : '세이브 칸이 모두 찼습니다 · 칸 하나를 지워야 시작할 수 있습니다'}

@@ -13,7 +13,7 @@ import { tipOffScene } from '@/components/court/choreo';
 import Portrait, { licensedPortrait } from '@/components/shared/Portrait';
 import {
   ATTR_GROUPS, Attr, CondBar, Crest, DEFENSE, DEFENSE_ROLE, DEFENSE_ROLE_INFO, FOCUS, Icon, OFFENSE_ROLE, OFFENSE_ROLE_INFO, PACE, POS_NAME, Panel, PosBadge, RATING_SHORT, Seg, Select,
-  TacticSelects, matchColors,
+  TacticSelects, matchColors, usePhone,
 } from '@/components/shared/ui';
 import { TRAITS, traitOf } from '@/game/team/people';
 import type { Player } from '@/game/types';
@@ -173,7 +173,7 @@ function BreakPanel({ info, mine, opp, side, tiredAt, onResume }: {
         <button className="btn primary" onClick={onResume}><Icon name="next" />{next} 시작</button>
       </div>
       <div className="break-body">
-        <table className="quarters">
+        <table className="quarters d-only">
           <thead><tr><th>{periodLabel(info.period)} 기록</th><th>{mine.name}</th><th>{opp.name}</th></tr></thead>
           <tbody>{rows.map(([label, a, b]) => <tr key={label}><td>{label}</td><td>{a}</td><td>{b}</td></tr>)}</tbody>
         </table>
@@ -222,8 +222,9 @@ const MADE = /성공|블록|스틸/;
 
 type CenterTab = 'feed' | 'tactics' | 'alerts';
 const CENTER_TABS: [CenterTab, string][] = [['feed', '중계'], ['tactics', '전술'], ['alerts', '자동 정지']];
-type MatchTab = 'feed' | 'squad' | 'tactics' | 'opp' | 'stats';
-const MATCH_TABS: [MatchTab, string][] = [['feed', '중계'], ['squad', '선수·교체'], ['tactics', '전술'], ['opp', '상대'], ['stats', '기록']];
+// 휴대폰의 코트 아래 탭: 경기 중에 실제로 손대는 세 가지만
+type MatchTab = 'feed' | 'squad' | 'tactics';
+const MATCH_TABS: [MatchTab, string][] = [['tactics', '전술'], ['squad', '선수·교체'], ['feed', '중계']];
 
 // 경기 종료 창: 승패, 최종 점수, 양 팀 최다 득점자
 // 경기 중 선수 능력치 창: 내 선수와 상대 선수 모두. 오늘 경기 기록도 함께 보여 준다
@@ -407,6 +408,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const [centerTab, setCenterTab] = useState<CenterTab>('tactics');
   const setDeny = (id: string) => act('matchTactic', 'denyPlayerId', id);
   // 휴대폰 화면: 코트 아래 내용을 탭으로 나눠 보고, 덜 쓰는 조작은 '더보기'에 접어 둔다
+  const phone = usePhone();
   const [tab, setTab] = useState<MatchTab>('tactics');
   const [moreOpen, setMoreOpen] = useState(false);
   // 쿼터 사이 휴식 화면은 맨 위에 뜨므로, 아래쪽을 보고 있었다면 위로 올린다
@@ -450,6 +452,56 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
   const shownLog = m.pending ? fullLog.slice(0, Math.max(0, fullLog.length - m.pending.step.events.length)) : fullLog;
   const lead = v.teams[m.side].score - v.teams[1 - m.side].score;
   // 넓은 화면의 한 팀 칸: 위에 선수 기록 표, 아래에 우리 팀이면 점수 흐름과 팀 기록, 상대면 매치업과 부문별 1위
+  // 에이스·집중 마크 지정 (넓은 화면에서는 그대로, 휴대폰에서는 접어서 보여 준다)
+  const picks = (
+    <>
+      <div className="tac-picks">
+        <label className="hint">에이스
+          <Select options={everyone} value={t.keyPlayerId} onChange={(value) => act('matchTactic', 'keyPlayerId', value)}><option value="">없음</option></Select>
+        </label>
+        <label className="hint">집중 마크
+          <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
+        </label>
+        {/* 집중 마크를 고르기 전에도 자리를 잡아 둔다 (고를 때 줄이 늘어나지 않게) */}
+        <label className="hint" title="마크 효과는 담당의 능력치를 대상의 능력치와 견줘 정합니다(수비 지능 대 공격 지능·주무기, 스피드, 키, 힘). 100이 대등한 수준이고, 확실히 앞서는 수비수가 아니면 큰 효과가 없습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
+          <Select options={t.denyPlayerId ? markers : {}} value={t.denyPlayerId ? t.denyDefenderId : ''} disabled={!t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">{t.denyPlayerId ? '같은 자리 선수' : '-'}</option></Select>
+        </label>
+      </div>
+      {/* 담당 추천: 늘 한 줄을 차지한다 */}
+      <div className="hint deny-pick">
+        {denyTarget && recommend ? (
+          <>
+            <span className="dp-text">
+              {recommend.power >= SOLID_MARK
+                ? <>추천 담당: <b>{recommend.p.name}</b> (마크 효과 {recommend.power}){benchPick && ' · 벤치에 있어 교체로 넣어야 합니다'}</>
+                : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.p.name}</b> (마크 효과 {recommend.power}) · 대상을 조금만 묶습니다</>}
+            </span>
+            {t.denyDefenderId !== recommend.p.id && (
+              <button className="btn ghost small" onClick={() => act('matchTactic', 'denyDefenderId', recommend.p.id)}>{recommend.p.name}에게 맡기기</button>
+            )}
+          </>
+        ) : <span className="dp-text faint">집중 마크할 상대를 고르면, 맡기기 좋은 선수를 여기에 추천합니다.</span>}
+      </div>
+    </>
+  );
+  const alertSettings = (
+    <>
+      <div className="toggles">
+        {(Object.keys(ALERTS) as AlertKey[]).map((k) => (
+          <label key={k} className="toggle">
+            <input type="checkbox" checked={prefs.alerts[k]} onChange={() => act('toggleAlert', k)} />
+            {ALERTS[k]}
+          </label>
+        ))}
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <span className="hint">체력 저하 기준</span>
+        <Seg options={TIRED_OPTIONS} value={String(prefs.tiredAt)} onChange={(k) => act('tiredAt', Number(k))} />
+      </div>
+      <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 지친 선수가 여럿이면 한 번에 묶어 알립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
+    </>
+  );
+
   const teamCol = (side: number) => {
     const team = live.teams[side];
     const isMine = side === m.side;
@@ -558,7 +610,7 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <button className="btn" onClick={() => act('autosub')}>교체: {mine.auto ? 'AI 코치' : '직접'}</button>
             <span className="spacer" />
             {/* 진행 중에도 자리를 지켜 옆 버튼이 밀리지 않게 한다 */}
-            <button className="btn ghost" disabled={m.playing || Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>
+            <button className="btn ghost d-only" disabled={m.playing || Boolean(m.pending)} onClick={() => act('step')} title="멈춘 상태에서 공격권 하나만 진행합니다">공격권 하나</button>
             {confirmSkip ? (
               <span className="skip-confirm">
                 <span>남은 경기를 바로 끝낼까요? 되돌릴 수 없습니다.</span>
@@ -744,50 +796,15 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
                   <span>상대: {oppTactics}</span>
                 </p>
               </div>
-              <div className="tac-picks">
-                <label className="hint">에이스
-                  <Select options={everyone} value={t.keyPlayerId} onChange={(value) => act('matchTactic', 'keyPlayerId', value)}><option value="">없음</option></Select>
-                </label>
-                <label className="hint">집중 마크
-                  <Select options={rivals} value={t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyPlayerId', value)}><option value="">없음</option></Select>
-                </label>
-                {/* 집중 마크를 고르기 전에도 자리를 잡아 둔다 (고를 때 줄이 늘어나지 않게) */}
-                <label className="hint" title="마크 효과는 담당의 능력치를 대상의 능력치와 견줘 정합니다(수비 지능 대 공격 지능·주무기, 스피드, 키, 힘). 100이 대등한 수준이고, 확실히 앞서는 수비수가 아니면 큰 효과가 없습니다. 담당은 체력이 빨리 닳고 공격이 조금 무뎌집니다. 담당이 벤치에 있는 동안은 같은 자리 선수가 맡습니다.">마크 담당
-                  <Select options={t.denyPlayerId ? markers : {}} value={t.denyPlayerId ? t.denyDefenderId : ''} disabled={!t.denyPlayerId} onChange={(value) => act('matchTactic', 'denyDefenderId', value)}><option value="">{t.denyPlayerId ? '같은 자리 선수' : '-'}</option></Select>
-                </label>
-              </div>
-              {/* 담당 추천: 늘 한 줄을 차지한다 */}
-              <div className="hint deny-pick">
-                {denyTarget && recommend ? (
-                  <>
-                    <span className="dp-text">
-                      {recommend.power >= SOLID_MARK
-                        ? <>추천 담당: <b>{recommend.p.name}</b> (마크 효과 {recommend.power}){benchPick && ' · 벤치에 있어 교체로 넣어야 합니다'}</>
-                        : <>{denyTarget.name}을(를) 확실히 막을 선수가 없습니다. 그나마 <b>{recommend.p.name}</b> (마크 효과 {recommend.power}) · 대상을 조금만 묶습니다</>}
-                    </span>
-                    {t.denyDefenderId !== recommend.p.id && (
-                      <button className="btn ghost small" onClick={() => act('matchTactic', 'denyDefenderId', recommend.p.id)}>{recommend.p.name}에게 맡기기</button>
-                    )}
-                  </>
-                ) : <span className="dp-text faint">집중 마크할 상대를 고르면, 맡기기 좋은 선수를 여기에 추천합니다.</span>}
-              </div>
+              {/* 휴대폰: 세부 지시는 접어 두고 필요할 때 연다 */}
+              {phone ? <details className="m-fold"><summary>세부 지시 · 에이스·집중 마크{(t.keyPlayerId || t.denyPlayerId) && <i className="pill club">설정됨</i>}</summary>{picks}</details> : picks}
             </div>
 
-            <Panel title="자동 정지" className="mt mt-tactics ct ct-alerts">
-              <div className="toggles">
-                {(Object.keys(ALERTS) as AlertKey[]).map((k) => (
-                  <label key={k} className="toggle">
-                    <input type="checkbox" checked={prefs.alerts[k]} onChange={() => act('toggleAlert', k)} />
-                    {ALERTS[k]}
-                  </label>
-                ))}
-              </div>
-              <div className="row" style={{ marginTop: 10 }}>
-                <span className="hint">체력 저하 기준</span>
-                <Seg options={TIRED_OPTIONS} value={String(prefs.tiredAt)} onChange={(k) => act('tiredAt', Number(k))} />
-              </div>
-              <p className="hint">켜 둔 상황이 오면 경기를 멈추고 알려 드립니다. 지친 선수가 여럿이면 한 번에 묶어 알립니다. 교체를 AI 코치에게 맡긴 동안에는 파울·체력으로는 멈추지 않습니다.</p>
-            </Panel>
+            {phone ? (
+              <details className="m-fold mt mt-tactics"><summary>자동 정지 설정</summary>{alertSettings}</details>
+            ) : (
+              <Panel title="자동 정지" className="mt mt-tactics ct ct-alerts">{alertSettings}</Panel>
+            )}
           </div>
         </div>
 
@@ -808,22 +825,6 @@ export default function MatchView({ S, act, match: m }: ViewProps & { match: Act
             <PlayerRow key={p.id} faces={faces} player={p} tags={tags(p)} onClick={() => act('pick', 'bench', p.id)} onInfo={info} />
           ))}
         </Panel>
-
-        <div className="stack">
-          <Panel title="경기 기록" className="mt mt-stats" action={<span className="hint">{v.teams[0].name} · {v.teams[1].name}</span>}>
-            <Compare box={box} />
-          </Panel>
-          <Panel title={`${opp.name} 선수`} flush className="mt mt-opp" action={<span className="hint">정보를 누르면 능력치</span>}>
-            <div className="opp-brief">
-              <b>{oppTactics}</b>
-              <span className="muted">팀 파울 {opp.teamFouls} · 남은 작전 타임 {opp.timeoutsLeft}</span>
-            </div>
-            <div className="sub-hint">코트 위 5명 · 동그라미 숫자는 코트의 번호 · 수비 옆 숫자는 종합 능력 차</div>
-            <Matchups mine={mine} opp={opp} faces={faces} roster={roster} onInfo={info} onDeny={v.finished ? undefined : setDeny} />
-            <div className="sub-hint">벤치</div>
-            {opp.bench.map((p) => <PlayerRow key={p.id} faces={faces} player={p} onInfo={info} />)}
-          </Panel>
-        </div>
       </div>
     </div>
   );

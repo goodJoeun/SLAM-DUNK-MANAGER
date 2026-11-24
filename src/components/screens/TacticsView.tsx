@@ -7,7 +7,7 @@ import { today, userMatchDays } from '@/game/career/season';
 import { scoutReport } from '@/game/coach/scouting';
 import { adviseTactics, mockWins } from '@/game/coach/advice';
 import type { TacticsAdvice } from '@/game/coach/advice';
-import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, Select, mean, userTeam } from '@/components/shared/ui';
+import { Attr, CondBar, DEFENSE, FOCUS, Icon, PACE, POS, PageTitle, Panel, PosBadge, Seg, Select, TacticSelects, mean, usePhone, userTeam } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
 const FOCUS_INFO: Record<Focus, string> = {
@@ -97,7 +97,12 @@ function Choice<K extends string>({ options, short, info, tags, value, onChange 
   );
 }
 
+const PHONE_PANES = { plan: '전술', lineup: '선발' };
+
 export default function TacticsView({ S, act }: ViewProps) {
+  // 휴대폰: 전술과 선발을 나눠 한 화면씩 보여 준다. 집중 마크와 전술의 부담 수치는 넓은 화면에서만 (집중 마크는 경기 중에도 걸 수 있다)
+  const phone = usePhone();
+  const [pane, setPane] = useState<keyof typeof PHONE_PANES>('plan');
   const prep = today(S.career)?.prep; // 다음 공식전 상대 분석으로 세운 코치의 계획
   const oppTeam = prep && prep.days > 0 ? S.career.teams[prep.opponentId] : undefined;
   const oppTactics = oppTeam ? scoutReport(oppTeam, prep!.days).tactics : '';
@@ -188,13 +193,38 @@ export default function TacticsView({ S, act }: ViewProps) {
 
   return (
     <div className="page">
-      <PageTitle title="전술" sub="경기 시작 때 적용됩니다. 직접 지휘하는 경기에서는 도중에 바꿀 수 있습니다." />
+      <PageTitle title="전술" sub={phone ? '경기 중에도 바꿀 수 있습니다.' : '경기 시작 때 적용됩니다. 직접 지휘하는 경기에서는 도중에 바꿀 수 있습니다.'}>
+        {phone && <Seg options={PHONE_PANES} value={pane} onChange={(v) => setPane(v as keyof typeof PHONE_PANES)} />}
+      </PageTitle>
       {prep && prep.days > 0 && (
         <div className="notice">
-          다음 공식전 <b>{prep.opponent}</b> · 상대 분석 {prep.days}일 · 그 경기 능력치 +{prep.bonus.toFixed(1)}.{oppTactics && <> 상대가 즐겨 쓰는 전술: <b>{oppTactics}</b>.</>} 코치의 분석 보고서는 받은 소식에 있습니다. 어떤 전술로 맞설지는 감독이 정합니다.
+          다음 공식전 <b>{prep.opponent}</b> · 상대 분석 {prep.days}일 · 그 경기 능력치 +{prep.bonus.toFixed(1)}.{oppTactics && <> 상대가 즐겨 쓰는 전술: <b>{oppTactics}</b>.</>}{!phone && ' 코치의 분석 보고서는 받은 소식에 있습니다. 어떤 전술로 맞설지는 감독이 정합니다.'}
         </div>
       )}
       <div className="split">
+        {phone ? pane === 'plan' && (
+          <div className="stack">
+            <Panel title="코치 추천">
+              <div className="advice">
+                <Icon name="bulb" />
+                <div className="stack" style={{ gap: 6 }}>
+                  {tip ? (
+                    <>
+                      <span><b>{FOCUS[tip.focus]}</b> 공격 · <b>{DEFENSE[tip.defense]}</b> 수비 · <b>{PACE.find(([k]) => k === String(tip.pace))?.[1]}</b> 템포</span>
+                      <span className="hint">{nextId ? `${sparring.name}전` : '현 내 중간 수준의 상대'} 모의 {tip.games}경기 {tip.wins}승{!follows && current != null ? ` · 지금 전술 ${current}승` : ''}</span>
+                      {follows
+                        ? <span className="pill good" style={{ width: 'fit-content' }}>지금 전술이 추천과 같습니다</span>
+                        : <span><button className="btn small primary" onClick={() => { act('tactic', 'focus', tip.focus); act('tactic', 'defense', tip.defense); act('tactic', 'pace', String(tip.pace)); }}>추천대로 바꾸기</button></span>}
+                    </>
+                  ) : <span>코치가 모의 경기를 돌려 보는 중입니다…</span>}
+                </div>
+              </div>
+            </Panel>
+            <Panel title="우리 전술">
+              <TacticSelects tactics={t} onChange={(key, value) => act('tactic', key, value)} />
+            </Panel>
+          </div>
+        ) : (
         <div className="stack">
           <Panel title="코치 조언">
             <div className="advice">
@@ -277,7 +307,9 @@ export default function TacticsView({ S, act }: ViewProps) {
             )}
           </Panel>
         </div>
+        )}
 
+        {(!phone || pane === 'lineup') && (
         <div className="stack">
           <Panel
             title={`선발 라인업 · 팀 전력 ${teamOverall(team)}`}
@@ -317,6 +349,7 @@ export default function TacticsView({ S, act }: ViewProps) {
             ))}
           </Panel>
         </div>
+        )}
       </div>
     </div>
   );

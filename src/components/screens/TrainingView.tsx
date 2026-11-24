@@ -7,7 +7,7 @@ import type { Career, Coach } from '@/game/types';
 import type { Act } from '@/components/shared/ui';
 import { PREPARATION } from '@/game/career/season';
 import type { IntensityKey, PrepInfo, ProgramKey } from '@/game/types';
-import { CondBar, Icon, PageTitle, Panel, PosBadge, Select, mean, userTeam } from '@/components/shared/ui';
+import { CondBar, Icon, PageTitle, Panel, PosBadge, Seg, Select, mean, usePhone, userTeam } from '@/components/shared/ui';
 import type { ViewProps } from '@/components/shared/ui';
 
 const PROGRAM_KEYS = (Object.keys(PROGRAMS) as ProgramKey[]).filter((k) => k !== 'scout'); // 상대 분석은 따로 보여 준다
@@ -17,7 +17,7 @@ const FOCUS_PROGRAMS = Object.fromEntries(Object.entries(PROGRAMS).filter(([k]) 
 const stars = (n: number) => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 // 코치진: 지금 있는 코치와 올해의 영입 후보. 자리 수와 영입 가능 여부는 학교 수준이 정한다
-function StaffPanel({ career, act }: { career: Career; act: Act }) {
+function StaffPanel({ career, act, compact = false }: { career: Career; act: Act; compact?: boolean }) {
   const staff = staffOf(career);
   const pool = coachPoolOf(career);
   const prestige = career.teams[career.userTeamId].prestige;
@@ -45,16 +45,18 @@ function StaffPanel({ career, act }: { career: Career; act: Act }) {
           return row(c, <button className="btn small primary" disabled={!!block} onClick={() => act('hireCoach', c.id)} title={block ?? '영입하면 바로 효과가 적용됩니다'}>영입</button>, block ?? undefined);
         }) : <li className="muted">남은 후보가 없습니다. 새 후보는 다음 해에 나옵니다.</li>}
       </ul>
+      {compact ? <p className="hint">같은 분야에 여럿이면 가장 뛰어난 코치만 효과가 있고, 후보는 해마다 바뀝니다.</p> : (
       <p className="hint">
         훈련 코치는 맡은 메뉴의 성장을 별 하나당 {Math.round(100 * STAFF.gainPerStar)}% 올립니다(개인 훈련에도 적용). 능력치가 낮은 선수일수록 코치의 효과가 커집니다(60 아래부터, 35 이하에서 2.5배). 같은 분야에 여럿이면 가장 뛰어난 코치만 효과가 있습니다.
         자리는 기본 2개, 학교 수준 {STAFF.slots[0][0]}부터 3개이고, 별이 많은 코치일수록 학교 수준이 높아야 옵니다(★3은 {needFor(3)}, ★5는 {needFor(5)}). 후보는 해마다 바뀝니다.
       </p>
+      )}
     </Panel>
   );
 }
 
 // 다음 공식전 상대 분석: 경기 3일 전부터 하루씩, 최대 3일
-function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: boolean; onPick: () => void }) {
+function ScoutPanel({ prep, selected, compact, onPick }: { prep: PrepInfo; selected: boolean; compact: boolean; onPick: () => void }) {
   const max = PREPARATION.maxDays;
   const reach = prep.reachDays ?? max; // 이번 경기 전까지 실제로 채울 수 있는 일수
   const reason = prep.daysUntil === 0 ? '오늘이 경기일입니다.'
@@ -63,12 +65,14 @@ function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: bool
         : '';
   return (
     <Panel title="다음 공식전 준비" action={<span className="pill club">{prep.daysUntil === 0 ? '오늘 경기' : `${prep.daysUntil}일 후`}</span>}>
+      {!compact && (
       <div className="kv">
         <div><small>상대</small><b style={{ fontSize: 15 }}>{prep.opponent}</b><span className="muted">{prep.label}</span></div>
         <div><small>분석한 날</small><b>{prep.days} / {reach}일</b><span className="muted">하루에 능력치 +{PREPARATION.perDay}</span></div>
         <div><small>그 경기 보너스</small><b className={prep.bonus ? 'good' : ''}>+{prep.bonus.toFixed(1)}</b><span className="muted">이번 경기 최대 +{(PREPARATION.perDay * reach).toFixed(1)}</span></div>
       </div>
-      {prep.days > 0 && (
+      )}
+      {!compact && prep.days > 0 && (
         <div className="advice">
           <Icon name="bulb" />
           <span>분석 보고서는 받은 소식에 있습니다. {prep.days < reach && prep.daysUntil > 0 ? '하루 더 분석하면 더 자세한 내용이 나옵니다.' : '보고서를 보고 전술과 선발을 정하세요.'}</span>
@@ -76,16 +80,23 @@ function ScoutPanel({ prep, selected, onPick }: { prep: PrepInfo; selected: bool
       )}
       <button className={`opt ${selected ? 'on' : ''}`} disabled={!prep.canScout} onClick={onPick} style={{ opacity: prep.canScout ? 1 : 0.55 }}>
         <b>{prep.opponent} 분석·대비</b>
+        {compact ? (
+          <span>{prep.canScout ? `오늘 훈련 대신 분석 · ${prep.days}/${reach}일 · 그 경기 능력치 +${prep.bonus.toFixed(1)}` : reason}</span>
+        ) : (
         <span>
           {prep.canScout ? '영상 분석과 맞춤 연습. 1일째는 주요 선수와 전술, 2일째는 강점·약점과 대응 실마리, 3일째는 선수별 성향과 벤치를 알아냅니다. 분석한 만큼 그 경기에서 능력치가 오르고, 상대의 허술한 쪽을 노리는 공격과 집중 마크도 더 잘 통합니다. 그날은 성장 훈련을 하지 않고, 컨디션은 조금만 씁니다.' : reason}
           {prep.canScout && reach < max && ` 이번 경기는 남은 훈련일이 모자라 ${reach}일까지만 분석할 수 있습니다.`}
         </span>
+        )}
       </button>
     </Panel>
   );
 }
 
 export default function TrainingView({ S, act }: ViewProps) {
+  // 휴대폰: 매일 고르는 팀 훈련과 1년에 한두 번 손대는 코치진을 나눈다. 선수별 개인 훈련은 선수 상세 화면에서 정한다
+  const phone = usePhone();
+  const [pane, setPane] = useState<'plan' | 'staff'>('plan');
   const c = S.career;
   const d = today(c);
   const team = userTeam(c);
@@ -107,12 +118,25 @@ export default function TrainingView({ S, act }: ViewProps) {
 
   const coach = staffEffects(staffOf(S.career));
 
+  if (phone && pane === 'staff') {
+    return (
+      <div className="page">
+        <PageTitle title="훈련" sub="코치는 맡은 훈련의 성장을 높여 줍니다.">
+          <Seg options={{ plan: '팀 훈련', staff: '코치진' }} value={pane} onChange={(v) => setPane(v as 'plan' | 'staff')} />
+        </PageTitle>
+        <StaffPanel career={S.career} act={act} compact />
+      </div>
+    );
+  }
+
   return (
     <div className="page">
-      <PageTitle title="훈련" sub="정해 둔 메뉴는 상단의 계속 버튼을 누를 때마다 적용됩니다." />
+      <PageTitle title="훈련" sub={phone ? '고른 메뉴는 "계속"을 누를 때마다 적용됩니다.' : '정해 둔 메뉴는 상단의 계속 버튼을 누를 때마다 적용됩니다.'}>
+        {phone && <Seg options={{ plan: '팀 훈련', staff: '코치진' }} value={pane} onChange={(v) => setPane(v as 'plan' | 'staff')} />}
+      </PageTitle>
       <div className="split">
         <div className="stack">
-          {d?.prep && <ScoutPanel prep={d.prep} selected={S.program === 'scout'} onPick={() => act('program', 'scout')} />}
+          {d?.prep && <ScoutPanel prep={d.prep} selected={S.program === 'scout'} compact={phone} onPick={() => act('program', 'scout')} />}
           <Panel title="팀 훈련 메뉴" action={d?.camp ? <span className="pill club">합숙 · 성장 ×1.4</span> : undefined}>
             <div className="opts">
               {PROGRAM_KEYS.map((k) => {
@@ -139,11 +163,11 @@ export default function TrainingView({ S, act }: ViewProps) {
                   );
                 })}
               </div>
-              <p className="hint">강하게 훈련할수록 빨리 크지만 지치고 다치기 쉽고, 노력파가 아닌 선수는 사기가 떨어집니다. 지치거나 사기가 낮은 선수는 같은 훈련을 해도 덜 성장합니다. 휴식은 컨디션과 사기를 함께 회복합니다. 컨디션이 낮은 채로 경기에 나서면 경기 내내 능력이 떨어지고(컨디션 60이면 약 5%) 더 빨리 지칩니다.</p>
+              <p className="hint d-only">강하게 훈련할수록 빨리 크지만 지치고 다치기 쉽고, 노력파가 아닌 선수는 사기가 떨어집니다. 지치거나 사기가 낮은 선수는 같은 훈련을 해도 덜 성장합니다. 휴식은 컨디션과 사기를 함께 회복합니다. 컨디션이 낮은 채로 경기에 나서면 경기 내내 능력이 떨어지고(컨디션 60이면 약 5%) 더 빨리 지칩니다.</p>
             </Panel>
           )}
-          <StaffPanel career={S.career} act={act} />
-          <Panel title="오늘 진행">
+          {!phone && <StaffPanel career={S.career} act={act} />}
+          {!phone && <Panel title="오늘 진행">
             <div className="kv">
               <div><small>팀 컨디션</small><b>{cond}</b><CondBar value={cond} wide /></div>
               <div><small>오늘 소모 예상</small><b>{S.program === 'rest' ? '+18' : S.program === 'scout' ? '-2' : `-${I.cost}`}</b></div>
@@ -158,10 +182,10 @@ export default function TrainingView({ S, act }: ViewProps) {
                   <button className="btn" onClick={() => act('auto')}>{d?.daysToNextMatch == null ? '졸업식까지' : '다음 경기까지'} AI 코치에게 맡기기</button>
                 </div>
               )}
-          </Panel>
+          </Panel>}
         </div>
 
-        <Panel title="선수별 상태 · 개인 훈련" flush>
+        {!phone && <Panel title="선수별 상태 · 개인 훈련" flush>
           <div className="bulk-bar">
             {picked.length ? (
               <>
@@ -194,7 +218,7 @@ export default function TrainingView({ S, act }: ViewProps) {
               ))}
             </tbody>
           </table></div>
-        </Panel>
+        </Panel>}
       </div>
     </div>
   );

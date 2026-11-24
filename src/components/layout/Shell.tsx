@@ -5,7 +5,7 @@ import { today } from '@/game/career/season';
 import { PROGRAMS, INTENSITY, teamOverall } from '@/game/team/school';
 import type { Today } from '@/game/types';
 import type { ScreenKey } from '@/state/useGame';
-import { Attr, CondBar, Crest, Icon, clubVars, mean, userTeam } from '@/components/shared/ui';
+import { Attr, CondBar, Crest, Icon, clubVars, mean, usePhone, userTeam } from '@/components/shared/ui';
 import EventModal, { eventKey, resultKey } from './EventModal';
 import FarewellModal from './FarewellModal';
 import type { IconName, ViewProps } from '@/components/shared/ui';
@@ -23,10 +23,10 @@ const NAV: { key: ScreenKey; label: string; icon: IconName }[] = [
   { key: 'records', label: '기록', icon: 'records' },
 ];
 
-// 휴대폰 화면의 아래쪽 탭. 나머지 메뉴는 '더보기'에 넣는다
-const TAB_KEYS: ScreenKey[] = ['home', 'inbox', 'squad', 'tactics', 'training'];
+// 휴대폰 화면의 아래쪽 탭: 시즌을 굴리는 데 꼭 필요한 다섯 곳만 둔다.
+// 받은 소식은 머리띠의 아이콘으로 열고, 일정·학교·리더보드·기록은 넓은 화면에서만 메뉴에 나온다
+const TAB_KEYS: ScreenKey[] = ['home', 'squad', 'tactics', 'training', 'comp'];
 const TABS = NAV.filter((n) => TAB_KEYS.includes(n.key));
-const MORE = NAV.filter((n) => !TAB_KEYS.includes(n.key));
 
 const REST_ADVICE = { low: 60, beforeMatch: 75 }; // 이 컨디션 아래에서 훈련을 이어 가려 하면 휴식을 권한다
 
@@ -90,9 +90,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const [more, setMore] = useState(false); // 휴대폰 화면의 '더보기' 메뉴
-  const go = (key: ScreenKey) => { setMore(false); act('screen', key); };
-
+  const phone = usePhone();
   const c = S.career;
   const team = userTeam(c);
   const d = today(c); // 캠페인이 끝났으면 null
@@ -131,14 +129,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
       </button>
     </>
   );
-  const moreOn = !S.schoolId && MORE.some((n) => n.key === S.screen);
 
   return (
     <div ref={appRef} className={`app ${inMatch ? 'in-match' : ''}`} style={clubVars(team.name)}>
       <header ref={headerRef} className="app-header">
         <div className="club">
           <Crest name={team.name} size={34} />
-          <div><b>{team.name}</b><span>{c.prefecture} · 학교 수준 {team.prestige}</span></div>
+          <div><b>{team.name}</b><span>{phone ? c.prefecture : `${c.prefecture} · 학교 수준 ${team.prestige}`}</span></div>
         </div>
         <div className="hdr-date">
           <b>{d ? `${d.year}년차 · ${d.day}일째` : '캠페인 종료'}</b>
@@ -148,6 +145,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
         {inMatch && <span className="pill live">{S.match?.game.finished ? '경기 종료' : '경기 중'}</span>}
         {!inMatch && d && <NextChip d={d} />}
         <div className="hdr-act">{actions}</div>
+        {/* 휴대폰: 받은 소식은 탭 대신 머리띠의 아이콘으로 */}
+        {!inMatch && (
+          <button className={`hdr-inbox m-only ${S.screen === 'inbox' && !S.schoolId ? 'on' : ''}`} aria-label={unread ? `받은 소식, 읽지 않은 소식 ${unread}건` : '받은 소식'} onClick={() => act('screen', 'inbox')}>
+            <Icon name="inbox" />
+            {unread > 0 && <i className="badge">{unread > 9 ? '9+' : unread}</i>}
+          </button>
+        )}
       </header>
 
       {!inMatch && (
@@ -175,23 +179,13 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
       {/* 휴대폰 화면: '계속' 버튼과 메뉴를 엄지가 닿는 화면 아래에 고정한다 */}
       {!inMatch && (
         <div ref={dockRef} className="dock">
-          {more && (
-            <div className="dock-more">
-              {MORE.map((n) => (
-                <button key={n.key} className={`nav-item ${S.screen === n.key && !S.schoolId ? 'on' : ''}`} onClick={() => go(n.key)}><Icon name={n.icon} />{n.label}</button>
-              ))}
-              <button className="nav-item" onClick={() => { setMore(false); act('menu'); }}><Icon name="back" />표지로 나가기 <span className="faint">· 게임은 저장됩니다</span></button>
-            </div>
-          )}
           {actions && <div className="dock-act">{actions}</div>}
           <nav className="tabbar" aria-label="아래쪽 메뉴">
             {TABS.map((n) => (
-              <button key={n.key} className={S.screen === n.key && !S.schoolId && !more ? 'on' : ''} onClick={() => go(n.key)}>
+              <button key={n.key} className={S.screen === n.key && !S.schoolId ? 'on' : ''} onClick={() => act('screen', n.key)}>
                 <Icon name={n.icon} /><span>{n.label}</span>
-                {n.key === 'inbox' && unread > 0 && <i className="badge">{unread}</i>}
               </button>
             ))}
-            <button className={more || moreOn ? 'on' : ''} aria-expanded={more} onClick={() => setMore(!more)}><Icon name="more" /><span>더보기</span></button>
           </nav>
         </div>
       )}
@@ -204,7 +198,7 @@ export default function Shell({ S, act, children }: ViewProps & { children: Reac
             <b>{note.title}</b>
             {note.items.map((item) => <span key={item.text} className={`pill ${item.tone ?? ''}`}>{item.text}</span>)}
             <span className="spacer" />
-            <button className="btn ghost small" onClick={() => act('screen', 'inbox')}>소식에서 자세히</button>
+            <button className="btn ghost small d-only" onClick={() => act('screen', 'inbox')}>소식에서 자세히</button>
             <button className="btn ghost small" aria-label="닫기" onClick={() => act('dismissDayNote')}>닫기</button>
           </div>
         )}
